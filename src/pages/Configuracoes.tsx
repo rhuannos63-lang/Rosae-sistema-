@@ -131,21 +131,27 @@ function AbaMetas() {
   const [rec, setRec] = useState<Centavos | null | undefined>(undefined);
   const [ven, setVen] = useState<Centavos | null | undefined>(undefined);
   const [imp, setImp] = useState<string | undefined>(undefined);
-  const [res, setRes] = useState<string | undefined>(undefined);
+  const [resMin, setResMin] = useState<Centavos | null | undefined>(undefined);
+  const [pro, setPro] = useState<Centavos | null | undefined>(undefined);
+  const [hor, setHor] = useState<string | undefined>(undefined);
   const [erro, setErro] = useState<string | null>(null);
   if (carregando && !dados) return <Carregando />;
   if (!dados) return null;
   const vRec = rec === undefined ? (dados.meta_recebimentos_mensal === null ? null : doBanco(dados.meta_recebimentos_mensal)) : rec;
   const vVen = ven === undefined ? (dados.meta_vendas_mensal === null ? null : doBanco(dados.meta_vendas_mensal)) : ven;
   const vImp = imp ?? (dados.provisao_impostos_pct === null ? '' : String(dados.provisao_impostos_pct));
-  const vRes = res ?? (dados.reserva_pct === null ? '' : String(dados.reserva_pct));
+  const vResMin = resMin === undefined ? (dados.reserva_minima == null ? null : doBanco(dados.reserva_minima)) : resMin;
+  const vPro = pro === undefined ? (dados.pro_labore_planejado == null ? null : doBanco(dados.pro_labore_planejado)) : pro;
+  const vHor = hor ?? String(dados.horizonte_despesas_dias ?? 30);
   const pct = (s: string) => (s.trim() === '' ? null : s.replace(',', '.'));
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
     const { error } = await supabase.from('empresa').update({
       meta_recebimentos_mensal: vRec === null ? null : paraBanco(vRec), meta_vendas_mensal: vVen === null ? null : paraBanco(vVen),
-      provisao_impostos_pct: pct(vImp), reserva_pct: pct(vRes),
+      provisao_impostos_pct: pct(vImp),
+      reserva_minima: vResMin === null ? null : paraBanco(vResMin), pro_labore_planejado: vPro === null ? null : paraBanco(vPro),
+      horizonte_despesas_dias: Math.min(120, Math.max(1, Number(vHor) || 30)),
     }).eq('id', dados!.id);
     if (error) return setErro(mensagemErro(error));
     toast('Metas salvas.');
@@ -160,7 +166,12 @@ function AbaMetas() {
           <span>Provisão de impostos (%) <Ajuda>Percentual gerencial para separar impostos até haver contador. O sistema não calcula imposto oficial.</Ajuda></span>
           <input inputMode="decimal" value={vImp} onChange={(e) => setImp(e.target.value)} placeholder="ex.: 6" />
         </label>
-        <label className="campo">Reserva da empresa (%)<span className="dica">Usado no planejador de destinação (Etapa 3)</span><input inputMode="decimal" value={vRes} onChange={(e) => setRes(e.target.value)} placeholder="ex.: 10" /></label>
+      </div>
+      <h3 style={{ marginTop: 8 }}>Planejador de destinação <Ajuda>Regras gerenciais para sugerir quanto do dinheiro em conta está realmente livre. Não é apuração contábil nem distribui nada automaticamente. Confirme os percentuais com o seu contador.</Ajuda></h3>
+      <div className="grid grid-3">
+        <label className="campo">Reserva mínima da empresa<span className="dica">Valor que deve sempre ficar em conta</span><CampoValor valor={vResMin} aoMudar={setResMin} /></label>
+        <label className="campo">Pró-labore planejado (mês)<span className="dica">Quanto pretende retirar como pró-labore</span><CampoValor valor={vPro} aoMudar={setPro} /></label>
+        <label className="campo">Despesas a considerar (dias)<span className="dica">Despesas da empresa que vencem nesse prazo</span><input type="number" min={1} max={120} value={vHor} onChange={(e) => setHor(e.target.value)} /></label>
       </div>
       <p className="muted small" style={{ margin: 0 }}>Nos períodos de semestre e ano, o painel multiplica a meta mensal pelo número de meses.</p>
       <Erro mensagem={erro} />

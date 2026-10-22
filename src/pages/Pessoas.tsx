@@ -5,6 +5,8 @@ import { Topo } from '../components/Layout';
 import { Carregando, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
 import type { Pessoa } from '../lib/tipos';
+import { useAuth } from '../auth/AuthProvider';
+import { HistoricoParceiro } from './ObraFinanceiro';
 
 type Filtro = 'todos' | 'cliente' | 'prestador' | 'fornecedor' | 'arquivados';
 
@@ -110,6 +112,7 @@ const vazia = {
 
 export function PessoaForm({ pessoa, aoFechar, aoSalvar, padrao }: { pessoa: Pessoa | null; aoFechar: () => void; aoSalvar: (p: Pessoa) => void; padrao?: Partial<typeof vazia> }) {
   const toast = useToast();
+  const { podeFinanceiro } = useAuth();
   const [f, setF] = useState(() => (pessoa ? { ...vazia, ...Object.fromEntries(Object.entries(pessoa).map(([k, v]) => [k, v ?? ''])) } : { ...vazia, ...padrao }) as typeof vazia);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -185,6 +188,7 @@ export function PessoaForm({ pessoa, aoFechar, aoSalvar, padrao }: { pessoa: Pes
             </span>
           </div>
         )}
+        {pessoa && f.eh_prestador && podeFinanceiro && <HistoricoParceiro pessoaId={pessoa.id} />}
         {f.eh_prestador && (
           <label className="campo">
             Especialidade

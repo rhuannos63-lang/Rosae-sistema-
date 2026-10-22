@@ -387,3 +387,11 @@ h3.nao { color: var(--desfavoravel) !important; }
 /* Ícones sem tamanho definido em algum contexto ficam do tamanho do texto. */
 :where(svg[aria-hidden="true"]) { width: 1.15em; height: 1.15em; flex: none; }
 .aviso > svg { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.destino { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--linha); }
+.destino.linha-saldo { font-size: 1.05rem; }
+.destino.linha-total { border-bottom: 0; border-top: 2px solid var(--oliva); font-size: 1.15rem; margin-top: 4px; }
+.estrelas { display: flex; gap: 2px; }
+.estrelas button { all: unset; cursor: pointer; font-size: 1.5rem; color: var(--linha-forte); padding: 0 2px; }
+.estrelas button.ativa { color: #c99a2e; }
+.estrelas button:focus-visible { outline: 2px solid var(--oliva); border-radius: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

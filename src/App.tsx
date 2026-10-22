@@ -14,6 +14,7 @@ import { Comercial, OportunidadeDetalhe } from './pages/Comercial';
 import { Propostas, PropostaEditor, PropostaImprimir } from './pages/Propostas';
 import { PropostaPublica } from './pages/PropostaPublica';
 import { Biblioteca } from './pages/Biblioteca';
+import { Planejador } from './pages/Planejador';
 import { Mais } from './components/Layout';
 
 function Rotas() {
@@ -41,6 +42,7 @@ function Rotas() {
         {podeFinanceiro && <Route path="financeiro" element={<Financeiro />} />}
         {podeFinanceiro && <Route path="financeiro/:id" element={<LancamentoDetalhe />} />}
         {podeFinanceiro && <Route path="contas" element={<Contas />} />}
+        {podeFinanceiro && <Route path="planejador" element={<Planejador />} />}
         {ehAdmin && <Route path="configuracoes" element={<Configuracoes />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

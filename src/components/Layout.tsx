@@ -8,6 +8,7 @@ const itens = [
   { para: '/obras', rotulo: 'Obras', icone: 'obras', fin: false },
   { para: '/financeiro', rotulo: 'Financeiro', icone: 'financeiro', fin: true },
   { para: '/contas', rotulo: 'Contas', icone: 'contas', fin: true },
+  { para: '/planejador', rotulo: 'Planejador', icone: 'planejador', fin: true },
   { para: '/pessoas', rotulo: 'Cadastros', icone: 'pessoas', fin: false },
   { para: '/configuracoes', rotulo: 'Configurações', icone: 'config', fin: false, admin: true },
 ];

@@ -9,6 +9,7 @@ const P: Record<string, string> = {
   mais: 'M12 5v14M5 12h14',
   comercial: 'M3 4h18l-7 8.5V19l-4 2v-8.5z',
   menu: 'M4 6h16M4 12h16M4 18h16',
+  planejador: 'M12 3a9 9 0 1 0 9 9h-9zM15 2.6A9 9 0 0 1 21.4 9H15z',
   seta: 'M7 17 17 7M8 7h9v9',
   fechar: 'M6 6l12 12M18 6 6 18',
   ajuda: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01',

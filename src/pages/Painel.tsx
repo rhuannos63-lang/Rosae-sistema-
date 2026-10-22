@@ -89,12 +89,19 @@ export function Painel() {
   const p = periodo(tipo, ref);
 
   const { dados, erro, carregando } = useConsulta(async () => {
-    const [ind, serie, empresa] = await Promise.all([
+    const pa = periodo(tipo, deslocarPeriodo(tipo, ref, -1));
+    const py = periodo(tipo, deslocarPeriodo('ano', ref, -1));
+    const [ind, serie, empresa, ant, anoAnt] = await Promise.all([
       supabase.rpc('painel_indicadores', { p_inicio: p.inicio, p_fim: p.fim }),
       podeFinanceiro ? supabase.rpc('serie_mensal', { p_fim: p.fim }) : Promise.resolve({ data: [], error: null }),
       supabase.from('empresa').select('*').maybeSingle(),
+      podeFinanceiro ? supabase.rpc('painel_indicadores', { p_inicio: pa.inicio, p_fim: pa.fim }) : Promise.resolve({ data: null, error: null }),
+      podeFinanceiro ? supabase.rpc('painel_indicadores', { p_inicio: py.inicio, p_fim: py.fim }) : Promise.resolve({ data: null, error: null }),
     ]);
-    return { ind: ok(ind) as Indicadores, serie: (ok(serie) ?? []) as Serie[], empresa: ok(empresa) as Empresa | null };
+    return {
+      ind: ok(ind) as Indicadores, serie: (ok(serie) ?? []) as Serie[], empresa: ok(empresa) as Empresa | null,
+      comparar: ok(ant) ? { anterior: ok(ant) as Indicadores, anoAnterior: ok(anoAnt) as Indicadores, rotuloAnt: pa.rotulo, rotuloAno: py.rotulo } : null,
+    };
   }, [p.inicio, p.fim, podeFinanceiro]);
 
   const primeiroNome = usuario?.nome.split(' ')[0] ?? '';
@@ -116,6 +123,7 @@ export function Painel() {
       <Erro mensagem={erro} />
       {carregando && !dados && <Carregando />}
       {dados && <ConteudoPainel ind={dados.ind} serie={dados.serie} empresa={dados.empresa} qs={qs} rotulo={p.rotulo} tipo={tipo} ehAdmin={ehAdmin} />}
+      {dados?.comparar && !dados.ind.sem_permissao && <Comparativo atual={dados.ind} {...dados.comparar} rotulo={p.rotulo} />}
     </>
   );
 }
@@ -244,5 +252,44 @@ function ConteudoPainel({ ind, serie, empresa, qs, rotulo, tipo, ehAdmin }: { in
         </div>
       </div>
     </>
+  );
+}
+
+function Comparativo({ atual, anterior, anoAnterior, rotulo, rotuloAnt, rotuloAno }: { atual: Indicadores; anterior: Indicadores; anoAnterior: Indicadores; rotulo: string; rotuloAnt: string; rotuloAno: string }) {
+  const v = (i: Indicadores, k: string) => doBanco(i[k] as string);
+  const caixa = (i: Indicadores) => v(i, 'recebido') - v(i, 'pago_obras') - v(i, 'pago_empresa');
+  const linhas: { rotulo: string; f: (i: Indicadores) => Centavos; custo?: boolean }[] = [
+    { rotulo: 'Vendido', f: (i) => v(i, 'vendido') },
+    { rotulo: 'Recebido de clientes', f: (i) => v(i, 'recebido') },
+    { rotulo: 'Pago em obras', f: (i) => v(i, 'pago_obras'), custo: true },
+    { rotulo: 'Despesas da empresa', f: (i) => v(i, 'pago_empresa'), custo: true },
+    { rotulo: 'Resultado de caixa (gerencial)', f: caixa },
+  ];
+  const delta = (a: Centavos, b: Centavos, custo?: boolean) => {
+    if (b === 0) return <span className="muted small">—</span>;
+    const pct = Math.round(((a - b) / Math.abs(b)) * 1000) / 10;
+    const fav = custo ? pct < 0 : pct > 0;
+    return <span className="small" style={{ color: pct === 0 ? undefined : fav ? 'var(--favoravel)' : 'var(--desfavoravel)' }}>{pct > 0 ? '▲' : pct < 0 ? '▼' : ''} {String(Math.abs(pct)).replace('.', ',')}%</span>;
+  };
+  return (
+    <div className="card section">
+      <div className="card-titulo"><h2>Comparativo</h2><span className="muted small">{rotulo} × {rotuloAnt} × {rotuloAno}</span></div>
+      <div className="tabela-wrap">
+        <table className="tabela">
+          <thead><tr><th /><th className="right">{rotulo}</th><th className="right">{rotuloAnt}</th><th className="right">{rotuloAno}</th></tr></thead>
+          <tbody>
+            {linhas.map((l) => (
+              <tr key={l.rotulo}>
+                <td>{l.rotulo}</td>
+                <td className="right num"><b>{formatar(l.f(atual))}</b></td>
+                <td className="right num">{formatar(l.f(anterior))} {delta(l.f(atual), l.f(anterior), l.custo)}</td>
+                <td className="right num">{formatar(l.f(anoAnterior))} {delta(l.f(atual), l.f(anoAnterior), l.custo)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted small" style={{ marginBottom: 0 }}>Percentuais comparam o período atual com cada coluna. Mais recebimento não significa mais lucro: confira custos e o resultado por obra.</p>
+    </div>
   );
 }

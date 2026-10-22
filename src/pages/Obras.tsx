@@ -11,6 +11,7 @@ import { formatarData } from '../core/datas';
 import { MODELO_CONTRATACAO, SITUACAO, STATUS_OBRA, TIPOS_SERVICO, type Obra, type ObraFinanceiro, type Pessoa, type StatusObra, type VParcela } from '../lib/tipos';
 import { PessoaForm } from './Pessoas';
 import { LancamentoForm } from './Financeiro';
+import { Contratacoes, ResultadoServicos } from './ObraFinanceiro';
 
 const ATIVAS: StatusObra[] = ['contratada', 'em_execucao'];
 
@@ -254,6 +255,7 @@ export function ObraDetalhe() {
   const { podeFinanceiro } = useAuth();
   const [editar, setEditar] = useState(false);
   const [novoLanc, setNovoLanc] = useState<'receber' | 'pagar' | null>(null);
+  const [versaoFin, setVersaoFin] = useState(0);
   const navegar = useNavigate();
   const { dados, erro, carregando, recarregar } = useConsulta(async () => {
     const obra = ok(await supabase.from('obra').select('*, cliente:pessoa(nome, telefone, email)').eq('id', id!).maybeSingle()) as (Obra & { cliente: { nome: string; telefone: string | null; email: string | null } | null }) | null;
@@ -332,7 +334,10 @@ export function ObraDetalhe() {
               <span>O total lançado a receber ({formatar(r('a_receber_total'))}) é diferente do valor contratado ({formatar(r('valor_contratado'))}). Confira se faltam parcelas.</span>
             </div>
           )}
+          <ResultadoServicos key={`r-${versaoFin}`} obraId={obra.id} servicos={dados.servicos} />
+          <Contratacoes obraId={obra.id} servicos={dados.servicos} aoMudar={() => { setVersaoFin((v) => v + 1); recarregar(); }} />
           <div className="card" style={{ marginTop: 14 }}>
+            <h2 style={{ marginBottom: 10 }}>Lançamentos da obra</h2>
             {parcelas.length === 0 ? (
               <Vazio titulo="Nenhum lançamento nesta obra"><p>Lance as parcelas do contrato e os custos para acompanhar o caixa da obra.</p></Vazio>
             ) : (
@@ -364,7 +369,7 @@ export function ObraDetalhe() {
           tipo={novoLanc}
           padrao={{ escopo: 'obra', obra_id: obra.id, pessoa_id: novoLanc === 'receber' ? obra.cliente_id ?? '' : '' }}
           aoFechar={() => setNovoLanc(null)}
-          aoSalvar={() => { setNovoLanc(null); recarregar(); }}
+          aoSalvar={() => { setNovoLanc(null); setVersaoFin((v) => v + 1); recarregar(); }}
         />
       )}
     </>
@@ -386,7 +391,7 @@ function AmbientesServicos({ obraId, ambientes, servicos, ligacoes, aoMudar }: {
   return (
     <div className="card">
       <h2 style={{ marginBottom: 4 }}>Ambientes e serviços</h2>
-      <p className="muted small" style={{ marginTop: 0 }}>Um serviço pode atender vários ambientes sem duplicar valor. Etapas e cronograma chegam na Etapa 4.</p>
+      <p className="muted small" style={{ marginTop: 0 }}>Um serviço pode atender vários ambientes sem duplicar valor. </p>
       <div className="stack" style={{ gap: 10 }}>
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (novoAmb.trim()) exec(supabase.from('ambiente').insert({ obra_id: obraId, nome: novoAmb.trim(), ordem: ambientes.length })).then(() => setNovoAmb('')); }}>
           <input placeholder="Novo ambiente (ex.: Cozinha)" value={novoAmb} onChange={(e) => setNovoAmb(e.target.value)} style={{ flex: 1 }} />

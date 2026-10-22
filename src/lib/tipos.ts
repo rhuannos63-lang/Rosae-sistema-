@@ -13,6 +13,7 @@ export type Empresa = {
   endereco: string | null; telefone: string | null; email: string | null; site: string | null; instagram: string | null;
   frase_institucional: string | null; meta_recebimentos_mensal: Numeric | null; meta_vendas_mensal: Numeric | null;
   provisao_impostos_pct: Numeric | null; reserva_pct: Numeric | null; regra_reconhecimento: string | null;
+  reserva_minima?: Numeric | null; pro_labore_planejado?: Numeric | null; horizonte_despesas_dias?: number;
 };
 
 export type Pessoa = {
@@ -67,7 +68,7 @@ export type SaldoConta = { id: string; nome: string; instituicao: string | null;
 export type Lancamento = {
   id: string; codigo: string; tipo: TipoConta; descricao: string; pessoa_id: string | null; categoria_id: string; escopo: Escopo;
   obra_id: string | null; servico_id: string | null; valor_total: Numeric; data_competencia: string; documento_ref: string | null;
-  observacoes: string | null; cancelado: boolean; cancelado_motivo: string | null; criado_em: string;
+  observacoes: string | null; cancelado: boolean; cancelado_motivo: string | null; criado_em: string; contratacao_id?: string | null;
 };
 
 export type Situacao = 'aberta' | 'parcial' | 'vencida' | 'liquidada' | 'cancelada';

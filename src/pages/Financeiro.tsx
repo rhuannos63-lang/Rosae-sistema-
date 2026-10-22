@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok, novaChave } from '../lib/consulta';
@@ -131,7 +131,8 @@ export function Financeiro() {
 // Formulário de conta a receber / a pagar
 // ---------------------------------------------------------------------
 
-type Padrao = { escopo?: Escopo; obra_id?: string; pessoa_id?: string };
+type Padrao = { escopo?: Escopo; obra_id?: string; pessoa_id?: string; servico_id?: string; contratacao_id?: string; descricao?: string; categoria_id?: string; valor?: Centavos | null };
+type LinhaRateio = { obra_id: string; servico_id: string; valor: Centavos | null };
 type ModoParcelas = 'unica' | 'iguais' | 'entrada' | 'manual';
 
 export function LancamentoForm({ tipo, lancamento, parcelasAtuais, temMovimento, padrao, aoFechar, aoSalvar }: {
@@ -152,13 +153,23 @@ export function LancamentoForm({ tipo, lancamento, parcelasAtuais, temMovimento,
     };
   }, [tipo]);
 
-  const [descricao, setDescricao] = useState(lancamento?.descricao ?? '');
-  const [categoriaId, setCategoriaId] = useState(lancamento?.categoria_id ?? '');
+  const [descricao, setDescricao] = useState(lancamento?.descricao ?? padrao?.descricao ?? '');
+  const [categoriaId, setCategoriaId] = useState(lancamento?.categoria_id ?? padrao?.categoria_id ?? '');
   const [pessoaId, setPessoaId] = useState(lancamento?.pessoa_id ?? padrao?.pessoa_id ?? '');
   const [escopo, setEscopo] = useState<Escopo>(lancamento?.escopo ?? padrao?.escopo ?? (tipo === 'receber' ? 'obra' : 'empresa'));
   const [obraId, setObraId] = useState(lancamento?.obra_id ?? padrao?.obra_id ?? '');
-  const [servicoId, setServicoId] = useState(lancamento?.servico_id ?? '');
-  const [total, setTotal] = useState<Centavos | null>(lancamento ? doBanco(lancamento.valor_total) : null);
+  const [servicoId, setServicoId] = useState(lancamento?.servico_id ?? padrao?.servico_id ?? '');
+  const contratacaoId = lancamento?.contratacao_id ?? padrao?.contratacao_id ?? null;
+  const [ratear, setRatear] = useState(false);
+  const [rateio, setRateio] = useState<LinhaRateio[]>([]);
+  useEffect(() => {
+    if (!lancamento) return;
+    supabase.from('lancamento_rateio').select('obra_id, servico_id, valor').eq('lancamento_id', lancamento.id).then(({ data }) => {
+      const l = (data ?? []) as { obra_id: string; servico_id: string | null; valor: string }[];
+      if (l.length) { setRatear(true); setRateio(l.map((x) => ({ obra_id: x.obra_id, servico_id: x.servico_id ?? '', valor: doBanco(x.valor) }))); }
+    });
+  }, [lancamento]);
+  const [total, setTotal] = useState<Centavos | null>(lancamento ? doBanco(lancamento.valor_total) : padrao?.valor ?? null);
   const [competencia, setCompetencia] = useState(lancamento?.data_competencia ?? hoje());
   const [documento, setDocumento] = useState(lancamento?.documento_ref ?? '');
   const [obs, setObs] = useState(lancamento?.observacoes ?? '');
@@ -195,6 +206,11 @@ export function LancamentoForm({ tipo, lancamento, parcelasAtuais, temMovimento,
     if (!categoriaId) return setErro('Escolha a categoria.');
     if (escopo === 'obra' && !obraId) return setErro('Escolha a obra ou marque como despesa/receita da empresa.');
     if (typeof plano === 'string') return setErro(plano);
+    if (ratear) {
+      if (rateio.length < 2 || rateio.some((r) => !r.obra_id || !r.valor)) return setErro('No rateio, informe obra e valor de cada parte (pelo menos duas).');
+      const soma = rateio.reduce((a, r) => a + (r.valor ?? 0), 0);
+      if (soma !== total) return setErro(`O rateio soma ${formatar(soma)}, mas o total é ${formatar(total ?? 0)}.`);
+    }
     const problema = validarPlano(total!, plano);
     if (problema) return setErro(problema);
     setSalvando(true);
@@ -203,6 +219,8 @@ export function LancamentoForm({ tipo, lancamento, parcelasAtuais, temMovimento,
       obra_id: escopo === 'obra' ? obraId : null, servico_id: escopo === 'obra' && servicoId ? servicoId : null,
       valor_total: paraBanco(total!), data_competencia: competencia, documento_ref: documento.trim() || null, observacoes: obs.trim() || null,
       parcelas: plano.map((p) => ({ numero: p.numero, valor: paraBanco(p.valor), vencimento: p.vencimento })),
+      contratacao_id: contratacaoId,
+      rateio: ratear && escopo === 'obra' ? rateio.map((r) => ({ obra_id: r.obra_id, servico_id: r.servico_id || null, valor: paraBanco(r.valor ?? 0) })) : [],
     };
     const { data, error } = await supabase.rpc('salvar_lancamento', { p: payload, p_id: lancamento?.id ?? null });
     setSalvando(false);
@@ -269,6 +287,19 @@ export function LancamentoForm({ tipo, lancamento, parcelasAtuais, temMovimento,
               </label>
             </div>
           )}
+          {escopo === 'obra' && !contratacaoId && (
+            <label className="check" style={{ marginTop: 10 }}>
+              <input type="checkbox" checked={ratear} onChange={(e) => {
+                setRatear(e.target.checked);
+                if (e.target.checked && rateio.length === 0) setRateio([{ obra_id: obraId, servico_id: servicoId, valor: total }, { obra_id: '', servico_id: '', valor: null }]);
+              }} /> Dividir entre obras ou serviços (rateio)
+              <Ajuda>Use quando uma mesma compra ou nota atende mais de uma obra ou serviço. A soma das partes precisa ser igual ao total; os pagamentos são distribuídos na mesma proporção.</Ajuda>
+            </label>
+          )}
+          {escopo === 'obra' && ratear && (
+            <EditorRateio linhas={rateio} aoMudar={setRateio} total={total ?? 0} obras={apoio.dados?.obras ?? []} />
+          )}
+          {contratacaoId && <p className="muted small" style={{ marginBottom: 0 }}>Este lançamento é um pagamento de parceiro contratado e abate o saldo da contratação.</p>}
         </fieldset>
         <div className="grid grid-2">
           <label className="campo">
@@ -681,6 +712,41 @@ function Anexos({ lancamentoId, arquivos, aoMudar, aoBaixar }: { lancamentoId: s
         </label>
       </div>
       <Erro mensagem={erro} />
+    </div>
+  );
+}
+
+function EditorRateio({ linhas, aoMudar, total, obras }: { linhas: LinhaRateio[]; aoMudar: (l: LinhaRateio[]) => void; total: Centavos; obras: { id: string; codigo: string; nome: string }[] }) {
+  const ids = Array.from(new Set(linhas.map((l) => l.obra_id).filter(Boolean)));
+  const servicos = useConsulta(async () => (ids.length ? (ok(await supabase.from('servico').select('id, nome, obra_id').in('obra_id', ids).order('nome')) as { id: string; nome: string; obra_id: string }[]) : []), [ids.join()]);
+  const soma = linhas.reduce((a, l) => a + (l.valor ?? 0), 0);
+  const set = (i: number, m: Partial<LinhaRateio>) => aoMudar(linhas.map((l, j) => (j === i ? { ...l, ...m } : l)));
+  return (
+    <div className="stack" style={{ marginTop: 10, gap: 8 }}>
+      {linhas.map((l, i) => (
+        <div key={i} className="linha-valores">
+          <label className="campo" style={{ flex: 2 }}>Obra
+            <select value={l.obra_id} onChange={(e) => set(i, { obra_id: e.target.value, servico_id: '' })}>
+              <option value="">Escolha…</option>
+              {obras.map((o) => <option key={o.id} value={o.id}>{o.codigo} · {o.nome}</option>)}
+            </select>
+          </label>
+          <label className="campo" style={{ flex: 2 }}>Serviço
+            <select value={l.servico_id} onChange={(e) => set(i, { servico_id: e.target.value })} disabled={!l.obra_id}>
+              <option value="">Obra inteira</option>
+              {(servicos.dados ?? []).filter((s) => s.obra_id === l.obra_id).map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+            </select>
+          </label>
+          <label className="campo" style={{ flex: 1 }}>Valor<CampoValor valor={l.valor} aoMudar={(v) => set(i, { valor: v })} /></label>
+          {linhas.length > 2 && <button type="button" className="btn-link" aria-label="Remover parte" onClick={() => aoMudar(linhas.filter((_, j) => j !== i))}><Icone nome="fechar" /></button>}
+        </div>
+      ))}
+      <div className="row">
+        <button type="button" className="btn-secundario" onClick={() => aoMudar([...linhas, { obra_id: '', servico_id: '', valor: total - soma > 0 ? total - soma : null }])}><Icone nome="mais" /> Parte</button>
+        <span className="small" style={{ color: soma === total ? 'var(--favoravel)' : 'var(--desfavoravel)' }}>
+          Soma {formatar(soma)} de {formatar(total)}{soma === total ? ' · confere' : ` · diferença ${formatar(total - soma)}`}
+        </span>
+      </div>
     </div>
   );
 }
