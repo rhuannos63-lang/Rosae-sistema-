@@ -3,7 +3,7 @@ import { configurado } from './lib/supabase';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { ToastProvider, Carregando } from './components/ui';
 import { Layout } from './components/Layout';
-import { Login, PrimeiroAcesso, NaoConfigurado, SemAcesso } from './pages/Acesso';
+import { Login, PrimeiroAcesso, NaoConfigurado, SemAcesso, DefinirSenha } from './pages/Acesso';
 import { Painel } from './pages/Painel';
 import { Pessoas } from './pages/Pessoas';
 import { Obras, ObraDetalhe } from './pages/Obras';
@@ -12,9 +12,10 @@ import { Contas } from './pages/Contas';
 import { Configuracoes } from './pages/Configuracoes';
 
 function Rotas() {
-  const { carregando, sessao, usuario, existeAdmin, podeFinanceiro, ehAdmin } = useAuth();
+  const { carregando, sessao, usuario, existeAdmin, podeFinanceiro, ehAdmin, definirSenha } = useAuth();
   if (carregando) return <Carregando />;
   if (!sessao) return <Login />;
+  if (definirSenha) return <DefinirSenha />;
   if (!usuario) return existeAdmin ? <SemAcesso /> : <PrimeiroAcesso />;
   if (!usuario.ativo || usuario.papel === 'cliente') return <SemAcesso cliente={usuario.papel === 'cliente'} />;
   return (

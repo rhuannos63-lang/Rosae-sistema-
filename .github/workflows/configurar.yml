@@ -1,0 +1,113 @@
+name: Configurar Supabase
+# Configura o Supabase a partir de dois segredos (SUPABASE_ACCESS_TOKEN e
+# SUPABASE_DB_PASSWORD): descobre o projeto, aplica o banco, desliga o cadastro
+# aberto e grava a configuração pública. Com "email_admin", cria o login do
+# administrador e envia o e-mail para ele criar a senha.
+# Roda de hora em hora até conseguir; depois disso não faz nada.
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      email_admin:
+        description: 'E-mail do administrador (cria o login e envia o e-mail de senha)'
+        type: string
+        default: ''
+      forcar:
+        description: 'Refazer mesmo se já configurado'
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency: configurar
+env:
+  SITE_URL: https://rosae-sistema.pages.dev
+  NOME_PROJETO: rosae
+jobs:
+  configurar:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      EMAIL_ADMIN: ${{ inputs.email_admin }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar se há algo a fazer
+        id: precisa
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "Segredos ainda não cadastrados; nada a fazer por enquanto."
+            echo "rodar=nao" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$(jq -r .supabase_url src/config.publico.json)" != "null" ] && [ "${{ inputs.forcar }}" != "true" ] && [ -z "$EMAIL_ADMIN" ]; then
+            echo "Já configurado."; echo "rodar=nao" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "rodar=sim" >> "$GITHUB_OUTPUT"
+
+      - name: Descobrir o projeto e as chaves
+        if: steps.precisa.outputs.rodar == 'sim'
+        id: projeto
+        run: |
+          API=https://api.supabase.com/v1
+          H="Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
+          curl -sf -H "$H" "$API/projects" > projetos.json
+          REF=$(jq -r --arg n "$NOME_PROJETO" '([.[] | select(.name == $n)] + .)[0].id // empty' projetos.json)
+          if [ -z "$REF" ]; then echo "::error::Nenhum projeto encontrado no Supabase."; exit 1; fi
+          STATUS=$(jq -r --arg r "$REF" '.[] | select(.id == $r) | .status' projetos.json)
+          rm -f projetos.json
+          echo "Projeto $REF ($STATUS)"
+          if [ "$STATUS" != "ACTIVE_HEALTHY" ]; then
+            echo "Projeto ainda iniciando; tento de novo na próxima hora."
+            echo "pronto=nao" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          curl -sf -H "$H" "$API/projects/$REF/api-keys?reveal=true" > chaves.json
+          PUB=$(jq -r '([.[] | select(.type == "publishable")] + [.[] | select(.name == "anon")])[0].api_key' chaves.json)
+          SEC=$(jq -r '([.[] | select(.type == "secret")] + [.[] | select(.name == "service_role")])[0].api_key' chaves.json)
+          rm -f chaves.json
+          echo "::add-mask::$SEC"
+          {
+            echo "ref=$REF"; echo "pub=$PUB"; echo "sec=$SEC"; echo "pronto=sim"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: supabase/setup-cli@v1
+        if: steps.projeto.outputs.pronto == 'sim'
+        with:
+          version: 2.48.3
+
+      - name: Aplicar o banco (migrações)
+        if: steps.projeto.outputs.pronto == 'sim'
+        run: |
+          supabase link --project-ref "${{ steps.projeto.outputs.ref }}" --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
+
+      - name: Configurar login (sem cadastro aberto)
+        if: steps.projeto.outputs.pronto == 'sim'
+        run: |
+          curl -sf -X PATCH "https://api.supabase.com/v1/projects/${{ steps.projeto.outputs.ref }}/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+            -d "{\"disable_signup\": true, \"site_url\": \"$SITE_URL\", \"uri_allow_list\": \"$SITE_URL/**,https://*.rosae-sistema.pages.dev/**,http://localhost:5173/**\"}" \
+            -o /dev/null -w "configuração do login: %{http_code}\n"
+
+      - name: Criar o login do administrador
+        if: steps.projeto.outputs.pronto == 'sim' && env.EMAIL_ADMIN != ''
+        run: |
+          URL="https://${{ steps.projeto.outputs.ref }}.supabase.co"
+          SEC="${{ steps.projeto.outputs.sec }}"
+          curl -s -X POST "$URL/auth/v1/admin/users" -H "apikey: $SEC" -H "Authorization: Bearer $SEC" \
+            -H "Content-Type: application/json" -d "{\"email\": \"$EMAIL_ADMIN\", \"email_confirm\": true}" \
+            -o /dev/null -w "criar usuário: %{http_code}\n"
+          curl -s -X POST "$URL/auth/v1/recover?redirect_to=$SITE_URL" -H "apikey: ${{ steps.projeto.outputs.pub }}" \
+            -H "Content-Type: application/json" -d "{\"email\": \"$EMAIL_ADMIN\"}" \
+            -o /dev/null -w "e-mail para criar a senha: %{http_code}\n"
+
+      - name: Gravar configuração pública
+        if: steps.projeto.outputs.pronto == 'sim'
+        run: |
+          jq --arg u "https://${{ steps.projeto.outputs.ref }}.supabase.co" --arg k "${{ steps.projeto.outputs.pub }}" --arg r "${{ steps.projeto.outputs.ref }}" \
+            '.supabase_url = $u | .supabase_chave_publica = $k | .projeto_ref = $r' src/config.publico.json > tmp.json
+          mv tmp.json src/config.publico.json
+          git config user.name "rosae-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/config.publico.json
+          git diff --cached --quiet || { git commit -m "Configuração pública do Supabase"; git push; }

@@ -10,6 +10,8 @@ type Estado = {
   existeAdmin: boolean | null;
   recarregar: () => Promise<void>;
   sair: () => Promise<void>;
+  definirSenha: boolean;
+  senhaDefinida: () => void;
   podeFinanceiro: boolean;
   ehAdmin: boolean;
 };
@@ -21,6 +23,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [existeAdmin, setExisteAdmin] = useState<boolean | null>(null);
   const [carregando, setCarregando] = useState(true);
+  // Link de criar/recuperar senha (e-mail do Supabase) abre a tela de nova senha.
+  const [definirSenha, setDefinirSenha] = useState(() => /type=(recovery|invite)/.test(window.location.hash));
 
   const carregarPerfil = useCallback(async (s: Session | null) => {
     if (!s) {
@@ -43,7 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSessao(data.session);
       carregarPerfil(data.session);
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_evento, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((evento, s) => {
+      if (evento === 'PASSWORD_RECOVERY') setDefinirSenha(true);
       setSessao(s);
       carregarPerfil(s);
     });
@@ -60,6 +65,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await supabase.auth.signOut();
     },
     // Só controla o que aparece na tela; quem decide de verdade é o banco (RLS).
+    definirSenha,
+    senhaDefinida: () => setDefinirSenha(false),
     podeFinanceiro: Boolean(usuario?.ativo && (usuario.papel === 'administrador' || (usuario.papel === 'administrativo' && usuario.acesso_financeiro))),
     ehAdmin: Boolean(usuario?.ativo && usuario.papel === 'administrador'),
   };

@@ -11,26 +11,38 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
       BACKUP_SENHA: ${{ secrets.BACKUP_SENHA || secrets.SUPABASE_DB_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+      - name: Projeto
+        id: p
+        run: |
+          REF=$(jq -r .projeto_ref src/config.publico.json)
+          if [ "$REF" = "null" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "Supabase ainda não configurado; sem backup hoje."; echo "ok=nao" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"; echo "ok=sim" >> "$GITHUB_OUTPUT"
+          fi
       - uses: supabase/setup-cli@v1
+        if: steps.p.outputs.ok == 'sim'
         with:
           version: 2.48.3
-      - run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
       - name: Exportar estrutura e dados
+        if: steps.p.outputs.ok == 'sim'
         run: |
+          supabase link --project-ref "${{ steps.p.outputs.ref }}" --password "$SUPABASE_DB_PASSWORD"
           mkdir -p backup
           supabase db dump --password "$SUPABASE_DB_PASSWORD" -f backup/estrutura.sql
           supabase db dump --password "$SUPABASE_DB_PASSWORD" --data-only -f backup/dados.sql
           supabase db dump --password "$SUPABASE_DB_PASSWORD" --role-only -f backup/papeis.sql
-          test -s backup/dados.sql
+          test -s backup/estrutura.sql
       - name: Criptografar
+        if: steps.p.outputs.ok == 'sim'
         run: |
-          tar czf - backup | gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_SENHA" --symmetric --cipher-algo AES256 -o rosae-backup-$(date -u +%Y-%m-%d).tar.gz.gpg
+          tar czf - backup | gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_SENHA" --symmetric --cipher-algo AES256 -o "rosae-backup-$(date -u +%Y-%m-%d).tar.gz.gpg"
           rm -rf backup
       - uses: actions/upload-artifact@v4
+        if: steps.p.outputs.ok == 'sim'
         with:
           name: rosae-backup-${{ github.run_id }}
           path: rosae-backup-*.tar.gz.gpg

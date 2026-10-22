@@ -12,16 +12,22 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
     steps:
       - uses: actions/checkout@v4
-      - name: Conferir segredos
+      - name: Projeto
+        id: p
         run: |
-          for s in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF; do
-            if [ -z "${!s}" ]; then echo "::error::Segredo $s não cadastrado (guia, passo 3)."; exit 1; fi
-          done
+          REF=$(jq -r .projeto_ref src/config.publico.json)
+          if [ "$REF" = "null" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
+            echo "Supabase ainda não configurado; o workflow Configurar Supabase aplica o banco."; echo "ok=nao" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"; echo "ok=sim" >> "$GITHUB_OUTPUT"
+          fi
       - uses: supabase/setup-cli@v1
+        if: steps.p.outputs.ok == 'sim'
         with:
           version: 2.48.3
-      - run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-      - run: supabase db push --password "$SUPABASE_DB_PASSWORD"
+      - if: steps.p.outputs.ok == 'sim'
+        run: |
+          supabase link --project-ref "${{ steps.p.outputs.ref }}" --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all

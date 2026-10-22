@@ -124,10 +124,47 @@ export function NaoConfigurado() {
       <div className="stack">
         <h2>Configuração pendente</h2>
         <div className="aviso">
-          O sistema ainda não está ligado ao banco de dados. Faltam as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY na hospedagem.
+          O sistema ainda não está ligado ao banco de dados. Assim que o projeto do Supabase e os dois segredos existirem no GitHub, a configuração é feita sozinha em até uma hora.
         </div>
-        <p className="muted small" style={{ margin: 0 }}>Nenhum dado foi gravado. Siga o guia das contas gratuitas, passo 4.</p>
+        <p className="muted small" style={{ margin: 0 }}>Nenhum dado foi gravado ainda.</p>
       </div>
+    </Moldura>
+  );
+}
+
+export function DefinirSenha() {
+  const { senhaDefinida, sessao } = useAuth();
+  const [senha, setSenha] = useState('');
+  const [repetir, setRepetir] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    if (senha.length < 8) return setErro('Use pelo menos 8 caracteres.');
+    if (senha !== repetir) return setErro('As duas senhas não são iguais.');
+    setEnviando(true);
+    const { error } = await supabase.auth.updateUser({ password: senha });
+    setEnviando(false);
+    if (error) return setErro(mensagemErro(error));
+    window.history.replaceState(null, '', window.location.pathname);
+    senhaDefinida();
+  }
+  return (
+    <Moldura>
+      <form className="stack" onSubmit={salvar}>
+        <h2>Criar sua senha</h2>
+        <p className="muted small" style={{ margin: 0 }}>Conta: <b>{sessao?.user.email}</b></p>
+        <label className="campo">
+          Nova senha
+          <input type="password" autoComplete="new-password" value={senha} onChange={(e) => setSenha(e.target.value)} required autoFocus />
+        </label>
+        <label className="campo">
+          Repita a senha
+          <input type="password" autoComplete="new-password" value={repetir} onChange={(e) => setRepetir(e.target.value)} required />
+        </label>
+        <Erro mensagem={erro} />
+        <button className="btn-primario" disabled={enviando} style={{ justifyContent: 'center' }}>Salvar e entrar</button>
+      </form>
     </Moldura>
   );
 }
