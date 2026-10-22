@@ -21,7 +21,6 @@ permissions:
   contents: write
 concurrency: configurar
 env:
-  SITE_URL: https://rosae-sistema.pages.dev
   NOME_PROJETO: rosae
 jobs:
   configurar:
@@ -32,6 +31,11 @@ jobs:
       EMAIL_ADMIN: ${{ inputs.email_admin }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Endereço do site
+        run: |
+          S=$(jq -r '.site_url // empty' src/config.publico.json)
+          echo "SITE_URL=${S:-https://rosae-sistema.workers.dev}" >> "$GITHUB_ENV"
 
       - name: Verificar se há algo a fazer
         id: precisa
@@ -86,7 +90,7 @@ jobs:
         run: |
           curl -sf -X PATCH "https://api.supabase.com/v1/projects/${{ steps.projeto.outputs.ref }}/config/auth" \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
-            -d "{\"disable_signup\": true, \"site_url\": \"$SITE_URL\", \"uri_allow_list\": \"$SITE_URL/**,https://*.rosae-sistema.pages.dev/**,http://localhost:5173/**\"}" \
+            -d "{\"disable_signup\": true, \"site_url\": \"$SITE_URL\", \"uri_allow_list\": \"$SITE_URL/**,https://rosae-sistema.*.workers.dev/**,https://*-rosae-sistema.*.workers.dev/**,http://localhost:5173/**\"}" \
             -o /dev/null -w "configuração do login: %{http_code}\n"
 
       - name: Criar o login do administrador
@@ -97,6 +101,9 @@ jobs:
           curl -s -X POST "$URL/auth/v1/admin/users" -H "apikey: $SEC" -H "Authorization: Bearer $SEC" \
             -H "Content-Type: application/json" -d "{\"email\": \"$EMAIL_ADMIN\", \"email_confirm\": true}" \
             -o /dev/null -w "criar usuário: %{http_code}\n"
+          # O e-mail de senha só sai daqui se o endereço do site já for conhecido;
+          # senão, a pessoa pede pelo próprio site ("Primeiro acesso ou esqueci a senha").
+          [ "$(jq -r '.site_url // empty' src/config.publico.json)" = "" ] && exit 0
           curl -s -X POST "$URL/auth/v1/recover?redirect_to=$SITE_URL" -H "apikey: ${{ steps.projeto.outputs.pub }}" \
             -H "Content-Type: application/json" -d "{\"email\": \"$EMAIL_ADMIN\"}" \
             -o /dev/null -w "e-mail para criar a senha: %{http_code}\n"

@@ -39,7 +39,7 @@ export function Login() {
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
     setEnviando(false);
     if (error) setErro(mensagemErro(error));
-    else setAviso('Se o e-mail estiver cadastrado, você receberá um link para criar nova senha.');
+    else setAviso('Se o e-mail estiver cadastrado, você receberá um link para criar sua senha. Confira também a caixa de spam.');
   }
 
   return (
@@ -61,7 +61,7 @@ export function Login() {
           {enviando ? 'Aguarde…' : modoRecuperar ? 'Enviar link' : 'Entrar'}
         </button>
         <button type="button" className="btn-link" onClick={() => { setModoRecuperar((v) => !v); setAviso(null); setErro(null); }}>
-          {modoRecuperar ? 'Voltar ao login' : 'Esqueci minha senha'}
+          {modoRecuperar ? 'Voltar ao login' : 'Primeiro acesso ou esqueci a senha'}
         </button>
       </form>
     </Moldura>
