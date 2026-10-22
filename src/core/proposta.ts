@@ -148,7 +148,7 @@ export function sugerirPagamento(total: Centavos, modo: 'entrada_parcelas' | 'et
     const temPct = etapas.some((e) => (e.percentual ?? 0) > 0);
     return parcelasPorPercentual(
       total,
-      etapas.map((e) => ({ descricao: e.nome, percentual: temPct ? e.percentual ?? 0 : 1, quando: `Ao concluir: ${e.nome}` })),
+      etapas.map((e) => ({ descricao: e.nome, percentual: temPct ? e.percentual ?? 0 : 1, quando: 'Ao concluir a etapa' })),
     );
   }
   if (modo === 'mensal') {

@@ -97,3 +97,49 @@ export const SITUACAO: Record<Situacao, { rotulo: string; classe: string }> = {
   liquidada: { rotulo: 'Liquidada', classe: 'ok' },
   cancelada: { rotulo: 'Cancelada', classe: 'neutro' },
 };
+
+// ---- Comercial (Etapa 2) ----
+export type EstadoFunil = { id: string; nome: string; ordem: number; tipo: 'aberto' | 'ganho' | 'perdido' | 'arquivado'; ativo: boolean };
+export type Origem = 'indicacao' | 'site' | 'instagram' | 'whatsapp' | 'telefone' | 'outro';
+export const ORIGEM: Record<Origem, string> = {
+  indicacao: 'Indicação', site: 'Site', instagram: 'Instagram', whatsapp: 'WhatsApp', telefone: 'Telefone', outro: 'Outro',
+};
+export type Oportunidade = {
+  id: string; codigo: string; pessoa_id: string; titulo: string; origem: Origem; indicado_por: string | null; campanha: string | null;
+  utm: Record<string, string> | null; tipo_servico: string | null; local_obra: string | null; resumo: string | null; estado_id: string;
+  estado_desde: string; proxima_acao: string | null; proxima_acao_data: string | null; motivo_perda: string | null;
+  valor_estimado: Numeric | null; arquivado: boolean; criado_em: string; atualizado_em: string;
+  pessoa?: { nome: string; telefone: string | null; email: string | null } | null;
+};
+export type Interacao = { id: string; oportunidade_id: string; tipo: string; texto: string; em: string; criado_por: string | null };
+export const TIPO_INTERACAO: Record<string, string> = {
+  nota: 'Nota', ligacao: 'Ligação', whatsapp: 'WhatsApp', email: 'E-mail', visita: 'Visita', reuniao: 'Reunião', site: 'Site', sistema: 'Sistema',
+};
+
+export type EstadoProposta = 'rascunho' | 'enviada' | 'em_negociacao' | 'aprovada' | 'recusada' | 'arquivada';
+export const ESTADO_PROPOSTA: Record<EstadoProposta, { rotulo: string; classe: string }> = {
+  rascunho: { rotulo: 'Rascunho', classe: 'neutro' },
+  enviada: { rotulo: 'Enviada', classe: 'alerta' },
+  em_negociacao: { rotulo: 'Em negociação', classe: 'alerta' },
+  aprovada: { rotulo: 'Aprovada', classe: 'ok' },
+  recusada: { rotulo: 'Recusada', classe: 'erro' },
+  arquivada: { rotulo: 'Arquivada', classe: 'neutro' },
+};
+export type Proposta = {
+  id: string; codigo: string; tipo: 'proposta' | 'aditivo'; oportunidade_id: string | null; pessoa_id: string; obra_id: string | null;
+  titulo: string; estado: EstadoProposta; versao_aprovada_id: string | null; aprovada_em: string | null; aprovada_por_nome: string | null;
+  criado_em: string; atualizado_em: string;
+  pessoa?: { nome: string; telefone: string | null; email: string | null } | null;
+};
+export type PropostaVersao = {
+  id: string; proposta_id: string; numero: number; conteudo: unknown; valor_total: Numeric; emitida: boolean; emitida_em: string | null;
+  hash: string | null; validade: string | null; criado_em: string;
+};
+export type PropostaEvento = {
+  id: number; proposta_id: string; versao_id: string | null; tipo: string; nome: string | null; email: string | null; documento: string | null;
+  comentario: string | null; canal: string | null; hash_versao: string | null; user_agent: string | null; em: string;
+};
+export const EVENTO_PROPOSTA: Record<string, string> = {
+  emitida: 'Versão emitida', link_criado: 'Link criado', enviada_email: 'Preparada para e-mail', enviada_whatsapp: 'Preparada para WhatsApp',
+  visualizada: 'Cliente abriu', aceita: 'Cliente aceitou', ajuste_pedido: 'Cliente pediu ajuste', recusada: 'Cliente recusou', link_revogado: 'Links revogados',
+};

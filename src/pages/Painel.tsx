@@ -10,7 +10,18 @@ import { doBanco, formatar, type Centavos } from '../core/dinheiro';
 import { deslocarPeriodo, hoje, nomeMesCurto, periodo } from '../core/datas';
 import type { Empresa } from '../lib/tipos';
 
-type Indicadores = Record<string, string | number | boolean | null> & { sem_permissao?: boolean; gerencial?: boolean };
+type Comercial = { enviadas: number; em_negociacao: number; aprovadas_periodo: number; recusadas_periodo: number; rascunhos: number; oportunidades_abertas: number; acoes_atrasadas: number; cliques_whatsapp: number; formularios: number };
+type Indicadores = Record<string, string | number | boolean | null | Comercial> & { sem_permissao?: boolean; gerencial?: boolean; comercial?: Comercial | null };
+
+function KpisComerciais({ c }: { c: Comercial | null | undefined }) {
+  if (!c) return null;
+  return (
+    <>
+      <Kpi rotulo="Propostas em aberto" valor={String(c.enviadas + c.em_negociacao)} det={<>{c.em_negociacao} em negociação · {c.rascunhos} rascunho(s) · {c.aprovadas_periodo} aprovada(s) no período</>} para="/propostas" />
+      <Kpi rotulo="Oportunidades" valor={String(c.oportunidades_abertas)} det={c.acoes_atrasadas > 0 ? <span style={{ color: 'var(--desfavoravel)' }}>{c.acoes_atrasadas} com ação atrasada</span> : 'Nenhuma ação atrasada'} para="/comercial" ajuda="Contatos em andamento no funil. Formulários do site e cliques no WhatsApp do período aparecem no Comercial." />
+    </>
+  );
+}
 type Serie = { mes: string; recebido: string; pago: string; vendido: string };
 type TipoPeriodo = 'mes' | 'semestre' | 'ano';
 
@@ -114,6 +125,7 @@ function ConteudoPainel({ ind, serie, empresa, qs, rotulo, tipo, ehAdmin }: { in
     return (
       <div className="grid grid-kpi">
         <Kpi rotulo="Obras ativas" valor={String(ind.obras_ativas)} para="/obras" />
+        <KpisComerciais c={ind.comercial} />
         <div className="aviso info" style={{ gridColumn: '1 / -1' }}>Os números financeiros aparecem só para quem tem acesso ao financeiro.</div>
       </div>
     );
@@ -126,6 +138,7 @@ function ConteudoPainel({ ind, serie, empresa, qs, rotulo, tipo, ehAdmin }: { in
   const pendencias: { texto: string; para: string }[] = [];
   if (Number(ind.a_receber_vencido_qtd) > 0) pendencias.push({ texto: `${ind.a_receber_vencido_qtd} recebimento(s) vencido(s): ${formatar(c('a_receber_vencido'))}`, para: '/financeiro?tipo=receber&situacao=vencida' });
   if (Number(ind.a_pagar_7_dias_qtd) > 0) pendencias.push({ texto: `${ind.a_pagar_7_dias_qtd} pagamento(s) vencido(s) ou nos próximos 7 dias: ${formatar(c('a_pagar_7_dias'))}`, para: '/financeiro?tipo=pagar&situacao=proximos' });
+  if (ind.comercial && ind.comercial.acoes_atrasadas > 0) pendencias.push({ texto: `${ind.comercial.acoes_atrasadas} oportunidade(s) com próxima ação atrasada`, para: '/comercial' });
   if (empresa && !empresa.registro_conferido) pendencias.push({ texto: 'Registro profissional (CREA) ainda não conferido para documentos oficiais', para: ehAdmin ? '/configuracoes' : '/' });
   if (empresa && !empresa.cnpj) pendencias.push({ texto: 'CNPJ não informado (documentos mostram "a preencher")', para: ehAdmin ? '/configuracoes' : '/' });
 
@@ -153,8 +166,8 @@ function ConteudoPainel({ ind, serie, empresa, qs, rotulo, tipo, ehAdmin }: { in
           valor={formatar(c('vendido'))}
           det={metaVen !== null ? <>Meta de vendas: {formatar(metaVen)}</> : 'Sem meta de vendas definida'}
           meta={metaVen ? (c('vendido') / metaVen) * 100 : null}
-          para={`/obras?contratadas=1&${qs}`}
-          ajuda="Soma do valor contratado das obras com data de contratação no período. Vendido não é dinheiro em caixa."
+          para={`/propostas?estado=aprovada`}
+          ajuda="Propostas e aditivos aceitos pelo cliente no período (versão aprovada), mais obras lançadas sem proposta pela data de contratação. Vendido não é dinheiro em caixa."
         />
         <Kpi
           rotulo="A receber"
@@ -198,7 +211,7 @@ function ConteudoPainel({ ind, serie, empresa, qs, rotulo, tipo, ehAdmin }: { in
         />
         <Kpi rotulo="Saldo nas contas" valor={formatar(c('saldo_contas'))} det="Hoje, somando todas as contas ativas" para="/contas" />
         <Kpi rotulo="Obras ativas" valor={String(ind.obras_ativas)} det="Contratadas ou em execução" para="/obras" />
-        <Kpi rotulo="Propostas" valor="—" det="Funil e propostas chegam na Etapa 2" />
+        <KpisComerciais c={ind.comercial} />
         {c('outras_entradas') !== 0 && (
           <Kpi rotulo="Outras entradas" valor={formatar(c('outras_entradas'))} det="Rendimentos, aportes e outras" para={`/contas?grupo=outras&${qs}`} />
         )}
