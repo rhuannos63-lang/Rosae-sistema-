@@ -1,0 +1,27 @@
+name: Atualizar banco
+# Aplica as migrações novas no Supabase quando o código chega na main.
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/migrations/**']
+  workflow_dispatch:
+concurrency: banco
+jobs:
+  migrar:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Conferir segredos
+        run: |
+          for s in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_REF; do
+            if [ -z "${!s}" ]; then echo "::error::Segredo $s não cadastrado (guia, passo 3)."; exit 1; fi
+          done
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.48.3
+      - run: supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+      - run: supabase db push --password "$SUPABASE_DB_PASSWORD"
