@@ -1,4 +1,6 @@
 // Tipos das tabelas usadas pelas telas (espelham supabase/migrations).
+import type { EstadoEtapa } from '../core/cronograma';
+import type { ConteudoContrato, ModeloContrato } from '../core/contrato';
 
 export type Papel = 'administrador' | 'administrativo' | 'campo' | 'cliente';
 export type TipoConta = 'receber' | 'pagar';
@@ -56,6 +58,7 @@ export type Obra = {
   id: string; codigo: string; nome: string; cliente_id: string | null; tipo_servico: string | null; endereco: string | null;
   status: StatusObra; data_inicio: string | null; data_previsao_fim: string | null; data_conclusao: string | null;
   observacoes: string | null; arquivado: boolean; criado_em: string;
+  proposta_versao_id?: string | null; liberada_em?: string | null; imagem_caminho?: string | null;
   cliente?: { nome: string } | null;
 };
 
@@ -143,4 +146,82 @@ export type PropostaEvento = {
 export const EVENTO_PROPOSTA: Record<string, string> = {
   emitida: 'Versão emitida', link_criado: 'Link criado', enviada_email: 'Preparada para e-mail', enviada_whatsapp: 'Preparada para WhatsApp',
   visualizada: 'Cliente abriu', aceita: 'Cliente aceitou', ajuste_pedido: 'Cliente pediu ajuste', recusada: 'Cliente recusou', link_revogado: 'Links revogados',
+};
+
+// ---------------------------------------------------------------------
+// Etapa 4: operação
+// ---------------------------------------------------------------------
+
+export type Etapa = {
+  id: string; obra_id: string; servico_id: string; nome: string; descricao: string | null; ordem: number; estado: EstadoEtapa;
+  peso: Numeric; criterio_medicao: string | null; unidade: string | null; quantidade_prevista: Numeric | null; quantidade_executada: Numeric | null;
+  percentual: Numeric; duracao_dias: number | null; inicio_previsto: string | null; fim_previsto: string | null;
+  inicio_base: string | null; fim_base: string | null; inicio_real: string | null; fim_real: string | null;
+  responsavel_id: string | null; depende_de: string[]; criterios: string[]; conferido_por: string | null; conferido_em: string | null;
+  conferencia_obs: string | null; visivel_cliente: boolean;
+};
+
+export type Progresso = {
+  executado: number; conferido: number; etapas: number; concluidas: number; canceladas: number;
+  servicos: { id: string; nome: string; peso: number; executado: number; conferido: number; etapas: number; concluidas: number; canceladas: number }[];
+  ambientes: { id: string; nome: string; executado: number }[];
+};
+
+export type SituacaoMaterial = 'a_comprar' | 'comprado_parcial' | 'comprado' | 'parcial' | 'na_obra' | 'aguardando_cliente' | 'aguardando_terceiro' | 'cancelado' | 'substituido';
+export const SITUACAO_MATERIAL: Record<SituacaoMaterial, { rotulo: string; classe: string }> = {
+  a_comprar: { rotulo: 'A comprar', classe: 'neutro' },
+  comprado_parcial: { rotulo: 'Comprado em parte', classe: 'alerta' },
+  comprado: { rotulo: 'Comprado · aguardando entrega', classe: 'alerta' },
+  parcial: { rotulo: 'Entregue em parte', classe: 'alerta' },
+  na_obra: { rotulo: 'Disponível na obra', classe: 'ok' },
+  aguardando_cliente: { rotulo: 'Aguardando o cliente', classe: 'alerta' },
+  aguardando_terceiro: { rotulo: 'Aguardando terceiro', classe: 'alerta' },
+  cancelado: { rotulo: 'Cancelado', classe: 'neutro' },
+  substituido: { rotulo: 'Substituído', classe: 'neutro' },
+};
+export const RESPONSAVEL_COMPRA: Record<string, string> = { rosae: 'ROSAE', cliente: 'Cliente', terceiro: 'Terceiro' };
+
+export type Material = {
+  id: string; obra_id: string; servico_id: string | null; ambiente_id: string | null; etapa_id: string | null; descricao: string; especificacao: string | null;
+  unidade: string; quantidade: Numeric | null; responsavel_compra: 'rosae' | 'cliente' | 'terceiro'; fornecedor_id: string | null; necessario_em: string | null;
+  estado: 'ativo' | 'cancelado' | 'substituido'; motivo: string | null; localizacao: string | null; observacoes: string | null; visivel_cliente: boolean;
+  servico_nome: string | null; ambiente_nome: string | null; etapa_nome: string | null; etapa_inicio: string | null; fornecedor_nome: string | null;
+  comprado: Numeric; entregue: Numeric; devolvido: Numeric; situacao: SituacaoMaterial;
+};
+export type MaterialEvento = { id: string; material_id: string; tipo: 'compra' | 'compra_cancelada' | 'entrega' | 'devolucao'; quantidade: Numeric; data: string; local: string | null; documento: string | null; lancamento_id: string | null; observacoes: string | null; criado_em: string };
+
+export type TipoRegistro = 'andamento' | 'impedimento' | 'inspecao' | 'condicao_existente' | 'decisao' | 'nota_interna' | 'sistema';
+export const TIPO_REGISTRO: Record<TipoRegistro, string> = {
+  andamento: 'Andamento', impedimento: 'Impedimento', inspecao: 'Inspeção', condicao_existente: 'Condição existente',
+  decisao: 'Decisão', nota_interna: 'Nota interna', sistema: 'Sistema',
+};
+export type Registro = {
+  id: string; obra_id: string; data: string; tipo: TipoRegistro; servico_id: string | null; etapa_id: string | null; ambiente_id: string | null;
+  titulo: string | null; texto: string | null; detalhes: Record<string, unknown>; publicado_em: string | null; autor_id: string | null; criado_em: string;
+};
+export type Foto = {
+  id: string; obra_id: string; registro_id: string | null; servico_id: string | null; etapa_id: string | null; ambiente_id: string | null;
+  caminho: string; legenda: string | null; momento: 'antes' | 'durante' | 'depois' | 'outro'; tirada_em: string; publicada_em: string | null;
+};
+export type Pendencia = {
+  id: string; obra_id: string; tipo: 'pendencia' | 'decisao_cliente' | 'impedimento' | 'inspecao'; titulo: string; descricao: string | null;
+  prioridade: 'alta' | 'media' | 'baixa'; responsavel: 'rosae' | 'cliente' | 'parceiro' | 'outro'; prazo: string | null;
+  estado: 'aberta' | 'resolvida' | 'cancelada'; resolucao: string | null; resolvida_em: string | null; servico_id: string | null; etapa_id: string | null; criado_em: string;
+};
+export const TIPO_PENDENCIA: Record<Pendencia['tipo'], string> = { pendencia: 'Pendência', decisao_cliente: 'Decisão do cliente', impedimento: 'Impedimento', inspecao: 'Inspeção' };
+export const RESPONSAVEL_PENDENCIA: Record<Pendencia['responsavel'], string> = { rosae: 'ROSAE', cliente: 'Cliente', parceiro: 'Parceiro', outro: 'Outro' };
+
+export type Contrato = {
+  id: string; codigo: string; obra_id: string; proposta_versao_id: string | null; modelo: ModeloContrato; estado: 'rascunho' | 'emitido' | 'assinado' | 'cancelado';
+  conteudo: ConteudoContrato; valor_total: Numeric; minuta: boolean; hash: string | null; emitido_em: string | null; assinado_em: string | null;
+  assinatura_registro: string | null; cancelado_motivo: string | null; criado_em: string;
+};
+
+export type ConteudoFicha = {
+  responsavel?: string; atividades: string[]; materiais: string[]; pre_requisitos: string[]; conferencia: string[]; referencias: string[];
+  impedimentos?: string; observacoes?: string;
+};
+export type Ficha = {
+  id: string; obra_id: string; servico_id: string; revisao: number; estado: 'rascunho' | 'liberada' | 'substituida'; origem: 'modelo' | 'manual' | 'ia';
+  conteudo: ConteudoFicha; liberada_por_nome: string | null; liberada_em: string | null; criado_em: string;
 };

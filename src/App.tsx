@@ -16,6 +16,8 @@ import { PropostaPublica } from './pages/PropostaPublica';
 import { Biblioteca } from './pages/Biblioteca';
 import { Planejador } from './pages/Planejador';
 import { Mais } from './components/Layout';
+import { Clausulas, ContratoImprimir } from './pages/ObraContrato';
+import { FichaAtual, FichaImprimir } from './pages/Fichas';
 
 function Rotas() {
   const { carregando, sessao, usuario, existeAdmin, podeFinanceiro, ehAdmin, definirSenha } = useAuth();
@@ -28,12 +30,16 @@ function Rotas() {
   return (
     <Routes>
       {comercial && <Route path="propostas/:id/imprimir" element={<PropostaImprimir />} />}
+      {comercial && <Route path="contratos/:id/imprimir" element={<ContratoImprimir />} />}
+      <Route path="fichas/:id/imprimir" element={<FichaImprimir />} />
       <Route element={<Layout />}>
         <Route index element={<Painel />} />
         <Route path="obras" element={<Obras />} />
         <Route path="obras/:id" element={<ObraDetalhe />} />
         <Route path="pessoas" element={<Pessoas />} />
         <Route path="mais" element={<Mais />} />
+        <Route path="ficha/:servicoId" element={<FichaAtual />} />
+        {comercial && <Route path="clausulas" element={<Clausulas />} />}
         {comercial && <Route path="comercial" element={<Comercial />} />}
         {comercial && <Route path="comercial/:id" element={<OportunidadeDetalhe />} />}
         {comercial && <Route path="propostas" element={<Propostas />} />}

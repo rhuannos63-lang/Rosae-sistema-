@@ -37,6 +37,9 @@ export type Conteudo = {
   garantia: string;
   observacoes: string;
   validade_dias: number;
+  // Só em aditivos: por que mudou e quanto muda o prazo.
+  motivo?: string;
+  impacto_prazo_dias?: number | null;
 };
 
 export type ModeloServico = {
@@ -115,8 +118,9 @@ export function somaParcelas(c: Conteudo): Centavos {
 }
 
 /** Pendências que impedem emitir (mesmas regras do banco, para avisar antes). */
-export function pendencias(c: Conteudo): string[] {
+export function pendencias(c: Conteudo, aditivo = false): string[] {
   const p: string[] = [];
+  if (aditivo && !c.motivo?.trim()) p.push('Informe o motivo do aditivo (aba Apresentação).');
   const total = totalConteudo(c);
   if (c.ambientes.length === 0 || total <= 0) p.push('Inclua ao menos um item com valor.');
   c.ambientes.forEach((a) => {

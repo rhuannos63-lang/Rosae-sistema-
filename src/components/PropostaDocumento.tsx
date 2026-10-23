@@ -94,8 +94,11 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
           {d.empresa?.frase && <p className="destaque">“{d.empresa.frase}”</p>}
         </div>
         <div>
-          <h3>A sua necessidade</h3>
+          <h3>{d.tipo === 'aditivo' ? 'O que muda' : 'A sua necessidade'}</h3>
           <p style={{ whiteSpace: 'pre-wrap' }}>{c.necessidade || 'Descrição a completar.'}</p>
+          {d.tipo === 'aditivo' && c.motivo && <p><b>Motivo:</b> {c.motivo}</p>}
+          {d.tipo === 'aditivo' && c.impacto_prazo_dias != null && <p><b>Impacto no prazo:</b> {c.impacto_prazo_dias === 0 ? 'sem alteração' : `${c.impacto_prazo_dias > 0 ? '+' : ''}${c.impacto_prazo_dias} dia(s)`}</p>}
+          {d.tipo === 'aditivo' && <p className="small">Este aditivo complementa o contrato original, que permanece válido nas demais condições.</p>}
         </div>
       </div>
     ),
@@ -180,11 +183,11 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
         <div className={ultima && c.pagamento.parcelas.length ? 'investimento' : ''}>
           <table className="tabela-doc">
             <tbody>
-              {pg.map(({ amb, item }) =>
+              {pg.map(({ amb, item }, ix) =>
                 item === null ? (
-                  <tr key={`a-${amb.id}`} className="amb"><td>{amb.nome}</td><td /><td className="num">{formatar(totalAmbiente(amb))}</td></tr>
+                  <tr key={`a-${amb.id ?? ix}`} className="amb"><td>{amb.nome}</td><td /><td className="num">{formatar(totalAmbiente(amb))}</td></tr>
                 ) : (
-                  <tr key={item.id}><td>{item.titulo}</td><td className="muted">{qtd(item)}</td><td className="num">{formatar(paraCentavos(totalItem(item)))}</td></tr>
+                  <tr key={item.id ?? `i-${ix}`}><td>{item.titulo}</td><td className="muted">{qtd(item)}</td><td className="num">{formatar(paraCentavos(totalItem(item)))}</td></tr>
                 ),
               )}
             </tbody>

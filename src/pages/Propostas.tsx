@@ -239,7 +239,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
   }
 
   const total = totalConteudo(c);
-  const pend = pendencias(c);
+  const pend = pendencias(c, carga.proposta.tipo === 'aditivo');
   const set = <K extends keyof Conteudo>(k: K, v: Conteudo[K]) => setC((x) => ({ ...x, [k]: v }));
 
   async function emitir() {
@@ -274,7 +274,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
       </nav>
       <div className="card">
         <Erro mensagem={erro} />
-        {aba === 'geral' && <AbaGeral c={c} setC={setC} biblioteca={carga.biblioteca} irPara={setAba} />}
+        {aba === 'geral' && <AbaGeral c={c} setC={setC} biblioteca={carga.biblioteca} irPara={setAba} aditivo={carga.proposta.tipo === 'aditivo'} />}
         {aba === 'escopo' && <AbaEscopo c={c} setC={setC} biblioteca={carga.biblioteca} />}
         {aba === 'incluso' && (
           <div className="grid grid-2">
@@ -342,7 +342,7 @@ function Comparacao({ a, b, na, nb, aoFechar }: { a: Conteudo; b: Conteudo; na: 
 
 type SetC = React.Dispatch<React.SetStateAction<Conteudo>>;
 
-function AbaGeral({ c, setC, biblioteca, irPara }: { c: Conteudo; setC: SetC; biblioteca: ModeloServico[]; irPara: (a: Aba) => void }) {
+function AbaGeral({ c, setC, biblioteca, irPara, aditivo }: { c: Conteudo; setC: SetC; biblioteca: ModeloServico[]; irPara: (a: Aba) => void; aditivo: boolean }) {
   const [pedido, setPedido] = useState(c.necessidade);
   const [perguntas, setPerguntas] = useState<string[]>([]);
   const toast = useToast();
@@ -357,7 +357,9 @@ function AbaGeral({ c, setC, biblioteca, irPara }: { c: Conteudo; setC: SetC; bi
     <div className="stack">
       <div className="grid grid-2">
         <label className="campo">Local da obra<input value={c.local} onChange={(e) => setC({ ...c, local: e.target.value })} /></label>
+        {aditivo && <label className="campo">Impacto no prazo (dias) <Ajuda>Quantos dias o aditivo acrescenta (ou tira, com sinal negativo) à previsão de término. 0 = sem impacto.</Ajuda><input inputMode="numeric" value={c.impacto_prazo_dias ?? ''} onChange={(e) => setC({ ...c, impacto_prazo_dias: e.target.value === '' ? null : Number(e.target.value) || 0 })} /></label>}
       </div>
+      {aditivo && <label className="campo">Motivo do aditivo (obrigatório) <Ajuda>Ex.: pedido do cliente, condição encontrada na obra, mudança de projeto. Aparece no documento enviado ao cliente.</Ajuda><input value={c.motivo ?? ''} onChange={(e) => setC({ ...c, motivo: e.target.value })} /></label>}
       <label className="campo">
         <span>A necessidade do cliente <Ajuda>Escreva com as palavras do cliente o que ele precisa. Aparece na apresentação como “A sua necessidade”.</Ajuda></span>
         <textarea rows={4} value={c.necessidade} onChange={(e) => setC({ ...c, necessidade: e.target.value })} />
@@ -622,7 +624,10 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar }: { carga: 
             Emitida em {formatarDataHora(versao.emitida_em)} · válida até {formatarData(versao.validade)}{vencida ? ' (vencida)' : ''} · código {versao.hash?.slice(0, 16).toUpperCase()}
           </p>
           {p.versao_aprovada_id === versao.id && (
-            <div className="aviso ok" style={{ marginTop: 10 }}><Icone nome="check" /><span>Aprovada por <b>{p.aprovada_por_nome}</b> em {formatarDataHora(p.aprovada_em)}.</span></div>
+            <>
+              <div className="aviso ok" style={{ marginTop: 10 }}><Icone nome="check" /><span>Aprovada por <b>{p.aprovada_por_nome}</b> em {formatarDataHora(p.aprovada_em)}.</span></div>
+              <Converter proposta={p} versaoId={versao.id} />
+            </>
           )}
           {!ehUltima && <div className="aviso info" style={{ marginTop: 10 }}><span>Existe versão mais nova. Esta continua guardada como histórico, mas não pode mais ser aceita.</span></div>}
           <Erro mensagem={erro} />
@@ -677,6 +682,45 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar }: { carga: 
       </div>
       <div className="card"><PropostaDocumento d={doc} /></div>
       {comparar && anterior && <Comparacao a={normalizar(anterior.conteudo as Partial<Conteudo>)} b={c} na={anterior.numero} nb={versao.numero} aoFechar={() => setComparar(false)} />}
+    </div>
+  );
+}
+
+// Proposta aprovada vira obra (ou o aditivo entra na obra). Repetir não duplica.
+function Converter({ proposta, versaoId }: { proposta: Proposta; versaoId: string }) {
+  const navegar = useNavigate();
+  const toast = useToast();
+  const [erro, setErro] = useState<string | null>(null);
+  const [rodando, setRodando] = useState(false);
+  const existente = useConsulta(async () => {
+    if (proposta.tipo === 'aditivo') return ok(await supabase.from('servico').select('obra_id').eq('origem_versao_id', versaoId).limit(1)) as { obra_id: string }[];
+    return ok(await supabase.from('obra').select('id').eq('proposta_versao_id', versaoId).limit(1)) as { id: string }[];
+  }, [versaoId]);
+  const feito = (existente.dados?.length ?? 0) > 0;
+  const obraId = proposta.tipo === 'aditivo' ? proposta.obra_id : (existente.dados?.[0] as { id?: string } | undefined)?.id;
+  async function converter() {
+    setErro(null);
+    setRodando(true);
+    const r = await supabase.rpc('converter_proposta', { p_versao: versaoId });
+    setRodando(false);
+    if (r.error) return setErro(mensagemErro(r.error));
+    toast(proposta.tipo === 'aditivo' ? 'Aditivo incorporado à obra.' : 'Obra criada: ambientes, serviços, etapas, materiais sugeridos e previsão de recebimento. Revise cada parte.');
+    navegar(`/obras/${r.data as string}${proposta.tipo === 'aditivo' ? '?aba=contrato' : ''}`);
+  }
+  if (existente.carregando && !existente.dados) return null;
+  return (
+    <div className="stack" style={{ marginTop: 10 }}>
+      {feito ? (
+        <Link className="btn-secundario" to={`/obras/${obraId}`}>{proposta.tipo === 'aditivo' ? 'Aditivo já incorporado · abrir obra' : 'Abrir a obra criada'}</Link>
+      ) : (
+        <>
+          <button className="btn-primario" onClick={converter} disabled={rodando}>{proposta.tipo === 'aditivo' ? 'Incorporar aditivo à obra' : 'Converter em obra'}</button>
+          <p className="muted small" style={{ margin: 0 }}>{proposta.tipo === 'aditivo'
+            ? 'Cria os serviços, etapas e a previsão de recebimento do aditivo na obra. O contrato original fica como está.'
+            : 'Cria a obra com ambientes, serviços e quantidades da versão aprovada, orçamento-base com o valor vendido, etapas e materiais sugeridos e a previsão de recebimentos. A proposta aprovada fica guardada como referência. Pode clicar de novo: não duplica.'}</p>
+        </>
+      )}
+      <Erro mensagem={erro} />
     </div>
   );
 }

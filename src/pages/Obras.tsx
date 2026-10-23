@@ -12,6 +12,11 @@ import { MODELO_CONTRATACAO, SITUACAO, STATUS_OBRA, TIPOS_SERVICO, type Obra, ty
 import { PessoaForm } from './Pessoas';
 import { LancamentoForm } from './Financeiro';
 import { Contratacoes, ResultadoServicos } from './ObraFinanceiro';
+import { Cronograma } from './ObraCronograma';
+import { Materiais } from './ObraMateriais';
+import { Registros } from './ObraRegistros';
+import { ContratoObra } from './ObraContrato';
+import { FichasObra } from './Fichas';
 
 const ATIVAS: StatusObra[] = ['contratada', 'em_execucao'];
 
@@ -250,9 +255,16 @@ function ObraForm({ obra, financeiro, aoFechar, aoSalvar }: { obra: Obra | null;
 type Ambiente = { id: string; nome: string; ordem: number };
 type Servico = { id: string; nome: string; descricao: string | null; ordem: number; arquivado: boolean };
 
+const ABAS_OBRA = [['visao', 'Visão geral'], ['cronograma', 'Cronograma'], ['materiais', 'Materiais'], ['diario', 'Diário e fotos'], ['fichas', 'Fichas'], ['contrato', 'Contrato'], ['financeiro', 'Financeiro']] as const;
+type AbaObra = (typeof ABAS_OBRA)[number][0];
+
 export function ObraDetalhe() {
   const { id } = useParams();
-  const { podeFinanceiro } = useAuth();
+  const { podeFinanceiro, usuario } = useAuth();
+  const ehAdm = usuario?.papel === 'administrador' || usuario?.papel === 'administrativo';
+  const [params, setParams] = useSearchParams();
+  const abas = ABAS_OBRA.filter(([k]) => (k !== 'contrato' || ehAdm) && (k !== 'financeiro' || podeFinanceiro));
+  const aba: AbaObra = (abas.find(([k]) => k === params.get('aba'))?.[0] ?? 'visao') as AbaObra;
   const [editar, setEditar] = useState(false);
   const [novoLanc, setNovoLanc] = useState<'receber' | 'pagar' | null>(null);
   const [versaoFin, setVersaoFin] = useState(0);
@@ -289,10 +301,16 @@ export function ObraDetalhe() {
     <>
       <Topo titulo={obra.nome} sub={<>{obra.codigo} · {seloStatus(obra.status)}</>}>
         <button className="btn-secundario" onClick={() => navegar('/obras')}><Icone nome="voltar" /> Obras</button>
-        <button className="btn-secundario" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar</button>
+        {ehAdm && <button className="btn-secundario" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar</button>}
       </Topo>
 
-      <div className="grid grid-2">
+      <nav className="abas-obra" aria-label="Seções da obra">
+        {abas.map(([k, rot]) => (
+          <button key={k} className={aba === k ? 'ativo' : ''} aria-current={aba === k ? 'page' : undefined} onClick={() => setParams(k === 'visao' ? {} : { aba: k }, { replace: true })}>{rot}</button>
+        ))}
+      </nav>
+
+      {aba === 'visao' && <div className="grid grid-2">
         <div className="card">
           <h2 style={{ marginBottom: 12 }}>Dados da obra</h2>
           <dl className="dl">
@@ -310,10 +328,16 @@ export function ObraDetalhe() {
           </dl>
           {obra.observacoes && <p className="muted" style={{ whiteSpace: 'pre-wrap' }}>{obra.observacoes}</p>}
         </div>
-        <AmbientesServicos obraId={obra.id} ambientes={dados.ambientes} servicos={dados.servicos} ligacoes={dados.ligacoes} aoMudar={recarregar} />
-      </div>
+        <AmbientesServicos obraId={obra.id} ambientes={dados.ambientes} servicos={dados.servicos} ligacoes={dados.ligacoes} aoMudar={recarregar} ehAdm={ehAdm} />
+      </div>}
 
-      {podeFinanceiro && resumo && (
+      {aba === 'cronograma' && <Cronograma obraId={obra.id} servicos={dados.servicos} ehAdm={ehAdm} />}
+      {aba === 'materiais' && <Materiais obraId={obra.id} servicos={dados.servicos} ambientes={dados.ambientes} ehAdm={ehAdm} podeFinanceiro={podeFinanceiro} />}
+      {aba === 'diario' && <Registros obraId={obra.id} servicos={dados.servicos} ambientes={dados.ambientes} ehAdm={ehAdm} />}
+      {aba === 'fichas' && <FichasObra obraId={obra.id} servicos={dados.servicos} ehAdm={ehAdm} />}
+      {aba === 'contrato' && ehAdm && <ContratoObra obra={obra} aoMudar={recarregar} />}
+
+      {aba === 'financeiro' && podeFinanceiro && resumo && (
         <div className="section">
           <div className="topo" style={{ marginBottom: 12 }}>
             <h2>Financeiro da obra <Ajuda>Números gerenciais desta obra, a partir dos lançamentos ligados a ela. Saldo de caixa = recebido − pago nesta obra.</Ajuda></h2>
@@ -323,15 +347,15 @@ export function ObraDetalhe() {
             </div>
           </div>
           <div className="grid grid-kpi">
-            <div className="kpi"><div className="rotulo">Contratado</div><div className="valor">{formatar(r('valor_contratado'))}</div></div>
+            <div className="kpi"><div className="rotulo">Contratado</div><div className="valor">{formatar(r('valor_contratado'))}</div>{r('aditivos') !== 0 && <div className="det">+ aditivos aprovados {formatar(r('aditivos'))}</div>}</div>
             <div className="kpi"><div className="rotulo">Recebido</div><div className="valor">{formatar(r('recebido'))}</div><div className="det">Lançado a receber: {formatar(r('a_receber_total'))}</div></div>
             <div className="kpi"><div className="rotulo">Pago em custos</div><div className="valor">{formatar(r('pago'))}</div><div className="det">Custos lançados: {formatar(r('custo_lancado'))}</div></div>
             <div className="kpi destaque"><div className="rotulo">Saldo de caixa da obra</div><div className="valor">{formatar(r('saldo_caixa'))}</div><div className="det">Gerencial</div></div>
           </div>
-          {r('valor_contratado') > 0 && r('a_receber_total') !== r('valor_contratado') && (
+          {r('valor_contratado') > 0 && r('a_receber_total') !== r('valor_contratado') + r('aditivos') && (
             <div className="aviso" style={{ marginTop: 12 }}>
               <Icone nome="alerta" />
-              <span>O total lançado a receber ({formatar(r('a_receber_total'))}) é diferente do valor contratado ({formatar(r('valor_contratado'))}). Confira se faltam parcelas.</span>
+              <span>O total lançado a receber ({formatar(r('a_receber_total'))}) é diferente do valor contratado{r('aditivos') ? ' com aditivos' : ''} ({formatar(r('valor_contratado') + r('aditivos'))}). Confira se faltam parcelas.</span>
             </div>
           )}
           <ResultadoServicos key={`r-${versaoFin}`} obraId={obra.id} servicos={dados.servicos} />
@@ -376,7 +400,7 @@ export function ObraDetalhe() {
   );
 }
 
-function AmbientesServicos({ obraId, ambientes, servicos, ligacoes, aoMudar }: { obraId: string; ambientes: Ambiente[]; servicos: Servico[]; ligacoes: { servico_id: string; ambiente_id: string }[]; aoMudar: () => void }) {
+function AmbientesServicos({ obraId, ambientes, servicos, ligacoes, aoMudar, ehAdm }: { obraId: string; ambientes: Ambiente[]; servicos: Servico[]; ligacoes: { servico_id: string; ambiente_id: string }[]; aoMudar: () => void; ehAdm: boolean }) {
   const [novoAmb, setNovoAmb] = useState('');
   const [novoServ, setNovoServ] = useState('');
   const [erro, setErro] = useState<string | null>(null);
@@ -393,6 +417,7 @@ function AmbientesServicos({ obraId, ambientes, servicos, ligacoes, aoMudar }: {
       <h2 style={{ marginBottom: 4 }}>Ambientes e serviços</h2>
       <p className="muted small" style={{ marginTop: 0 }}>Um serviço pode atender vários ambientes sem duplicar valor. </p>
       <div className="stack" style={{ gap: 10 }}>
+        {ehAdm && <>
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (novoAmb.trim()) exec(supabase.from('ambiente').insert({ obra_id: obraId, nome: novoAmb.trim(), ordem: ambientes.length })).then(() => setNovoAmb('')); }}>
           <input placeholder="Novo ambiente (ex.: Cozinha)" value={novoAmb} onChange={(e) => setNovoAmb(e.target.value)} style={{ flex: 1 }} />
           <button className="btn-secundario">Adicionar</button>
@@ -401,6 +426,7 @@ function AmbientesServicos({ obraId, ambientes, servicos, ligacoes, aoMudar }: {
           <input placeholder="Novo serviço (ex.: Troca de piso)" value={novoServ} onChange={(e) => setNovoServ(e.target.value)} style={{ flex: 1 }} />
           <button className="btn-secundario">Adicionar</button>
         </form>
+        </>}
         <Erro mensagem={erro} />
         {servicos.length === 0 && ambientes.length === 0 ? (
           <p className="muted small">Nenhum ambiente ou serviço ainda.</p>
@@ -420,6 +446,7 @@ function AmbientesServicos({ obraId, ambientes, servicos, ligacoes, aoMudar }: {
                           type="checkbox"
                           aria-label={`${s.nome} em ${a.nome}`}
                           checked={ligado(s.id, a.id)}
+                          disabled={!ehAdm}
                           onChange={(e) => exec(e.target.checked
                             ? supabase.from('servico_ambiente').insert({ servico_id: s.id, ambiente_id: a.id })
                             : supabase.from('servico_ambiente').delete().eq('servico_id', s.id).eq('ambiente_id', a.id))}

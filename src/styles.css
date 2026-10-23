@@ -395,3 +395,148 @@ h3.nao { color: var(--desfavoravel) !important; }
 .estrelas button.ativa { color: #c99a2e; }
 .estrelas button:focus-visible { outline: 2px solid var(--oliva); border-radius: 4px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------------------------------------------------------------------
+   Etapa 4: operação da obra
+   --------------------------------------------------------------------- */
+.selo.info { background: #e6ecef; color: #2f5566; }
+.abas-obra { display: flex; gap: 4px; overflow-x: auto; margin: -4px 0 16px; padding-bottom: 2px; border-bottom: 1px solid var(--linha); scrollbar-width: none; }
+.abas-obra button { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 12px; color: var(--texto-2); font-weight: 600; white-space: nowrap; }
+.abas-obra button.ativo { color: var(--oliva-escuro); border-bottom-color: var(--oliva); }
+.abas-obra button:hover { color: var(--grafite); }
+.rotulo-kpi { font-size: 0.8rem; color: var(--texto-2); }
+.valor-grande { font-family: var(--fonte-titulo); font-size: 2rem; font-weight: 600; margin: 2px 0 8px; }
+.barra-progresso { position: relative; height: 10px; background: var(--bege); border-radius: 5px; overflow: hidden; }
+.barra-progresso .exec, .barra-progresso .conf { position: absolute; inset: 0 auto 0 0; border-radius: 5px; transition: width 0.6s ease; }
+.barra-progresso .exec { background: var(--oliva-claro); }
+.barra-progresso .conf { background: var(--oliva); }
+.linha-prog { display: grid; grid-template-columns: minmax(110px, 34%) 1fr 48px; gap: 10px; align-items: center; }
+.sub-servico { font-size: 0.95rem; margin: 6px 0 4px; color: var(--oliva-escuro); }
+.select-compacto { padding: 4px 6px; font-size: 0.85rem; min-width: 150px; }
+.tabela tr.cancelada td { color: var(--texto-2); text-decoration: line-through; }
+.tabela tr.cancelada td:nth-child(2) { text-decoration: none; }
+.desfavoravel { color: var(--desfavoravel); }
+.favoravel { color: var(--favoravel); }
+.alerta-texto { color: var(--alerta); font-weight: 600; }
+.detalhes-form { border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px; }
+.detalhes-form > summary { cursor: pointer; font-weight: 600; color: var(--oliva-escuro); }
+.lista-check { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+fieldset.campo { border: 0; padding: 0; margin: 0; }
+fieldset.campo legend { padding: 0; margin-bottom: 6px; }
+.btn-link.perigo { color: var(--desfavoravel); }
+.lista-simples { margin: 4px 0 0; padding-left: 18px; }
+
+/* Linha do tempo (Gantt simples, sem biblioteca) */
+.lt-legenda { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.lt-chave { display: inline-block; width: 18px; height: 8px; border-radius: 4px; vertical-align: middle; margin-right: 4px; }
+.lt-chave.atual, .lt-barra.atual { background: var(--oliva-claro); }
+.lt-chave.base { border: 1.5px dashed var(--texto-2); }
+.lt-chave.real, .lt-barra.real { background: var(--grafite); }
+.lt-grade { position: relative; padding-top: 22px; }
+.lt-regua { position: absolute; top: 0; left: 38%; right: 0; height: 18px; font-size: 0.72rem; color: var(--texto-2); }
+.lt-regua span { position: absolute; border-left: 1px solid var(--linha-forte); padding-left: 4px; white-space: nowrap; text-transform: capitalize; }
+.lt-hoje { position: absolute; top: 18px; bottom: 0; width: 2px; background: var(--alerta); transform: translateX(-1px); pointer-events: none; z-index: 1; }
+.lt-linha { display: grid; grid-template-columns: 38% 1fr; align-items: center; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--linha); padding: 6px 0; text-align: left; border-radius: 0; color: inherit; font-weight: 400; }
+.lt-linha:hover { background: var(--bege-claro); }
+.lt-nome { font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 8px; }
+.lt-trilho { position: relative; height: 22px; }
+.lt-barra { position: absolute; border-radius: 4px; }
+.lt-barra.base { top: 0; height: 22px; border: 1.5px dashed var(--texto-2); background: transparent; }
+.lt-barra.atual { top: 4px; height: 14px; overflow: hidden; }
+.lt-barra.atual .lt-feito { display: block; height: 100%; background: var(--oliva); }
+.lt-barra.atual.cancelado { background: #d8d6cf; }
+.lt-barra.atual.suspenso { background: var(--desfavoravel); }
+.lt-barra.real { top: 19px; height: 3px; }
+@media (max-width: 860px) {
+  .lt-linha { grid-template-columns: 1fr; gap: 4px; }
+  .lt-regua { left: 0; }
+  .lt-grade .lt-hoje { display: none; }
+}
+
+/* Calendário */
+.calendario { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--linha); border-left: 1px solid var(--linha); }
+.cal-cab { font-size: 0.72rem; text-transform: uppercase; color: var(--texto-2); padding: 6px; border-right: 1px solid var(--linha); border-bottom: 1px solid var(--linha); background: var(--bege-claro); }
+.cal-dia { min-height: 86px; padding: 4px; border-right: 1px solid var(--linha); border-bottom: 1px solid var(--linha); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cal-dia.fora { background: #faf8f2; color: var(--texto-2); }
+.cal-dia.hoje .cal-num { background: var(--oliva); color: #fff; border-radius: 10px; padding: 0 6px; }
+.cal-num { font-size: 0.75rem; align-self: flex-start; }
+.cal-etapa { font-size: 0.72rem; text-align: left; padding: 2px 5px; border-radius: 4px; background: var(--bege); color: var(--oliva-escuro); border: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.cal-etapa.executado, .cal-etapa.conferido { background: var(--ok-fundo); color: var(--favoravel); }
+.cal-etapa.aguardando_material, .cal-etapa.aguardando_liberacao, .cal-etapa.suspenso { background: var(--alerta-fundo); color: var(--alerta); }
+@media (max-width: 600px) { .cal-dia { min-height: 58px; } .cal-etapa { font-size: 0.62rem; padding: 1px 3px; } }
+
+/* Diário, fotos e pendências */
+.diario { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.diario-item { border-left: 3px solid var(--linha-forte); padding: 4px 0 4px 12px; }
+.diario-item.impedimento { border-color: var(--desfavoravel); }
+.diario-item.condicao_existente { border-color: var(--alerta); }
+.diario-item.sistema { border-color: var(--linha); color: var(--texto-2); }
+.diario-cab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+.dl.compacto { font-size: 0.85rem; gap: 3px 12px; margin: 6px 0; }
+.galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.galeria.mini { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); margin-top: 8px; }
+.foto { position: relative; aspect-ratio: 4 / 3; padding: 0; border: 0; border-radius: 8px; overflow: hidden; background: var(--bege); cursor: zoom-in; }
+.foto img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.3s ease; }
+.foto:hover img { transform: scale(1.03); }
+.foto-momento { position: absolute; left: 6px; bottom: 6px; font-size: 0.7rem; background: rgba(35, 38, 29, 0.7); color: #fff; padding: 2px 6px; border-radius: 4px; }
+.foto-carregando { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, var(--bege) 0%, var(--bege-claro) 50%, var(--bege) 100%); background-size: 200% 100%; animation: brilho 1.4s infinite; }
+@keyframes brilho { to { background-position: -200% 0; } }
+.foto-grande { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 8px; background: #111; }
+.lista-pendencias { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.pend { border: 1px solid var(--linha); border-left: 4px solid var(--linha-forte); border-radius: 10px; padding: 10px 12px; }
+.pend.alta { border-left-color: var(--desfavoravel); }
+.pend.media { border-left-color: var(--alerta); }
+.pend.resolvida, .pend.cancelada { opacity: 0.7; }
+.pend-cab { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; }
+
+/* Contrato: passos e documento A4 */
+.passos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; counter-reset: passo; }
+.passos li { border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px 10px 42px; position: relative; display: flex; flex-direction: column; gap: 2px; counter-increment: passo; }
+.passos li::before { content: counter(passo); position: absolute; left: 12px; top: 10px; width: 22px; height: 22px; border-radius: 50%; background: var(--bege); color: var(--oliva-escuro); display: grid; place-items: center; font-size: 0.8rem; font-weight: 700; }
+.passos li.feito { border-color: var(--favoravel); background: var(--ok-fundo); }
+.passos li.feito::before { content: '✓'; background: var(--favoravel); color: #fff; }
+.passos li.atual { border-color: var(--alerta); }
+@media (max-width: 700px) { .passos { grid-template-columns: 1fr; } }
+.contrato-previa { max-height: 70vh; overflow: auto; border: 1px solid var(--linha); border-radius: 10px; background: #f3efe4; padding: 16px; }
+.doc-a4 { position: relative; background: #fff; color: #1d1f18; max-width: 210mm; margin: 0 auto; padding: 18mm 16mm; font-size: 10.5pt; line-height: 1.5; box-shadow: var(--sombra); overflow: hidden; }
+.doc-a4 h1 { font-family: var(--fonte-titulo); font-size: 15pt; margin: 6px 0 10px; color: var(--oliva-escuro); }
+.doc-a4 h2 { font-family: var(--fonte-titulo); font-size: 11.5pt; margin: 16px 0 6px; color: var(--oliva-escuro); border-bottom: 1px solid var(--linha); padding-bottom: 3px; }
+.doc-a4 h3 { font-size: 10.5pt; margin: 10px 0 4px; }
+.doc-a4 p { margin: 4px 0; text-align: justify; }
+.doc-a4 ul { margin: 4px 0; padding-left: 18px; }
+.doc-cab { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--oliva); padding-bottom: 8px; }
+.doc-cab img { height: 34px; }
+.doc-aviso { background: var(--alerta-fundo); color: #6a4508; padding: 6px 10px; border-radius: 6px; font-size: 9pt; }
+.marca-minuta { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 64pt; font-weight: 800; color: rgba(168, 107, 18, 0.1); pointer-events: none; letter-spacing: 0.1em; white-space: nowrap; }
+.doc-tabela { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 6px 0; }
+.doc-tabela th, .doc-tabela td { border-bottom: 1px solid #e5e0d2; padding: 4px 6px; text-align: left; vertical-align: top; }
+.doc-tabela .right { text-align: right; }
+.doc-tabela tr.grupo td { background: #f5f1e6; font-weight: 600; }
+.doc-tabela tfoot td { font-weight: 700; border-top: 2px solid var(--oliva); }
+.clausula { break-inside: avoid; }
+.assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; break-inside: avoid; }
+.assinaturas div { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 9.5pt; }
+.assinaturas span { width: 100%; border-top: 1px solid #333; margin-bottom: 4px; height: 36px; }
+.assinaturas small { color: var(--texto-2); }
+.doc-rodape { margin-top: 18px; color: var(--texto-2); border-top: 1px solid var(--linha); padding-top: 6px; }
+.item-clausula { text-align: left; width: 100%; color: inherit; font-weight: 400; cursor: pointer; }
+.item-clausula:hover { border-color: var(--oliva-claro); }
+
+/* Ficha de execução */
+.ficha-qr { width: 84px; height: 84px; }
+.ficha-qr svg { width: 100%; height: 100%; }
+.ficha-check { list-style: none; padding-left: 0 !important; }
+.ficha-check li { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; }
+.ficha-check .caixa { width: 13px; height: 13px; border: 1.5px solid #444; border-radius: 2px; flex: none; margin-top: 4px; }
+.linhas-escrever { height: 90px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 28px, #cfc6ad 28px, #cfc6ad 29px); }
+@media (max-width: 700px) { .doc-a4 { padding: 18px 14px; font-size: 10pt; } .marca-minuta { font-size: 38pt; } }
+
+@page a4 { size: A4; margin: 12mm; }
+@media print {
+  .pagina-impressao.a4 { page: a4; }
+  .pagina-impressao.a4 .doc-a4 { box-shadow: none; padding: 0; max-width: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .barra-progresso .exec, .barra-progresso .conf, .foto img { transition: none; }
+  .foto-carregando { animation: none; }
+}

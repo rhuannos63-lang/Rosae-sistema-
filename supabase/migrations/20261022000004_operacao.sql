@@ -475,8 +475,8 @@ create view public.v_material with (security_invoker = true) as
          coalesce(ev.comprado, 0) as comprado, coalesce(ev.entregue, 0) as entregue, coalesce(ev.devolvido, 0) as devolvido,
          case
            when m.estado <> 'ativo' then m.estado
-           when m.quantidade is not null and coalesce(ev.entregue, 0) >= m.quantidade then 'na_obra'
-           when m.quantidade is null and coalesce(ev.entregue, 0) > 0 then 'na_obra'
+           -- Sem quantidade definida, a referência é o que foi comprado.
+           when coalesce(ev.entregue, 0) > 0 and coalesce(ev.entregue, 0) >= coalesce(m.quantidade, nullif(ev.comprado, 0), 0) then 'na_obra'
            when coalesce(ev.entregue, 0) > 0 then 'parcial'
            when m.responsavel_compra <> 'rosae' then 'aguardando_' || m.responsavel_compra
            when m.quantidade is not null and coalesce(ev.comprado, 0) >= m.quantidade then 'comprado'
