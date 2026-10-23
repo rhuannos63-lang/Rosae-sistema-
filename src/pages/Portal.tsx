@@ -17,7 +17,7 @@ import {
 const CHAVE_TOKEN = 'rosae.portal.token';
 let tokenMemoria: string | null = null;
 
-function lerToken(): string | null {
+export function lerToken(): string | null {
   try { return localStorage.getItem(CHAVE_TOKEN) ?? tokenMemoria; } catch { return tokenMemoria; }
 }
 function gravarToken(t: string | null) {
@@ -112,7 +112,7 @@ function useFoto(token: string | null, id: string | null | undefined, grande = f
   return url;
 }
 
-function Imagem({ token, id, grande, alt, className }: { token: string | null; id: string; grande?: boolean; alt: string; className?: string }) {
+export function ImagemPortal({ token, id, grande, alt, className }: { token: string | null; id: string; grande?: boolean; alt: string; className?: string }) {
   const url = useFoto(token, id, grande);
   return url ? <img src={url} alt={alt} className={className} decoding="async" /> : <div className={`${className ?? ''} foto-espera`} aria-hidden="true" />;
 }
@@ -192,7 +192,10 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
           Este acompanhamento mostra o andamento físico publicado pela ROSAE. Valores, pagamentos e documentos comerciais seguem por e-mail.
           {d.expira_em && <> Seu link pessoal vale até {formatarData(d.expira_em)}.</>}
         </p>
-        {sair && <button className="btn-link" onClick={sair}>Sair deste aparelho</button>}
+        <p className="portal-rodape-acoes">
+          <a href={token ? '/c/relatorio' : `/obras/${d.obra.id}/relatorio-cliente`} target={token ? undefined : '_blank'} rel="noreferrer">Relatório para imprimir</a>
+          {sair && <button className="btn-link" onClick={sair}>Sair deste aparelho</button>}
+        </p>
       </footer>
 
       {foto && <VerFoto ctx={ctx} foto={foto} fechar={() => setFoto(null)} mudar={setFoto} />}
@@ -336,7 +339,7 @@ function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
           <div className="portal-faixa">
             {ultimas.map((f) => (
               <button key={f.id} className="portal-mini" onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir foto ${f.legenda ?? ''} de ${formatarData(f.tirada_em)}`}>
-                <Imagem token={ctx.token} id={f.id} alt={f.legenda ?? 'Foto da obra'} />
+                <ImagemPortal token={ctx.token} id={f.id} alt={f.legenda ?? 'Foto da obra'} />
               </button>
             ))}
           </div>
@@ -431,7 +434,7 @@ function Ambientes({ ctx }: { ctx: Ctx }) {
                   <div className="portal-faixa">
                     {fotosAmb.slice(0, 8).map((f) => (
                       <button key={f.id} className="portal-mini" onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir foto de ${formatarData(f.tirada_em)}`}>
-                        <Imagem token={ctx.token} id={f.id} alt={f.legenda ?? 'Foto do ambiente'} />
+                        <ImagemPortal token={ctx.token} id={f.id} alt={f.legenda ?? 'Foto do ambiente'} />
                       </button>
                     ))}
                   </div>
@@ -469,7 +472,7 @@ function Fotos({ ctx }: { ctx: Ctx }) {
       <div className="portal-galeria">
         {lista.map((f) => (
           <button key={f.id} className="portal-foto" onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir foto ${f.legenda ?? ''} de ${formatarData(f.tirada_em)}`}>
-            <Imagem token={ctx.token} id={f.id} alt={f.legenda ?? 'Foto da obra'} />
+            <ImagemPortal token={ctx.token} id={f.id} alt={f.legenda ?? 'Foto da obra'} />
             <span className="portal-foto-data">{formatarData(f.tirada_em)} · {MOMENTO[f.momento]}</span>
           </button>
         ))}
@@ -484,9 +487,9 @@ function AntesDepois({ ctx, antes, depois }: { ctx: Ctx; antes: FotoPortal; depo
   return (
     <figure className="portal-comparador">
       <div className="portal-comparador-quadro">
-        <Imagem token={ctx.token} id={depois.id} grande alt={`Depois: ${titulo}`} />
+        <ImagemPortal token={ctx.token} id={depois.id} grande alt={`Depois: ${titulo}`} />
         <div className="portal-comparador-antes" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
-          <Imagem token={ctx.token} id={antes.id} grande alt={`Antes: ${titulo}`} />
+          <ImagemPortal token={ctx.token} id={antes.id} grande alt={`Antes: ${titulo}`} />
         </div>
         <div className="portal-comparador-linha" style={{ left: `${pos}%` }} aria-hidden="true" />
         <span className="portal-comparador-rot esq">Antes</span><span className="portal-comparador-rot dir">Depois</span>
@@ -521,7 +524,7 @@ function VerFoto({ ctx, foto, fechar, mudar }: { ctx: Ctx; foto: FotoPortal; fec
           <button className="portal-luz-fechar" onClick={fechar} aria-label="Fechar"><Icone nome="fechar" /></button>
         </div>
         <div className="portal-luz-img">
-          <Imagem token={ctx.token} id={foto.id} grande alt={foto.legenda ?? 'Foto da obra'} />
+          <ImagemPortal token={ctx.token} id={foto.id} grande alt={foto.legenda ?? 'Foto da obra'} />
           {i > 0 && <button className="portal-luz-nav esq" onClick={() => mudar(lista[i - 1])} aria-label="Foto anterior"><Icone nome="voltar" /></button>}
           {i < lista.length - 1 && <button className="portal-luz-nav dir" onClick={() => mudar(lista[i + 1])} aria-label="Próxima foto"><Icone nome="voltar" /></button>}
         </div>
@@ -601,7 +604,7 @@ function FotosDoRegistro({ ctx, id }: { ctx: Ctx; id: string }) {
     <div className="portal-faixa">
       {fotos.map((f) => (
         <button key={f.id} className="portal-mini" onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir foto de ${formatarData(f.tirada_em)}`}>
-          <Imagem token={ctx.token} id={f.id} alt={f.legenda ?? 'Foto do registro'} />
+          <ImagemPortal token={ctx.token} id={f.id} alt={f.legenda ?? 'Foto do registro'} />
         </button>
       ))}
     </div>

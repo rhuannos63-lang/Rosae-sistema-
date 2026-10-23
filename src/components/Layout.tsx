@@ -7,9 +7,12 @@ const itens = [
   { para: '/comercial', rotulo: 'Comercial', icone: 'comercial', fin: false, comercial: true },
   { para: '/obras', rotulo: 'Obras', icone: 'obras', fin: false },
   { para: '/financeiro', rotulo: 'Financeiro', icone: 'financeiro', fin: true },
+  { para: '/pendencias', rotulo: 'Pendências', icone: 'alerta', fin: false },
+  { para: '/notas', rotulo: 'Notas fiscais', icone: 'documento', fin: true },
   { para: '/contas', rotulo: 'Contas', icone: 'contas', fin: true },
   { para: '/planejador', rotulo: 'Planejador', icone: 'planejador', fin: true },
   { para: '/pessoas', rotulo: 'Cadastros', icone: 'pessoas', fin: false },
+  { para: '/ajuda', rotulo: 'Ajuda', icone: 'ajuda', fin: false },
   { para: '/configuracoes', rotulo: 'Configurações', icone: 'config', fin: false, admin: true },
 ];
 

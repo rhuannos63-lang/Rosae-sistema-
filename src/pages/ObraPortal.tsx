@@ -104,7 +104,10 @@ export function PortalObra({ obra, aoMudar }: { obra: ObraPortalCampos; aoMudar:
               O cliente vê só o que estiver publicado: andamento físico, etapas visíveis, fotos, decisões e materiais sem valores. Nunca vê preços, pagamentos, notas ou notas internas.
             </p>
           </div>
-          <a className="btn-secundario" href={`/obras/${obra.id}/portal-previa`} target="_blank" rel="noreferrer"><Icone nome="olho" /> Ver como cliente</a>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <a className="btn-secundario" href={`/obras/${obra.id}/portal-previa`} target="_blank" rel="noreferrer"><Icone nome="olho" /> Ver como cliente</a>
+            <a className="btn-secundario" href={`/obras/${obra.id}/relatorio-cliente`} target="_blank" rel="noreferrer"><Icone nome="imprimir" /> Relatório do cliente</a>
+          </div>
         </div>
       </div>
 

@@ -302,6 +302,7 @@ export function ObraDetalhe() {
     <>
       <Topo titulo={obra.nome} sub={<>{obra.codigo} · {seloStatus(obra.status)}</>}>
         <button className="btn-secundario" onClick={() => navegar('/obras')}><Icone nome="voltar" /> Obras</button>
+        {ehAdm && <a className="btn-secundario" href={`/obras/${obra.id}/relatorio`} target="_blank" rel="noreferrer"><Icone nome="imprimir" /> Relatório</a>}
         {ehAdm && <button className="btn-secundario" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar</button>}
       </Topo>
 

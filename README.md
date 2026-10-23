@@ -1,6 +1,6 @@
 # ROSAE · Sistema de gestão
 
-Sistema de uso próprio da ROSAE Engenharia & Estruturas: comercial e propostas, obras (contrato, cronograma, materiais, diário, fichas), financeiro, painel e portal do cliente.
+Sistema de uso próprio da ROSAE Engenharia & Estruturas: comercial e propostas, obras (contrato, cronograma, materiais, diário, fichas), financeiro (com importação de NF-e em XML), painel, central de pendências, relatórios, ajuda e portal do cliente.
 
 ## Como está montado
 
@@ -23,6 +23,9 @@ Regras que o código garante:
 - Portal do cliente: cada pessoa recebe um link pessoal (`/c/<token>`) com validade e revogação; o banco guarda só o hash.
   O cliente só chama funções `portal_*`, que devolvem o que foi publicado (nunca valores, pagamentos, notas ou notas internas).
   Fotos publicadas ganham cópia reduzida sem metadados; retirar a publicação apaga a cópia. Ciência é por pessoa e por versão do conteúdo.
+- Nota fiscal (XML da NF-e): conferida antes de importar, bloqueada contra duplicidade (chave e emitente+série+número),
+  e só vira conta a pagar uma vez, na confirmação (ou é ligada a uma conta já lançada). Foto, PDF e QR ainda não são lidos automaticamente.
+- Central de pendências (`central_pendencias()`) junta propostas, contas, notas, materiais, etapas paradas, mensagens do portal e cadastros incompletos; cada aviso pode ser adiado ou dispensado por usuário.
 
 ## Rodar no computador
 

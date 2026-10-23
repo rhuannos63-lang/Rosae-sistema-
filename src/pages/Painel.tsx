@@ -9,6 +9,7 @@ import { Icone } from '../components/Icone';
 import { doBanco, formatar, type Centavos } from '../core/dinheiro';
 import { deslocarPeriodo, hoje, nomeMesCurto, periodo } from '../core/datas';
 import type { Empresa } from '../lib/tipos';
+import { LinhaPendencia, usePendencias } from './Pendencias';
 
 type Comercial = { enviadas: number; em_negociacao: number; aprovadas_periodo: number; recusadas_periodo: number; rascunhos: number; oportunidades_abertas: number; acoes_atrasadas: number; cliques_whatsapp: number; formularios: number };
 type Indicadores = Record<string, string | number | boolean | null | Comercial> & { sem_permissao?: boolean; gerencial?: boolean; comercial?: Comercial | null };
@@ -128,7 +129,7 @@ export function Painel() {
   );
 }
 
-function ConteudoPainel({ ind, serie, empresa, qs, rotulo, tipo, ehAdmin }: { ind: Indicadores; serie: Serie[]; empresa: Empresa | null; qs: string; rotulo: string; tipo: TipoPeriodo; ehAdmin: boolean }) {
+function ConteudoPainel({ ind, serie, qs, rotulo, tipo }: { ind: Indicadores; serie: Serie[]; empresa: Empresa | null; qs: string; rotulo: string; tipo: TipoPeriodo; ehAdmin: boolean }) {
   if (ind.sem_permissao) {
     return (
       <div className="grid grid-kpi">
@@ -143,12 +144,6 @@ function ConteudoPainel({ ind, serie, empresa, qs, rotulo, tipo, ehAdmin }: { in
   const metaRec = ind.meta_recebimentos === null ? null : c('meta_recebimentos') * meses;
   const metaVen = ind.meta_vendas === null ? null : c('meta_vendas') * meses;
   const resultadoCaixa = c('recebido') - c('pago_obras') - c('pago_empresa');
-  const pendencias: { texto: string; para: string }[] = [];
-  if (Number(ind.a_receber_vencido_qtd) > 0) pendencias.push({ texto: `${ind.a_receber_vencido_qtd} recebimento(s) vencido(s): ${formatar(c('a_receber_vencido'))}`, para: '/financeiro?tipo=receber&situacao=vencida' });
-  if (Number(ind.a_pagar_7_dias_qtd) > 0) pendencias.push({ texto: `${ind.a_pagar_7_dias_qtd} pagamento(s) vencido(s) ou nos próximos 7 dias: ${formatar(c('a_pagar_7_dias'))}`, para: '/financeiro?tipo=pagar&situacao=proximos' });
-  if (ind.comercial && ind.comercial.acoes_atrasadas > 0) pendencias.push({ texto: `${ind.comercial.acoes_atrasadas} oportunidade(s) com próxima ação atrasada`, para: '/comercial' });
-  if (empresa && !empresa.registro_conferido) pendencias.push({ texto: 'Registro profissional (CREA) ainda não conferido para documentos oficiais', para: ehAdmin ? '/configuracoes' : '/' });
-  if (empresa && !empresa.cnpj) pendencias.push({ texto: 'CNPJ não informado (documentos mostram "a preencher")', para: ehAdmin ? '/configuracoes' : '/' });
 
   return (
     <>
@@ -229,19 +224,9 @@ function ConteudoPainel({ ind, serie, empresa, qs, rotulo, tipo, ehAdmin }: { in
         <div className="card">
           <div className="card-titulo">
             <h2>Pendências</h2>
+            <Link to="/pendencias" className="small">Ver todas</Link>
           </div>
-          {pendencias.length === 0 ? (
-            <p className="muted" style={{ margin: 0 }}>Nada exigindo ação agora.</p>
-          ) : (
-            <div className="stack" style={{ gap: 8 }}>
-              {pendencias.map((p) => (
-                <Link key={p.texto} to={p.para} className="item-cartao">
-                  <span>{p.texto}</span>
-                  <Icone nome="seta" className="seta" />
-                </Link>
-              ))}
-            </div>
-          )}
+          <ResumoPendencias />
         </div>
         <div className="card">
           <div className="card-titulo">
@@ -291,5 +276,18 @@ function Comparativo({ atual, anterior, anoAnterior, rotulo, rotuloAnt, rotuloAn
       </div>
       <p className="muted small" style={{ marginBottom: 0 }}>Percentuais comparam o período atual com cada coluna. Mais recebimento não significa mais lucro: confira custos e o resultado por obra.</p>
     </div>
+  );
+}
+
+function ResumoPendencias() {
+  const { dados, erro } = usePendencias();
+  if (erro) return <p className="muted small">{erro}</p>;
+  if (!dados) return <p className="muted small">Carregando…</p>;
+  if (!dados.length) return <p className="muted" style={{ margin: 0 }}>Nada exigindo ação agora.</p>;
+  return (
+    <>
+      <ul className="lista-adm">{dados.slice(0, 6).map((i) => <LinhaPendencia key={i.chave} i={i} />)}</ul>
+      {dados.length > 6 && <Link to="/pendencias" className="small">Mais {dados.length - 6} na central de pendências</Link>}
+    </>
   );
 }
