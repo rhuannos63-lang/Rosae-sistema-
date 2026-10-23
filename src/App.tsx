@@ -18,6 +18,7 @@ import { Planejador } from './pages/Planejador';
 import { Mais } from './components/Layout';
 import { Clausulas, ContratoImprimir } from './pages/ObraContrato';
 import { FichaAtual, FichaImprimir } from './pages/Fichas';
+import { Portal, PortalEntrada, PortalPrevia } from './pages/Portal';
 
 function Rotas() {
   const { carregando, sessao, usuario, existeAdmin, podeFinanceiro, ehAdmin, definirSenha } = useAuth();
@@ -31,6 +32,7 @@ function Rotas() {
     <Routes>
       {comercial && <Route path="propostas/:id/imprimir" element={<PropostaImprimir />} />}
       {comercial && <Route path="contratos/:id/imprimir" element={<ContratoImprimir />} />}
+      {comercial && <Route path="obras/:id/portal-previa" element={<PortalPrevia />} />}
       <Route path="fichas/:id/imprimir" element={<FichaImprimir />} />
       <Route element={<Layout />}>
         <Route index element={<Painel />} />
@@ -63,6 +65,9 @@ export function App() {
       <Routes>
         {/* Link da proposta para o cliente: sem login. */}
         <Route path="/p/:token" element={<PropostaPublica />} />
+        {/* Portal do cliente: link pessoal, com expiração e revogação. */}
+        <Route path="/c/:token" element={<PortalEntrada />} />
+        <Route path="/c" element={<Portal />} />
         <Route
           path="*"
           element={

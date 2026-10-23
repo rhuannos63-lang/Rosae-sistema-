@@ -206,7 +206,7 @@ export type Foto = {
 export type Pendencia = {
   id: string; obra_id: string; tipo: 'pendencia' | 'decisao_cliente' | 'impedimento' | 'inspecao'; titulo: string; descricao: string | null;
   prioridade: 'alta' | 'media' | 'baixa'; responsavel: 'rosae' | 'cliente' | 'parceiro' | 'outro'; prazo: string | null;
-  estado: 'aberta' | 'resolvida' | 'cancelada'; resolucao: string | null; resolvida_em: string | null; servico_id: string | null; etapa_id: string | null; criado_em: string;
+  estado: 'aberta' | 'resolvida' | 'cancelada'; resolucao: string | null; resolvida_em: string | null; servico_id: string | null; etapa_id: string | null; criado_em: string; publicado_em?: string | null;
 };
 export const TIPO_PENDENCIA: Record<Pendencia['tipo'], string> = { pendencia: 'Pendência', decisao_cliente: 'Decisão do cliente', impedimento: 'Impedimento', inspecao: 'Inspeção' };
 export const RESPONSAVEL_PENDENCIA: Record<Pendencia['responsavel'], string> = { rosae: 'ROSAE', cliente: 'Cliente', parceiro: 'Parceiro', outro: 'Outro' };

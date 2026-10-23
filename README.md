@@ -1,6 +1,6 @@
 # ROSAE · Sistema de gestão
 
-Sistema de uso próprio da ROSAE Engenharia & Estruturas: obras, cadastros, financeiro e painel. Portal do cliente, propostas e operação de obra chegam nas próximas etapas.
+Sistema de uso próprio da ROSAE Engenharia & Estruturas: comercial e propostas, obras (contrato, cronograma, materiais, diário, fichas), financeiro, painel e portal do cliente.
 
 ## Como está montado
 
@@ -20,6 +20,9 @@ Regras que o código garante:
 - Toda tabela crítica grava auditoria (quem, quando, antes e depois); a auditoria só aceita inclusão.
 - Permissões validadas no banco para os quatro perfis; o cliente não lê nenhuma tabela.
 - Sem regra de reconhecimento de receita configurada, todo resultado aparece como gerencial.
+- Portal do cliente: cada pessoa recebe um link pessoal (`/c/<token>`) com validade e revogação; o banco guarda só o hash.
+  O cliente só chama funções `portal_*`, que devolvem o que foi publicado (nunca valores, pagamentos, notas ou notas internas).
+  Fotos publicadas ganham cópia reduzida sem metadados; retirar a publicação apaga a cópia. Ciência é por pessoa e por versão do conteúdo.
 
 ## Rodar no computador
 
