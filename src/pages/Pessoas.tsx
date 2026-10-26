@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { Topo } from '../components/Layout';
@@ -16,7 +17,9 @@ function papeis(p: Pessoa): string[] {
 
 export function Pessoas() {
   const [filtro, setFiltro] = useState<Filtro>('todos');
-  const [busca, setBusca] = useState('');
+  const [params] = useSearchParams();
+  const [busca, setBusca] = useState(params.get('busca') ?? '');
+  useEffect(() => { const b = params.get('busca'); if (b !== null) setBusca(b); }, [params]);
   const [editando, setEditando] = useState<Pessoa | 'nova' | null>(null);
   const { dados, erro, carregando, recarregar } = useConsulta(
     async () => ok(await supabase.from('pessoa').select('*').order('nome')) as Pessoa[],

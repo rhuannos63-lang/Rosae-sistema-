@@ -7,6 +7,8 @@ import { Icone } from '../components/Icone';
 import { doBanco, formatar, paraBanco, type Centavos } from '../core/dinheiro';
 import { formatarData, hoje } from '../core/datas';
 import type { Pessoa } from '../lib/tipos';
+import { Grafico } from '../components/graficos';
+import { formatarCompacto } from '../core/graficos';
 import { LancamentoForm } from './Financeiro';
 
 type Linha = Record<string, number | string | null> & { servico_id: string | null; nome: string };
@@ -66,6 +68,25 @@ export function ResultadoServicos({ obraId, servicos, aoMudar }: { obraId: strin
         <div className="kpi"><div className="rotulo">Obrigações a pagar</div><div className="valor num">{formatar(n(t.a_pagar))}</div><div className="det">Contratado e ainda não pago</div></div>
         <div className="kpi"><div className="rotulo">Saldo de caixa</div><div className="valor num">{formatar(n(t.saldo_caixa))}</div><div className="det">Recebido {formatar(n(t.recebido))} − pago {formatar(n(t.pago))}</div></div>
       </div>
+      {dados.servicos.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <Grafico
+            rotulos={dados.servicos.map((s) => (s.nome.length > 22 ? s.nome.slice(0, 21) + '…' : s.nome))}
+            rotulosLongos={dados.servicos.map((s) => s.nome)}
+            series={[
+              { chave: 'vendido', nome: 'Vendido', cor: 'var(--serie-1)', valores: dados.servicos.map((s) => n(s.vendido)) },
+              { chave: 'custo', nome: 'Custo estimado', cor: 'var(--serie-2)', valores: dados.servicos.map((s) => n(s.custo_estimado)) },
+              { chave: 'pago', nome: 'Pago', cor: 'var(--serie-3)', valores: dados.servicos.map((s) => n(s.pago)) },
+            ]}
+            formatar={formatar} formatarEixo={formatarCompacto} altura={230}
+            descricao="Vendido, custo estimado e pago por serviço"
+            aoSelecionar={(i) => setDetalhe(dados.servicos[i])} dicaSelecionar="Clique para ver a composição"
+            extraDica={(i) => (
+              <div className="g-dica-extra"><span className="muted">Diferença estimada</span><b className="num" style={{ color: n(dados.servicos[i].diferenca_estimada) < 0 ? 'var(--desfavoravel)' : 'var(--favoravel)' }}>{formatar(n(dados.servicos[i].diferenca_estimada))}</b></div>
+            )}
+          />
+        </div>
+      )}
       <div className="tabela-wrap">
         <table className="tabela">
           <thead>
