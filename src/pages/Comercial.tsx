@@ -42,6 +42,7 @@ export function Comercial() {
   const [modo, setModo] = useState<'quadro' | 'lista'>(() => (window.innerWidth <= 860 ? 'lista' : 'quadro'));
   const [filtro, setFiltro] = useState<'abertas' | 'atrasadas' | 'encerradas'>('abertas');
   const [busca, setBusca] = useState('');
+  const [etapa, setEtapa] = useState<string | null>(null);
   const [nova, setNova] = useState(false);
   const [site, setSite] = useState(false);
   const { dados, erro, carregando, recarregar } = useConsulta(async () => {
@@ -59,10 +60,13 @@ export function Comercial() {
     if (filtro === 'abertas' && t !== 'aberto' && t !== 'ganho') return false;
     if (filtro === 'encerradas' && (t === 'aberto')) return false;
     if (filtro === 'atrasadas' && !(t === 'aberto' && o.proxima_acao_data && o.proxima_acao_data < hoje())) return false;
+    if (etapa && o.estado_id !== etapa) return false;
     const b = busca.trim().toLowerCase();
     return !b || [o.titulo, o.pessoa?.nome, o.pessoa?.telefone, o.codigo, o.local_obra].some((v) => v?.toLowerCase().includes(b));
   });
-  const colunas = estados.filter((e) => (filtro === 'encerradas' ? e.tipo !== 'aberto' : e.tipo === 'aberto' || e.tipo === 'ganho'));
+  const colunas = estados.filter((e) => (filtro === 'encerradas' ? e.tipo !== 'aberto' : e.tipo === 'aberto' || e.tipo === 'ganho')).filter((e) => !etapa || e.id === etapa);
+  const funil = estados.filter((e) => e.tipo === 'aberto' || e.tipo === 'ganho').map((e) => ({ e, qtd: (dados?.ops ?? []).filter((o) => o.estado_id === e.id).length }));
+  const maxFunil = Math.max(1, ...funil.map((f) => f.qtd));
   const atrasadas = (dados?.ops ?? []).filter((o) => tipoDe.get(o.estado_id)?.tipo === 'aberto' && o.proxima_acao_data && o.proxima_acao_data < hoje()).length;
 
   return (
@@ -78,8 +82,20 @@ export function Comercial() {
           <span>{atrasadas === 1 ? '1 oportunidade está' : `${atrasadas} oportunidades estão`} com a próxima ação atrasada. <button className="btn-link" onClick={() => setFiltro('atrasadas')}>Ver</button></span>
         </div>
       )}
+      {funil.length > 0 && filtro !== 'encerradas' && (
+        <div className="funil" role="group" aria-label="Funil: clique numa etapa para filtrar">
+          {funil.map(({ e, qtd }) => (
+            <button key={e.id} className={etapa === e.id ? 'ativo' : ''} aria-pressed={etapa === e.id} onClick={() => setEtapa(etapa === e.id ? null : e.id)} title={etapa === e.id ? 'Mostrar todas as etapas' : `Ver só “${e.nome}”`}>
+              <span className="f-nome">{e.nome}</span>
+              <span className="f-num num">{qtd}</span>
+              <span className="f-trilho"><span style={{ width: `${(qtd / maxFunil) * 100}%`, background: e.tipo === 'ganho' ? 'var(--favoravel)' : undefined }} /></span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="card">
         <div className="row" style={{ marginBottom: 12 }}>
+          {etapa && <button className="chip-link ativo" onClick={() => setEtapa(null)}>{tipoDe.get(etapa)?.nome} <Icone nome="fechar" /></button>}
           <div className="segmentado" role="group" aria-label="Filtro">
             {(['abertas', 'atrasadas', 'encerradas'] as const).map((f) => (
               <button key={f} className={filtro === f ? 'ativo' : ''} onClick={() => setFiltro(f)}>

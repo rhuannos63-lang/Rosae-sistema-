@@ -1,20 +1,26 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Icone } from './Icone';
 import { useAuth } from '../auth/AuthProvider';
+import { BuscaRapida, useBuscaRapida } from './BuscaRapida';
 
-const itens = [
-  { para: '/', rotulo: 'Início', icone: 'inicio', fin: false },
-  { para: '/comercial', rotulo: 'Comercial', icone: 'comercial', fin: false, comercial: true },
-  { para: '/obras', rotulo: 'Obras', icone: 'obras', fin: false },
-  { para: '/financeiro', rotulo: 'Financeiro', icone: 'financeiro', fin: true },
-  { para: '/pendencias', rotulo: 'Pendências', icone: 'alerta', fin: false },
-  { para: '/notas', rotulo: 'Notas fiscais', icone: 'documento', fin: true },
-  { para: '/contas', rotulo: 'Contas', icone: 'contas', fin: true },
-  { para: '/planejador', rotulo: 'Planejador', icone: 'planejador', fin: true },
-  { para: '/pessoas', rotulo: 'Cadastros', icone: 'pessoas', fin: false },
-  { para: '/ajuda', rotulo: 'Ajuda', icone: 'ajuda', fin: false },
-  { para: '/configuracoes', rotulo: 'Configurações', icone: 'config', fin: false, admin: true },
+type Item = { para: string; rotulo: string; icone: string; fin: boolean; grupo?: string; comercial?: boolean; admin?: boolean };
+
+const itens: Item[] = [
+  { para: '/', rotulo: 'Início', icone: 'inicio', fin: false, grupo: 'Gestão' },
+  { para: '/comercial', rotulo: 'Comercial', icone: 'comercial', fin: false, comercial: true, grupo: 'Gestão' },
+  { para: '/obras', rotulo: 'Obras', icone: 'obras', fin: false, grupo: 'Gestão' },
+  { para: '/financeiro', rotulo: 'Financeiro', icone: 'financeiro', fin: true, grupo: 'Financeiro' },
+  { para: '/pendencias', rotulo: 'Pendências', icone: 'alerta', fin: false, grupo: 'Gestão' },
+  { para: '/notas', rotulo: 'Notas fiscais', icone: 'documento', fin: true, grupo: 'Financeiro' },
+  { para: '/contas', rotulo: 'Contas', icone: 'contas', fin: true, grupo: 'Financeiro' },
+  { para: '/planejador', rotulo: 'Planejador', icone: 'planejador', fin: true, grupo: 'Financeiro' },
+  { para: '/pessoas', rotulo: 'Cadastros', icone: 'pessoas', fin: false, grupo: 'Sistema' },
+  { para: '/ajuda', rotulo: 'Ajuda', icone: 'ajuda', fin: false, grupo: 'Sistema' },
+  { para: '/configuracoes', rotulo: 'Configurações', icone: 'config', fin: false, admin: true, grupo: 'Sistema' },
 ];
+const GRUPOS = ['Gestão', 'Financeiro', 'Sistema'];
+const PAPEL: Record<string, string> = { administrador: 'Administrador', administrativo: 'Administrativo', financeiro: 'Financeiro', campo: 'Campo' };
+const iniciais = (nome?: string) => (nome ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'R';
 
 function useItens() {
   const { usuario, podeFinanceiro, ehAdmin } = useAuth();
@@ -25,35 +31,58 @@ function useItens() {
 export function Layout() {
   const { usuario, sair } = useAuth();
   const visiveis = useItens();
+  const local = useLocation();
+  const [busca, setBusca] = useBuscaRapida();
   const mobile = visiveis.length > 5 ? [...visiveis.slice(0, 4), { para: '/mais', rotulo: 'Mais', icone: 'menu', fin: false }] : visiveis;
+  const ehMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+  const destinos = [...visiveis, ...(visiveis.some((i) => i.para === '/comercial') ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'documento' }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista' }] : [])];
   return (
     <div className="shell">
       <aside className="sidebar">
         <div className="logo">
           <img src="/marca/rosae-logo-horizontal-negativo.svg" alt="ROSAE Engenharia & Estruturas" />
         </div>
+        <button type="button" className="busca-atalho" onClick={() => setBusca(true)}>
+          <Icone nome="busca" /> Buscar… <kbd>{ehMac ? '⌘' : 'Ctrl'} K</kbd>
+        </button>
         <nav className="nav" aria-label="Principal">
-          {visiveis.map((i) => (
-            <NavLink key={i.para} to={i.para} end={i.para === '/'}>
-              <Icone nome={i.icone} />
-              {i.rotulo}
-            </NavLink>
-          ))}
+          {GRUPOS.map((g) => {
+            const doGrupo = visiveis.filter((i) => i.grupo === g);
+            if (!doGrupo.length) return null;
+            return (
+              <div key={g} className="nav">
+                <div className="nav-grupo">{g}</div>
+                {doGrupo.map((i) => (
+                  <NavLink key={i.para} to={i.para} end={i.para === '/'}>
+                    <Icone nome={i.icone} />
+                    {i.rotulo}
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
         </nav>
         <div className="rodape">
-          <div>{usuario?.nome}</div>
-          <button className="btn-link" onClick={sair}>Sair</button>
+          <span className="avatar" aria-hidden="true">{iniciais(usuario?.nome)}</span>
+          <div className="quem">
+            <b>{usuario?.nome}</b>
+            <span>{PAPEL[usuario?.papel ?? ''] ?? usuario?.papel}</span>
+          </div>
+          <button onClick={sair} aria-label="Sair" title="Sair"><Icone nome="sair" /></button>
         </div>
       </aside>
       <div>
         <header className="topo-mobile">
           <img src="/marca/rosae-logo-horizontal-negativo.svg" alt="ROSAE" />
-          <button className="btn-link" style={{ color: '#e8e2cc' }} onClick={sair} aria-label="Sair">
-            <Icone nome="sair" />
-          </button>
+          <div className="row" style={{ gap: 2 }}>
+            <button onClick={() => setBusca(true)} aria-label="Buscar"><Icone nome="busca" /></button>
+            <button onClick={sair} aria-label="Sair"><Icone nome="sair" /></button>
+          </div>
         </header>
         <main className="main">
-          <Outlet />
+          <div className="pagina" key={local.pathname}>
+            <Outlet />
+          </div>
         </main>
       </div>
       <nav className="bottom-nav" aria-label="Principal">
@@ -64,6 +93,7 @@ export function Layout() {
           </NavLink>
         ))}
       </nav>
+      {busca && <BuscaRapida destinos={destinos} aoFechar={() => setBusca(false)} />}
     </div>
   );
 }

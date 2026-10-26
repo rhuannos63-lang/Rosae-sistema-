@@ -10,6 +10,8 @@ import {
   desvioDias, diasEntre, ESTADO_ETAPA, limitesLinhaTempo, posicaoBarra, programarSequencial, semanasDoMes, type EstadoEtapa,
 } from '../core/cronograma';
 import type { Etapa, Pessoa, Progresso } from '../lib/tipos';
+import { Grafico, TabelaDados, type Serie } from '../components/graficos';
+import { curvaS, datasDaCurva, pesosNaObra } from '../core/graficos';
 
 type Item = { id: string; nome: string };
 const ESTADOS = Object.keys(ESTADO_ETAPA) as EstadoEtapa[];
@@ -25,7 +27,7 @@ export function BarraProgresso({ valor, conferido, rotulo }: { valor: number; co
 
 export function Cronograma({ obraId, servicos, ehAdm, aoMudar }: { obraId: string; servicos: Item[]; ehAdm: boolean; aoMudar?: () => void }) {
   const toast = useToast();
-  const [visao, setVisao] = useState<'lista' | 'linha' | 'calendario'>('lista');
+  const [visao, setVisao] = useState<'lista' | 'linha' | 'calendario' | 'curva'>('lista');
   const [editar, setEditar] = useState<Etapa | 'nova' | null>(null);
   const [programar, setProgramar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -106,7 +108,7 @@ export function Cronograma({ obraId, servicos, ehAdm, aoMudar }: { obraId: strin
       <div className="card">
         <div className="topo" style={{ marginBottom: 10 }}>
           <div className="segmentado" role="tablist" aria-label="Visão do cronograma">
-            {([['lista', 'Lista'], ['linha', 'Linha do tempo'], ['calendario', 'Calendário']] as const).map(([k, r]) => (
+            {([['lista', 'Lista'], ['linha', 'Linha do tempo'], ['calendario', 'Calendário'], ['curva', 'Curva S']] as const).map(([k, r]) => (
               <button key={k} role="tab" aria-selected={visao === k} className={visao === k ? 'ativo' : ''} onClick={() => setVisao(k)}>{r}</button>
             ))}
           </div>
@@ -118,6 +120,8 @@ export function Cronograma({ obraId, servicos, ehAdm, aoMudar }: { obraId: strin
           <ListaEtapas etapas={ordenadas} servicos={servicos} aoAbrir={setEditar} aoMudarEstado={mudarEstado} ehAdm={ehAdm} />
         ) : visao === 'linha' ? (
           <LinhaTempo etapas={ordenadas} servicos={servicos} aoAbrir={setEditar} />
+        ) : visao === 'curva' ? (
+          <CurvaS etapas={etapas} progresso={prog ?? null} />
         ) : (
           <Calendario etapas={ordenadas} aoAbrir={setEditar} />
         )}
@@ -125,6 +129,59 @@ export function Cronograma({ obraId, servicos, ehAdm, aoMudar }: { obraId: strin
 
       {editar && <EtapaForm obraId={obraId} etapa={editar === 'nova' ? null : editar} etapas={etapas} servicos={servicos} ehAdm={ehAdm} aoFechar={() => setEditar(null)} aoSalvar={() => { setEditar(null); mudou(); }} />}
       {programar && <ProgramarDatas etapas={etapas} aoFechar={() => setProgramar(false)} aoSalvar={() => { setProgramar(false); mudou(); }} />}
+    </div>
+  );
+}
+
+/** Curva S: % acumulado planejado (linha de base) e previsto, com o realizado de hoje para comparar. */
+function CurvaS({ etapas, progresso }: { etapas: Etapa[]; progresso: Progresso | null }) {
+  const [tabela, setTabela] = useState(false);
+  const calc = useMemo(() => {
+    const et = etapas.map((e) => ({ ...e, peso: Number(e.peso) }));
+    const pesoServ = new Map((progresso?.servicos ?? []).map((s) => [s.id, Number(s.peso)]));
+    const pesos = pesosNaObra(et, pesoServ);
+    const datas = et.flatMap((e) => [e.inicio_previsto, e.fim_previsto, e.inicio_base, e.fim_base]).filter(Boolean) as string[];
+    if (!datas.length) return null;
+    const lim = limitesLinhaTempo([...datas, hoje()], 1)!;
+    const pontos = datasDaCurva(lim.inicio, lim.fim, 36);
+    const prev = curvaS(et, pesos, pontos, 'previsto');
+    const base = curvaS(et, pesos, pontos, 'base');
+    const ih = pontos.findIndex((d) => d >= hoje());
+    return { pontos, prev, base, ih: ih < 0 ? pontos.length - 1 : ih };
+  }, [etapas, progresso]);
+  if (!calc) return <Vazio titulo="Sem datas ainda"><p>Programe as datas das etapas para ver a Curva S.</p></Vazio>;
+  const { pontos, prev, base, ih } = calc;
+  const temBase = base.some((v) => v !== null);
+  const series: Serie[] = [
+    ...(temBase ? [{ chave: 'base', nome: 'Planejado (linha de base)', cor: 'var(--serie-3)', valores: base, forma: 'linha' as const, tracejada: true }] : []),
+    { chave: 'prev', nome: 'Previsão atual', cor: 'var(--serie-1)', valores: prev, forma: 'area' },
+  ];
+  const fmt = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+  const planejadoHoje = (temBase ? base[ih] : prev[ih]) ?? 0;
+  const real = progresso?.executado ?? 0;
+  const desvio = Math.round((real - planejadoHoje) * 10) / 10;
+  const rotulos = pontos.map((d) => formatarData(d).slice(0, 5));
+  return (
+    <div className="stack">
+      <div className="detalhe-numeros" style={{ margin: 0 }}>
+        <div><span>{temBase ? 'Planejado até hoje' : 'Previsto até hoje'}</span><b>{fmt(planejadoHoje)}</b></div>
+        <div><span>Executado (real)</span><b>{fmt(real)}</b></div>
+        <div><span>Desvio</span><b style={{ color: desvio < 0 ? 'var(--desfavoravel)' : 'var(--favoravel)' }}>{desvio > 0 ? '+' : ''}{desvio.toLocaleString('pt-BR')} p.p.</b></div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', background: 'none', border: 0 }}>
+          <button className="btn-secundario" style={{ padding: '5px 10px', fontSize: '0.8rem' }} onClick={() => setTabela((t) => !t)}><Icone nome={tabela ? 'grafico' : 'tabela'} /> {tabela ? 'Gráfico' : 'Tabela'}</button>
+        </div>
+      </div>
+      {tabela ? (
+        <TabelaDados rotulos={pontos.map(formatarData)} series={series} formatar={fmt} cabecalho="Data" />
+      ) : (
+        <Grafico
+          rotulos={rotulos} rotulosLongos={pontos.map(formatarData)} series={series} formatar={fmt} dominio={[0, 100]} altura={280}
+          descricao="Curva S da obra: percentual acumulado por data" marcador={{ indice: ih, rotulo: `hoje · real ${fmt(real)}` }}
+        />
+      )}
+      <p className="muted small" style={{ margin: 0 }}>
+        A curva distribui o peso de cada etapa entre início e fim. {temBase ? 'A linha tracejada é o planejamento original combinado com o cliente.' : 'Guarde a linha de base para comparar com o planejamento original.'} Desvio negativo = obra atrás do planejado.
+      </p>
     </div>
   );
 }
