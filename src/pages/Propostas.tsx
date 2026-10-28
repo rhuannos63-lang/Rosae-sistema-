@@ -16,6 +16,9 @@ import {
 } from '../core/proposta';
 import { ESTADO_PROPOSTA, EVENTO_PROPOSTA, type EstadoProposta, type Proposta, type PropostaEvento, type PropostaVersao } from '../lib/tipos';
 import { linkWhatsApp } from './Comercial';
+import { estadoInicial, OrcamentoGerador, type EstadoGerador } from '../components/OrcamentoGerador';
+import { carregarPrecos } from '../lib/orcamentoParametros';
+import type { Orcamento } from '../core/orcamento';
 
 type PropostaLista = Proposta & { versoes: { id: string; numero: number; valor_total: string; emitida: boolean; validade: string | null }[] };
 
@@ -90,7 +93,7 @@ type Carga = {
 };
 
 const ABAS = [
-  ['geral', 'Apresentação'], ['escopo', 'Escopo e valores'], ['incluso', 'Incluso / não incluso'], ['resp', 'Responsabilidades'],
+  ['auto', 'Orçamento automático'], ['geral', 'Apresentação'], ['escopo', 'Escopo e valores'], ['incluso', 'Incluso / não incluso'], ['resp', 'Responsabilidades'],
   ['prazo', 'Etapas e prazo'], ['pagamento', 'Pagamento'], ['condicoes', 'Premissas'], ['custos', 'Custos internos'], ['revisao', 'Revisar e emitir'],
 ] as const;
 type Aba = (typeof ABAS)[number][0];
@@ -194,7 +197,12 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
     if (!n.local && p.oportunidade?.local_obra) n.local = p.oportunidade.local_obra;
     return n;
   });
-  const [aba, setAba] = useState<Aba>(c.ambientes.length ? 'escopo' : 'geral');
+  const [params] = useSearchParams();
+  const [aba, setAba] = useState<Aba>(() => {
+    const pedida = params.get('aba');
+    if (pedida && ABAS.some(([k]) => k === pedida)) return pedida as Aba;
+    return c.ambientes.length ? 'escopo' : 'auto';
+  });
   const [estadoSalvo, setEstadoSalvo] = useState<'salvo' | 'pendente' | 'salvando' | 'erro'>('salvo');
   const [erro, setErro] = useState<string | null>(null);
   const [custos, setCustos] = useState<Custo[]>([]);
@@ -274,6 +282,18 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
       </nav>
       <div className="card">
         <Erro mensagem={erro} />
+        {aba === 'auto' && (
+          <AbaAutomatica c={c} biblioteca={carga.biblioteca} podeFinanceiro={podeFinanceiro} aoAplicar={async (o) => {
+            setC(o.conteudo);
+            if (podeFinanceiro) {
+              setCustos(o.custos);
+              const { error } = await supabase.from('proposta_custo').upsert({ versao_id: versao.id, custos: { linhas: o.custos }, custo_total: paraBanco(Math.round(o.analise.custo * 100)), notas_internas: notas || `Gerado pelo orçamento automático (pacote ${o.principal.nome}).` });
+              if (error) setErro(mensagemErro(error));
+            }
+            toast('Proposta montada. Confira cada parte e veja como o cliente vai receber.');
+            setAba('revisao');
+          }} />
+        )}
         {aba === 'geral' && <AbaGeral c={c} setC={setC} biblioteca={carga.biblioteca} irPara={setAba} aditivo={carga.proposta.tipo === 'aditivo'} />}
         {aba === 'escopo' && <AbaEscopo c={c} setC={setC} biblioteca={carga.biblioteca} />}
         {aba === 'incluso' && (
@@ -341,6 +361,29 @@ function Comparacao({ a, b, na, nb, aoFechar }: { a: Conteudo; b: Conteudo; na: 
 }
 
 type SetC = React.Dispatch<React.SetStateAction<Conteudo>>;
+
+function AbaAutomatica({ c, biblioteca, podeFinanceiro, aoAplicar }: { c: Conteudo; biblioteca: ModeloServico[]; podeFinanceiro: boolean; aoAplicar: (o: Orcamento) => void }) {
+  const precos = useConsulta(() => carregarPrecos(), []);
+  const [estado, setEstado] = useState<EstadoGerador>(() => estadoInicial(c.gerador));
+  const contexto = useMemo(() => ({ necessidade: c.necessidade, local: c.local, biblioteca, base: c }), [c, biblioteca]);
+  if (precos.carregando && !precos.dados) return <Carregando />;
+  if (precos.erro || !precos.dados) return <Erro mensagem={precos.erro ?? 'Erro ao carregar a tabela de preços.'} />;
+  return (
+    <div className="stack">
+      <p className="muted small" style={{ margin: 0 }}>
+        Escolha o tipo de serviço e responda às perguntas. O sistema monta escopo, pacotes, prazos, pagamento e todos os textos da apresentação com a sua tabela de preços.
+        Depois você ajusta o que quiser nas outras abas.
+      </p>
+      <OrcamentoGerador estado={estado} setEstado={setEstado} precos={precos.dados} contexto={contexto} podeFinanceiro={podeFinanceiro}
+        acao={(o) => (
+          <button className="btn-primario btn-grande" disabled={o.principal.valor <= 0}
+            onClick={() => (c.ambientes.length === 0 || window.confirm('Substituir o escopo, os valores e os textos atuais por este orçamento? A versão em rascunho é sobrescrita.')) && aoAplicar(o)}>
+            <Icone nome="varinha" /> {c.gerador ? 'Atualizar a proposta' : 'Montar a proposta'}
+          </button>
+        )} />
+    </div>
+  );
+}
 
 function AbaGeral({ c, setC, biblioteca, irPara, aditivo }: { c: Conteudo; setC: SetC; biblioteca: ModeloServico[]; irPara: (a: Aba) => void; aditivo: boolean }) {
   const [pedido, setPedido] = useState(c.necessidade);

@@ -8,6 +8,8 @@ type Item = { para: string; rotulo: string; icone: string; fin: boolean; grupo?:
 const itens: Item[] = [
   { para: '/', rotulo: 'Início', icone: 'inicio', fin: false, grupo: 'Gestão' },
   { para: '/comercial', rotulo: 'Comercial', icone: 'comercial', fin: false, comercial: true, grupo: 'Gestão' },
+  { para: '/orcamento', rotulo: 'Novo orçamento', icone: 'varinha', fin: false, comercial: true, grupo: 'Gestão' },
+  { para: '/agenda', rotulo: 'Agenda', icone: 'calendario', fin: false, grupo: 'Gestão' },
   { para: '/obras', rotulo: 'Obras', icone: 'obras', fin: false, grupo: 'Gestão' },
   { para: '/financeiro', rotulo: 'Financeiro', icone: 'financeiro', fin: true, grupo: 'Financeiro' },
   { para: '/pendencias', rotulo: 'Pendências', icone: 'alerta', fin: false, grupo: 'Gestão' },
@@ -22,6 +24,12 @@ const GRUPOS = ['Gestão', 'Financeiro', 'Sistema'];
 const PAPEL: Record<string, string> = { administrador: 'Administrador', administrativo: 'Administrativo', financeiro: 'Financeiro', campo: 'Campo' };
 const iniciais = (nome?: string) => (nome ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'R';
 
+// Barra de baixo do celular: as 4 áreas de uso diário; o resto fica em "Mais".
+const BARRA = ['/', '/comercial', '/obras', '/financeiro', '/agenda', '/pendencias'];
+function naBarra(visiveis: Item[]): Item[] {
+  return BARRA.map((p) => visiveis.find((i) => i.para === p)).filter((i): i is Item => !!i).slice(0, 4);
+}
+
 function useItens() {
   const { usuario, podeFinanceiro, ehAdmin } = useAuth();
   const comercial = usuario?.papel === 'administrador' || usuario?.papel === 'administrativo';
@@ -33,7 +41,7 @@ export function Layout() {
   const visiveis = useItens();
   const local = useLocation();
   const [busca, setBusca] = useBuscaRapida();
-  const mobile = visiveis.length > 5 ? [...visiveis.slice(0, 4), { para: '/mais', rotulo: 'Mais', icone: 'menu', fin: false }] : visiveis;
+  const mobile = visiveis.length > 5 ? [...naBarra(visiveis), { para: '/mais', rotulo: 'Mais', icone: 'menu', fin: false }] : visiveis;
   const ehMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const destinos = [...visiveis, ...(visiveis.some((i) => i.para === '/comercial') ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'documento' }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista' }] : [])];
   return (
@@ -117,7 +125,7 @@ export function Mais() {
     <>
       <Topo titulo="Mais" />
       <div className="lista-cartoes" style={{ display: 'grid' }}>
-        {visiveis.slice(4).concat(visiveis.some((i) => i.para === '/comercial') ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'comercial', fin: false }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'comercial', fin: false }] : []).map((i) => (
+        {visiveis.filter((i) => !naBarra(visiveis).includes(i)).concat(visiveis.some((i) => i.para === '/comercial') ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'comercial', fin: false }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'comercial', fin: false }] : []).map((i) => (
           <Link key={i.para} to={i.para} className="item-cartao">
             <span className="row"><Icone nome={i.icone} />{i.rotulo}</span>
           </Link>
