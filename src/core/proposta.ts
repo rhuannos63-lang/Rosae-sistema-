@@ -16,11 +16,16 @@ export type Item = {
   complexidade?: string | null;
   fator?: number; // multiplicador da complexidade (1 = sem ajuste)
   total: number; // reais, sempre recalculado por totalItem
+  // Etapas que a obra recebe ao converter (o orçamento automático preenche com as durações).
+  etapas?: { nome: string; descricao?: string; percentual?: number | null; duracao_dias?: number | null }[];
 };
 export type Ambiente = { id: string; nome: string; itens: Item[] };
 export type Responsabilidade = { parte: string; itens: string[] };
 export type Etapa = { nome: string; descricao?: string; prazo_dias?: number | null; percentual?: number | null };
 export type ParcelaProposta = { descricao: string; valor: number; quando?: string };
+export type Topico = { titulo: string; texto: string };
+export type Pergunta = { pergunta: string; resposta: string };
+export type OpcaoProposta = { nome: string; subtitulo: string; valor: number; destaques: string[]; recomendado: boolean; principal: boolean };
 
 export type Conteudo = {
   apresentacao: string;
@@ -40,6 +45,20 @@ export type Conteudo = {
   // Só em aditivos: por que mudou e quanto muda o prazo.
   motivo?: string;
   impacto_prazo_dias?: number | null;
+  // Partes da apresentação completa (o orçamento automático preenche; todas opcionais).
+  tipo_servico?: string;
+  resumo?: string;
+  dados_tecnicos?: { rotulo: string; valor: string }[];
+  entregaveis?: string[];
+  metodologia?: Topico[];
+  riscos?: string[];
+  normas?: string[];
+  diferenciais?: Topico[];
+  faq?: Pergunta[];
+  opcoes?: OpcaoProposta[];
+  condicao_especial?: string;
+  prazo_total_dias?: number | null;
+  gerador?: { tipo: string; respostas: Record<string, string | number | boolean | null>; pacote: number; em: string };
 };
 
 export type ModeloServico = {

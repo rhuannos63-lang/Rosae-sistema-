@@ -22,6 +22,7 @@ export function PropostaPublica() {
   const [f, setF] = useState({ nome: '', email: '', documento: '', comentario: '', concordo: false });
   const [enviando, setEnviando] = useState(false);
   const [resposta, setResposta] = useState<string | null>(null);
+  const [opcao, setOpcao] = useState<string | null>(null);
 
   async function carregar(registrar: boolean) {
     const r = await supabase.rpc('proposta_publica', { p_token: token, p_registrar: registrar });
@@ -63,6 +64,19 @@ export function PropostaPublica() {
   }
   const c = normalizar(d.conteudo);
   const podeAceitar = d.atual && !d.vencida && d.estado !== 'aprovada';
+  const opcoes = (c.opcoes ?? []).filter((o) => o.valor > 0);
+  const principal = opcoes.find((o) => o.principal);
+  const escolhida = opcoes.find((o) => o.nome === opcao) ?? principal;
+  const outraOpcao = !!(escolhida && principal && escolhida.nome !== principal.nome);
+  const tel = (d.empresa?.telefone ?? '').replace(/\D/g, '');
+  const whats = tel ? `https://wa.me/${tel.length <= 11 ? `55${tel}` : tel}?text=${encodeURIComponent(`Olá! Vi a proposta ${d.codigo} (${d.titulo}) e tenho uma dúvida.`)}` : null;
+  function abrir(a: 'aceitar' | 'ajuste' | 'recusar') {
+    if (a === 'aceitar' && outraOpcao) {
+      setF((x) => ({ ...x, comentario: `Gostaria de seguir com o pacote ${escolhida!.nome} (${formatar(Math.round(escolhida!.valor * 100))}).` }));
+      setAcao('ajuste');
+    } else setAcao(a);
+    setTimeout(() => document.getElementById('resposta')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  }
 
   return (
     <div className="publica">
@@ -80,14 +94,30 @@ export function PropostaPublica() {
 
       <PropostaDocumento d={{ codigo: d.codigo, tipo: d.tipo, titulo: d.titulo, versao: d.versao, cliente: d.cliente, emitida_em: d.emitida_em, validade: d.validade, hash: d.hash, conteudo: c, empresa: d.empresa }} />
 
-      <div className="card resposta-cliente">
+      <div className="card resposta-cliente" id="resposta">
         <h2>Sua resposta</h2>
         <p className="muted" style={{ marginTop: 4 }}>Total desta versão: <b>{formatar(totalConteudo(c))}</b></p>
+        {opcoes.length > 1 && d.estado !== 'aprovada' && d.atual && (
+          <>
+            <p style={{ margin: '10px 0 0' }}><b>Qual pacote faz mais sentido para você?</b></p>
+            <div className="escolha-cliente" role="radiogroup" aria-label="Pacote">
+              {opcoes.map((o) => (
+                <button key={o.nome} type="button" role="radio" aria-checked={escolhida?.nome === o.nome} className={escolhida?.nome === o.nome ? 'ativo' : ''} onClick={() => setOpcao(o.nome)}>
+                  <b>{o.nome}{o.recomendado ? ' · mais escolhido' : ''}</b>
+                  <span className="num">{formatar(Math.round(o.valor * 100))}</span>
+                  <span className="muted small">{o.subtitulo}</span>
+                </button>
+              ))}
+            </div>
+            {outraOpcao && <p className="muted small" style={{ marginTop: -6 }}>Vamos preparar a versão com o pacote {escolhida!.nome} para você aprovar. É só confirmar abaixo.</p>}
+          </>
+        )}
         {!acao ? (
           <div className="row">
-            {podeAceitar && <button className="btn-primario" onClick={() => setAcao('aceitar')}>Aceitar esta proposta</button>}
-            {d.estado !== 'aprovada' && <button className="btn-secundario" onClick={() => setAcao('ajuste')}>Pedir ajuste</button>}
-            {d.estado !== 'aprovada' && d.atual && <button className="btn-link" onClick={() => setAcao('recusar')}>Não tenho interesse</button>}
+            {podeAceitar && <button className="btn-primario" onClick={() => abrir('aceitar')}>{outraOpcao ? `Quero o pacote ${escolhida!.nome}` : 'Aceitar esta proposta'}</button>}
+            {d.estado !== 'aprovada' && <button className="btn-secundario" onClick={() => abrir('ajuste')}>Pedir ajuste</button>}
+            {whats && <a className="btn-secundario" href={whats} target="_blank" rel="noopener noreferrer">Falar com o engenheiro</a>}
+            {d.estado !== 'aprovada' && d.atual && <button className="btn-link" onClick={() => abrir('recusar')}>Não tenho interesse</button>}
             <button className="btn-link" onClick={() => window.print()}>Salvar em PDF</button>
           </div>
         ) : (
@@ -119,6 +149,13 @@ export function PropostaPublica() {
           {d.empresa?.nome ?? 'ROSAE Engenharia & Estruturas'}{d.empresa?.telefone ? ` · ${d.empresa.telefone}` : ''}{d.empresa?.email ? ` · ${d.empresa.email}` : ''}
         </p>
       </div>
+      {podeAceitar && !acao && (
+        <div className="cta-fixa">
+          <span className="cta-total"><span className="muted small">{escolhida ? `Pacote ${escolhida.nome}` : 'Total'}</span><b className="num">{formatar(escolhida ? Math.round(escolhida.valor * 100) : totalConteudo(c))}</b></span>
+          {whats && <a className="btn-secundario" href={whats} target="_blank" rel="noopener noreferrer">Tirar dúvida</a>}
+          <button className="btn-primario" onClick={() => abrir('aceitar')}>{outraOpcao ? 'Quero este pacote' : 'Aceitar proposta'}</button>
+        </div>
+      )}
     </div>
   );
 }

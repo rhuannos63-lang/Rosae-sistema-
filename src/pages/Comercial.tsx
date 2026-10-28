@@ -74,6 +74,7 @@ export function Comercial() {
       <Topo titulo="Comercial" sub="Cada contato vira uma oportunidade. Acompanhe a etapa, a próxima ação e as propostas.">
         <button className="btn-secundario" onClick={() => setSite(true)}>Formulário do site</button>
         <Link className="btn-secundario" to="/propostas">Propostas</Link>
+        <Link className="btn-secundario" to="/orcamento"><Icone nome="varinha" /> Novo orçamento</Link>
         <button className="btn-primario" onClick={() => setNova(true)}><Icone nome="mais" /> Novo contato</button>
       </Topo>
       {atrasadas > 0 && filtro !== 'atrasadas' && (
@@ -331,7 +332,8 @@ export function OportunidadeDetalhe() {
       <Topo titulo={op.pessoa?.nome ?? op.titulo} sub={<>{op.codigo} · {op.titulo}</>}>
         <button className="btn-secundario" onClick={() => navegar('/comercial')}><Icone nome="voltar" /> Comercial</button>
         <button className="btn-secundario" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar</button>
-        <button className="btn-primario" onClick={novaProposta}><Icone nome="mais" /> Nova proposta</button>
+        <Link className="btn-primario" to={`/orcamento?oportunidade=${op.id}`}><Icone nome="varinha" /> Orçamento automático</Link>
+        <button className="btn-secundario" onClick={novaProposta}><Icone nome="mais" /> Proposta em branco</button>
       </Topo>
       <Erro mensagem={erro} />
       <div className="grid grid-2">

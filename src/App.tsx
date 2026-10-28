@@ -25,6 +25,9 @@ const Propostas = preguicoso(() => import('./pages/Propostas'), 'Propostas');
 const PropostaEditor = preguicoso(() => import('./pages/Propostas'), 'PropostaEditor');
 const PropostaImprimir = preguicoso(() => import('./pages/Propostas'), 'PropostaImprimir');
 const PropostaPublica = preguicoso(() => import('./pages/PropostaPublica'), 'PropostaPublica');
+const NovoOrcamento = preguicoso(() => import('./pages/Orcamento'), 'NovoOrcamento');
+const PrecosOrcamento = preguicoso(() => import('./pages/Orcamento'), 'PrecosOrcamento');
+const Agenda = preguicoso(() => import('./pages/Agenda'), 'Agenda');
 const Biblioteca = preguicoso(() => import('./pages/Biblioteca'), 'Biblioteca');
 const Planejador = preguicoso(() => import('./pages/Planejador'), 'Planejador');
 const Clausulas = preguicoso(() => import('./pages/ObraContrato'), 'Clausulas');
@@ -76,6 +79,9 @@ function Rotas() {
             {comercial && <Route path="propostas" element={<Propostas />} />}
             {comercial && <Route path="propostas/:id" element={<PropostaEditor />} />}
             {comercial && <Route path="biblioteca" element={<Biblioteca />} />}
+            {comercial && <Route path="orcamento" element={<NovoOrcamento />} />}
+            {comercial && <Route path="orcamento/precos" element={<PrecosOrcamento />} />}
+            <Route path="agenda" element={<Agenda />} />
             {podeFinanceiro && <Route path="financeiro" element={<Financeiro />} />}
             {podeFinanceiro && <Route path="financeiro/:id" element={<LancamentoDetalhe />} />}
             {podeFinanceiro && <Route path="notas" element={<Notas />} />}
