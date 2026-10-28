@@ -1,8 +1,10 @@
+import { useMemo, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Icone } from './Icone';
 import { useAuth } from '../auth/AuthProvider';
 import { BuscaRapida, useBuscaRapida } from './BuscaRapida';
 import { useAparencia, type Modo } from '../lib/aparencia';
+import { departamentosVisiveis, localizar, type Departamento } from '../core/departamentos';
 
 const PROXIMO: Record<Modo, Modo> = { auto: 'claro', claro: 'escuro', escuro: 'auto' };
 const ROTULO_TEMA: Record<Modo, string> = { auto: 'Tema automático', claro: 'Modo claro', escuro: 'Modo escuro' };
@@ -26,49 +28,103 @@ function Logo({ tipo = 'horizontal' }: { tipo?: 'horizontal' | 'nome' }) {
   );
 }
 
-type Item = { para: string; rotulo: string; icone: string; fin: boolean; grupo?: string; comercial?: boolean; admin?: boolean };
-
-const itens: Item[] = [
-  { para: '/', rotulo: 'Início', icone: 'inicio', fin: false, grupo: 'Gestão' },
-  { para: '/comercial', rotulo: 'Comercial', icone: 'comercial', fin: false, comercial: true, grupo: 'Gestão' },
-  { para: '/orcamento', rotulo: 'Novo orçamento', icone: 'varinha', fin: false, comercial: true, grupo: 'Gestão' },
-  { para: '/agenda', rotulo: 'Agenda', icone: 'calendario', fin: false, grupo: 'Gestão' },
-  { para: '/obras', rotulo: 'Obras', icone: 'obras', fin: false, grupo: 'Gestão' },
-  { para: '/financeiro', rotulo: 'Financeiro', icone: 'financeiro', fin: true, grupo: 'Financeiro' },
-  { para: '/pendencias', rotulo: 'Pendências', icone: 'alerta', fin: false, grupo: 'Gestão' },
-  { para: '/notas', rotulo: 'Notas fiscais', icone: 'documento', fin: true, grupo: 'Financeiro' },
-  { para: '/contas', rotulo: 'Contas', icone: 'contas', fin: true, grupo: 'Financeiro' },
-  { para: '/planejador', rotulo: 'Planejador', icone: 'planejador', fin: true, grupo: 'Financeiro' },
-  { para: '/pessoas', rotulo: 'Cadastros', icone: 'pessoas', fin: false, grupo: 'Sistema' },
-  { para: '/manual', rotulo: 'Manual', icone: 'livro', fin: false, grupo: 'Sistema' },
-  { para: '/aparencia', rotulo: 'Aparência', icone: 'paleta', fin: false, grupo: 'Sistema' },
-  { para: '/ajuda', rotulo: 'Ajuda rápida', icone: 'ajuda', fin: false, grupo: 'Sistema' },
-  { para: '/configuracoes', rotulo: 'Configurações', icone: 'config', fin: false, admin: true, grupo: 'Sistema' },
-];
-const GRUPOS = ['Gestão', 'Financeiro', 'Sistema'];
+type Item = { para: string; rotulo: string; icone: string };
 const PAPEL: Record<string, string> = { administrador: 'Administrador', administrativo: 'Administrativo', financeiro: 'Financeiro', campo: 'Campo' };
 const iniciais = (nome?: string) => (nome ?? '').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || 'R';
 
-// Barra de baixo do celular: as 4 áreas de uso diário; o resto fica em "Mais".
-const BARRA = ['/', '/comercial', '/obras', '/financeiro', '/agenda', '/pendencias'];
-function naBarra(visiveis: Item[]): Item[] {
-  return BARRA.map((p) => visiveis.find((i) => i.para === p)).filter((i): i is Item => !!i).slice(0, 4);
-}
-
-function useItens() {
+/** Departamentos (com as subpastas) que a pessoa logada pode abrir. */
+export function useDepartamentos(): Departamento[] {
   const { usuario, podeFinanceiro, ehAdmin } = useAuth();
   const comercial = usuario?.papel === 'administrador' || usuario?.papel === 'administrativo';
-  return itens.filter((i) => (!i.fin || podeFinanceiro) && (!i.admin || ehAdmin) && (!i.comercial || comercial));
+  return useMemo(() => departamentosVisiveis({ comercial, financeiro: podeFinanceiro, admin: ehAdmin }), [comercial, podeFinanceiro, ehAdmin]);
+}
+
+const CHAVE_ABERTOS = 'rosae.menu.abertos';
+function lerAbertos(): string[] {
+  try { return JSON.parse(localStorage.getItem(CHAVE_ABERTOS) ?? '[]') as string[]; } catch { return []; }
+}
+
+/** Menu lateral: Início e as pastas dos departamentos, que abrem mostrando as subpastas. */
+function MenuDepartamentos({ deps }: { deps: Departamento[] }) {
+  const local = useLocation();
+  const atual = localizar(local.pathname, deps);
+  const [abertos, setAbertos] = useState<string[]>(lerAbertos);
+  const alternar = (id: string) => setAbertos((a) => {
+    const n = a.includes(id) ? a.filter((x) => x !== id) : [...a, id];
+    try { localStorage.setItem(CHAVE_ABERTOS, JSON.stringify(n)); } catch { /* sem armazenamento: vale só nesta visita */ }
+    return n;
+  });
+  return (
+    <nav className="nav" aria-label="Principal">
+      <NavLink to="/" end><Icone nome="inicio" />Início</NavLink>
+      <div className="nav-grupo">Departamentos</div>
+      {deps.map((d) => {
+        const ativo = atual?.dep.id === d.id;
+        const aberto = ativo || abertos.includes(d.id);
+        return (
+          <div key={d.id} className={`nav-dep${aberto ? ' aberto' : ''}${ativo ? ' ativo' : ''}`}>
+            <div className="nav-dep-cab">
+              <NavLink to={`/d/${d.id}`} className={() => (ativo && !atual?.sub ? 'active' : ativo ? 'dentro' : '')}>
+                <Icone nome={d.icone} />{d.curto === 'Empresa' ? 'Empresa' : d.curto}
+              </NavLink>
+              {!ativo && (
+                <button type="button" className="nav-dep-seta" aria-expanded={aberto} aria-label={`${aberto ? 'Fechar' : 'Abrir'} ${d.nome}`} onClick={() => alternar(d.id)}>
+                  <Icone nome="chevron" />
+                </button>
+              )}
+            </div>
+            {aberto && (
+              <div className="nav-sub">
+                {d.subpastas.map((s) => (
+                  <NavLink key={s.para} to={s.para} className={() => (atual?.sub?.para === s.para ? 'active' : '')}>{s.rotulo}</NavLink>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
+
+/** Trilha no topo das páginas: departamento › subpasta, e as outras subpastas ao lado. */
+function Trilha({ deps }: { deps: Departamento[] }) {
+  const local = useLocation();
+  const l = localizar(local.pathname, deps);
+  if (!l || !l.sub) return null;
+  const naRaiz = local.pathname === l.sub.para;
+  return (
+    <div className="trilha">
+      <nav className="trilha-caminho" aria-label="Você está em">
+        <Link to={`/d/${l.dep.id}`}><Icone nome={l.dep.icone} />{l.dep.nome}</Link>
+        <Icone nome="chevron" />
+        {naRaiz ? <span aria-current="page">{l.sub.rotulo}</span> : <Link to={l.sub.para}>{l.sub.rotulo}</Link>}
+      </nav>
+      {naRaiz && l.dep.subpastas.length > 1 && (
+        <div className="trilha-pastas" role="tablist" aria-label={`Subpastas de ${l.dep.nome}`}>
+          {l.dep.subpastas.map((s) => (
+            <Link key={s.para} to={s.para} role="tab" aria-selected={s.para === l.sub!.para} className={s.para === l.sub!.para ? 'ativo' : ''}>{s.rotulo}</Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function Layout() {
   const { usuario, sair } = useAuth();
-  const visiveis = useItens();
+  const deps = useDepartamentos();
   const local = useLocation();
   const [busca, setBusca] = useBuscaRapida();
-  const mobile = visiveis.length > 5 ? [...naBarra(visiveis), { para: '/mais', rotulo: 'Mais', icone: 'menu', fin: false }] : visiveis;
+  const atual = localizar(local.pathname, deps);
   const ehMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-  const destinos = [...visiveis, ...(visiveis.some((i) => i.para === '/comercial') ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'documento' }, { para: '/orcamento/precos', rotulo: 'Tabela de preços do orçamento', icone: 'config' }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista' }] : [])];
+  const destinos: Item[] = [
+    { para: '/', rotulo: 'Início', icone: 'inicio' },
+    ...deps.flatMap((d) => [{ para: `/d/${d.id}`, rotulo: d.nome, icone: d.icone }, ...d.subpastas.map((s) => ({ para: s.para, rotulo: `${s.rotulo} · ${d.curto}`, icone: s.icone }))]),
+  ];
+  // Barra de baixo do celular: Início, até 3 departamentos e "Mais".
+  const barra = deps.filter((d) => d.id !== 'empresa').slice(0, 3);
+  const naBarra = (id: string) => atual?.dep.id === id;
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -76,23 +132,7 @@ export function Layout() {
         <button type="button" className="busca-atalho" onClick={() => setBusca(true)}>
           <Icone nome="busca" /> Buscar… <kbd>{ehMac ? '⌘' : 'Ctrl'} K</kbd>
         </button>
-        <nav className="nav" aria-label="Principal">
-          {GRUPOS.map((g) => {
-            const doGrupo = visiveis.filter((i) => i.grupo === g);
-            if (!doGrupo.length) return null;
-            return (
-              <div key={g} className="nav">
-                <div className="nav-grupo">{g}</div>
-                {doGrupo.map((i) => (
-                  <NavLink key={i.para} to={i.para} end={i.para === '/'}>
-                    <Icone nome={i.icone} />
-                    {i.rotulo}
-                  </NavLink>
-                ))}
-              </div>
-            );
-          })}
-        </nav>
+        <MenuDepartamentos deps={deps} />
         <div className="rodape">
           <span className="avatar" aria-hidden="true">{iniciais(usuario?.nome)}</span>
           <div className="quem">
@@ -115,17 +155,17 @@ export function Layout() {
         </header>
         <main className="main">
           <div className="pagina" key={local.pathname}>
+            <Trilha deps={deps} />
             <Outlet />
           </div>
         </main>
       </div>
       <nav className="bottom-nav" aria-label="Principal">
-        {mobile.map((i) => (
-          <NavLink key={i.para} to={i.para} end={i.para === '/'}>
-            <Icone nome={i.icone} />
-            {i.rotulo === 'Configurações' ? 'Ajustes' : i.rotulo}
-          </NavLink>
+        <NavLink to="/" end><Icone nome="inicio" />Início</NavLink>
+        {barra.map((d) => (
+          <Link key={d.id} to={`/d/${d.id}`} className={naBarra(d.id) ? 'active' : ''}><Icone nome={d.icone} />{d.curto}</Link>
         ))}
+        <Link to="/mais" className={local.pathname === '/mais' || (atual && !barra.some((d) => d.id === atual.dep.id)) ? 'active' : ''}><Icone nome="menu" />Mais</Link>
       </nav>
       {busca && <BuscaRapida destinos={destinos} aoFechar={() => setBusca(false)} />}
     </div>
@@ -144,14 +184,10 @@ export function Topo({ titulo, sub, children }: { titulo: string; sub?: React.Re
   );
 }
 
-/** Menu "Mais" do celular: o que não cabe na barra de baixo, em blocos por área. */
+/** Menu "Mais" do celular: todos os departamentos, cada um com as suas subpastas. */
 export function Mais() {
-  const visiveis = useItens();
+  const deps = useDepartamentos();
   const { usuario, sair } = useAuth();
-  const extras: Item[] = visiveis.some((i) => i.para === '/comercial')
-    ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'documento', fin: false, grupo: 'Gestão' }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista', fin: false, grupo: 'Gestão' }, { para: '/orcamento/precos', rotulo: 'Tabela de preços', icone: 'config', fin: false, grupo: 'Gestão' }]
-    : [];
-  const resto = [...visiveis.filter((i) => !naBarra(visiveis).includes(i)), ...extras];
   return (
     <>
       <div className="mais-perfil card">
@@ -159,23 +195,19 @@ export function Mais() {
         <div className="quem"><b>{usuario?.nome}</b><span className="muted small">{PAPEL[usuario?.papel ?? ''] ?? usuario?.papel}</span></div>
         <button className="btn-secundario" onClick={sair}><Icone nome="sair" /> Sair</button>
       </div>
-      {GRUPOS.map((g) => {
-        const doGrupo = resto.filter((i) => i.grupo === g);
-        if (!doGrupo.length) return null;
-        return (
-          <section key={g} className="mais-grupo">
-            <h2 className="mais-titulo">{g}</h2>
-            <div className="mais-grade">
-              {doGrupo.map((i) => (
-                <Link key={i.para} to={i.para} className="mais-item">
-                  <span className="mais-icone"><Icone nome={i.icone} /></span>
-                  {i.rotulo}
-                </Link>
-              ))}
-            </div>
-          </section>
-        );
-      })}
+      {deps.map((d) => (
+        <section key={d.id} className="mais-grupo">
+          <Link to={`/d/${d.id}`} className="mais-titulo mais-titulo-link"><Icone nome={d.icone} />{d.nome}<Icone nome="chevron" /></Link>
+          <div className="mais-grade">
+            {d.subpastas.map((s) => (
+              <Link key={s.para} to={s.para} className="mais-item">
+                <span className="mais-icone"><Icone nome={s.icone} /></span>
+                {s.rotulo}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ))}
     </>
   );
 }

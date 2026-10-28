@@ -18,9 +18,10 @@ export const MANUAL: Capitulo[] = [
     passos: [
       { titulo: 'Entre com seu e-mail e senha', texto: 'Abra o endereço do sistema no navegador. Na primeira vez, ou se esquecer a senha, toque em “Primeiro acesso ou esqueci a senha” na tela de entrada e siga o link que chega por e-mail.' },
       { titulo: 'Instale como aplicativo no celular', texto: 'No Android (Chrome): abra o sistema, toque nos três pontos e em “Instalar aplicativo” ou “Adicionar à tela inicial”. No iPhone (Safari): toque em Compartilhar e em “Adicionar à Tela de Início”. O ícone da ROSAE aparece junto dos outros aplicativos e abre em tela cheia.' },
-      { titulo: 'Conheça o menu', texto: 'No computador, o menu fica à esquerda, dividido em Gestão, Financeiro e Sistema. No celular, as áreas de uso diário ficam na barra de baixo e o resto em “Mais”.' },
+      { titulo: 'Conheça os departamentos', texto: 'O sistema é organizado como uma empresa, em quatro departamentos: Comercial e Orçamentos, Gestão de Obras, Financeiro e Empresa e Sistema. Cada um é uma pasta: ao entrar, você vê os números do setor, as subpastas, o que precisa de atenção e como ele se liga aos outros. No computador, toque na setinha ao lado da pasta no menu para abrir as subpastas. No celular, os departamentos ficam na barra de baixo e tudo aparece em “Mais”.' },
+      { titulo: 'Siga a trilha no topo', texto: 'Em cada tela, a linha no alto mostra onde você está (por exemplo, Financeiro › Notas fiscais) e as outras subpastas do mesmo departamento, para trocar com um toque.' },
       { titulo: 'Use a busca rápida', texto: 'Aperte Ctrl + K (no Mac, ⌘ + K) ou toque na lupa para ir direto a qualquer tela, obra, cliente ou proposta digitando o nome.' },
-      { titulo: 'Deixe com a sua cara', texto: 'Em Sistema → Aparência você escolhe a cor principal, o estilo do menu, o fundo, os cantos e o tamanho do texto. A escolha vale no celular e no computador.' },
+      { titulo: 'Deixe com a sua cara', texto: 'Em Empresa e Sistema → Aparência você escolhe a cor principal, o estilo do menu, o fundo, os cantos e o tamanho do texto. A escolha vale no celular e no computador.' },
     ],
     dicas: ['Os pontos de interrogação ao lado dos campos explicam cada número e cada regra.', 'Cada número do Início é clicável e abre os registros que o explicam.'],
   },

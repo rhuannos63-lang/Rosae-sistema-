@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
-import { Topo } from '../components/Layout';
+import { Topo, useDepartamentos } from '../components/Layout';
 import { Ajuda, Carregando, Erro } from '../components/ui';
 import { Icone } from '../components/Icone';
 import { doBanco, formatar, type Centavos } from '../core/dinheiro';
@@ -138,6 +138,7 @@ export function Painel() {
         <button className="btn-secundario" aria-label="Período anterior" onClick={() => setRef(deslocarPeriodo(tipo, ref, -1))}>‹</button>
         <button className="btn-secundario" aria-label="Próximo período" onClick={() => setRef(deslocarPeriodo(tipo, ref, 1))}>›</button>
       </Topo>
+      <AtalhosDepartamentos />
       <Erro mensagem={erro} />
       {carregando && !dados && <Carregando />}
       {dados && (
@@ -149,6 +150,21 @@ export function Painel() {
       )}
       {dados?.comparar && !dados.ind.sem_permissao && <Comparativo atual={dados.ind} {...dados.comparar} rotulo={p.rotulo} />}
     </>
+  );
+}
+
+/** Entrada rápida nos departamentos (pastas) logo abaixo do título. */
+function AtalhosDepartamentos() {
+  const deps = useDepartamentos();
+  return (
+    <nav className="dep-atalhos" aria-label="Departamentos">
+      {deps.map((d) => (
+        <Link key={d.id} to={`/d/${d.id}`} className="dep-atalho">
+          <span className="dep-pasta-icone"><Icone nome={d.icone} /></span>
+          <span className="dep-pasta-texto"><b>{d.nome}</b><span>{d.subpastas.length} subpastas</span></span>
+        </Link>
+      ))}
+    </nav>
   );
 }
 
