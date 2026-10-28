@@ -2,6 +2,18 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Icone } from './Icone';
 import { useAuth } from '../auth/AuthProvider';
 import { BuscaRapida, useBuscaRapida } from './BuscaRapida';
+import { useTema, type Tema } from '../lib/tema';
+
+const PROXIMO: Record<Tema, Tema> = { auto: 'claro', claro: 'escuro', escuro: 'auto' };
+const ROTULO_TEMA: Record<Tema, string> = { auto: 'Tema automático', claro: 'Modo claro', escuro: 'Modo escuro' };
+const ICONE_TEMA: Record<Tema, string> = { auto: 'monitor', claro: 'sol', escuro: 'lua' };
+function BotaoTema({ tema, setTema }: { tema: Tema; setTema: (t: Tema) => void }) {
+  return (
+    <button onClick={() => setTema(PROXIMO[tema])} aria-label={`${ROTULO_TEMA[tema]} (trocar)`} title={`${ROTULO_TEMA[tema]}: clique para trocar`}>
+      <Icone nome={ICONE_TEMA[tema]} />
+    </button>
+  );
+}
 
 type Item = { para: string; rotulo: string; icone: string; fin: boolean; grupo?: string; comercial?: boolean; admin?: boolean };
 
@@ -41,9 +53,10 @@ export function Layout() {
   const visiveis = useItens();
   const local = useLocation();
   const [busca, setBusca] = useBuscaRapida();
+  const [tema, setTema] = useTema();
   const mobile = visiveis.length > 5 ? [...naBarra(visiveis), { para: '/mais', rotulo: 'Mais', icone: 'menu', fin: false }] : visiveis;
   const ehMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-  const destinos = [...visiveis, ...(visiveis.some((i) => i.para === '/comercial') ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'documento' }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista' }] : [])];
+  const destinos = [...visiveis, ...(visiveis.some((i) => i.para === '/comercial') ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'documento' }, { para: '/orcamento/precos', rotulo: 'Tabela de preços do orçamento', icone: 'config' }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista' }] : [])];
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -76,6 +89,7 @@ export function Layout() {
             <b>{usuario?.nome}</b>
             <span>{PAPEL[usuario?.papel ?? ''] ?? usuario?.papel}</span>
           </div>
+          <BotaoTema tema={tema} setTema={setTema} />
           <button onClick={sair} aria-label="Sair" title="Sair"><Icone nome="sair" /></button>
         </div>
       </aside>
@@ -84,6 +98,7 @@ export function Layout() {
           <img src="/marca/rosae-logo-horizontal-negativo.svg" alt="ROSAE" />
           <div className="row" style={{ gap: 2 }}>
             <button onClick={() => setBusca(true)} aria-label="Buscar"><Icone nome="busca" /></button>
+            <BotaoTema tema={tema} setTema={setTema} />
             <button onClick={sair} aria-label="Sair"><Icone nome="sair" /></button>
           </div>
         </header>

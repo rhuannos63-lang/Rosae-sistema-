@@ -8,7 +8,7 @@ import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast }
 import { Icone } from '../components/Icone';
 import { PropostaDocumento, type DadosDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
 import { doBanco, formatar, paraBanco, somar, type Centavos } from '../core/dinheiro';
-import { formatarData, formatarDataHora } from '../core/datas';
+import { formatarData, formatarDataHora, hoje } from '../core/datas';
 import {
   aplicarModelos, compararVersoes, itemDoModelo, normalizar, novoId, paraCentavos, pendencias, prepararParaSalvar, rascunhoDoTexto,
   somaParcelas, sugerirPagamento, totalAmbiente, totalConteudo, totalItem, UNIDADES,
@@ -26,10 +26,18 @@ export function Propostas() {
   const navegar = useNavigate();
   const [params] = useSearchParams();
   const [filtro, setFiltro] = useState<'ativas' | EstadoProposta | 'todas'>(params.get('estado') === 'aprovada' ? 'aprovada' : 'ativas');
-  const { dados, erro, carregando } = useConsulta(
-    async () => ok(await supabase.from('proposta').select('*, pessoa:pessoa(nome, telefone, email), versoes:proposta_versao!proposta_versao_proposta_id_fkey(id, numero, valor_total, emitida, validade)').order('atualizado_em', { ascending: false })) as PropostaLista[],
-    [],
-  );
+  const { dados, erro, carregando } = useConsulta(async () => {
+    const [p, ev] = await Promise.all([
+      supabase.from('proposta').select('*, pessoa:pessoa(nome, telefone, email), versoes:proposta_versao!proposta_versao_proposta_id_fkey(id, numero, valor_total, emitida, validade)').order('atualizado_em', { ascending: false }),
+      supabase.from('proposta_evento').select('proposta_id, em').eq('tipo', 'visualizada').order('em', { ascending: false }).limit(2000),
+    ]);
+    const vistas = new Map<string, { n: number; ultima: string }>();
+    for (const e of ok(ev) as { proposta_id: string; em: string }[]) {
+      const x = vistas.get(e.proposta_id);
+      vistas.set(e.proposta_id, { n: (x?.n ?? 0) + 1, ultima: x?.ultima ?? e.em });
+    }
+    return (ok(p) as PropostaLista[]).map((x) => ({ ...x, vistas: vistas.get(x.id) }));
+  }, []);
   const lista = (dados ?? []).filter((p) =>
     filtro === 'todas' ? true : filtro === 'ativas' ? ['rascunho', 'enviada', 'em_negociacao'].includes(p.estado) : p.estado === filtro,
   );
@@ -38,6 +46,7 @@ export function Propostas() {
       <Topo titulo="Propostas" sub="Cada proposta guarda todas as versões. A versão enviada fica congelada; mudanças viram uma nova versão.">
         <Link className="btn-secundario" to="/comercial"><Icone nome="voltar" /> Comercial</Link>
         <Link className="btn-secundario" to="/biblioteca">Biblioteca de serviços</Link>
+        <Link className="btn-primario" to="/orcamento"><Icone nome="varinha" /> Novo orçamento</Link>
       </Topo>
       <div className="card">
         <div className="row" style={{ marginBottom: 12 }}>
@@ -52,12 +61,12 @@ export function Propostas() {
         <Erro mensagem={erro} />
         {carregando && !dados ? <Carregando /> : lista.length === 0 ? (
           <Vazio titulo="Nenhuma proposta aqui">
-            <p>Propostas nascem de um contato no Comercial: abra o contato e clique em “Nova proposta”.</p>
+            <p>Use “Novo orçamento”: escolha o serviço, preencha os dados e a proposta sai pronta. Também dá para começar de um contato no Comercial.</p>
           </Vazio>
         ) : (
           <div className="tabela-wrap">
             <table className="tabela">
-              <thead><tr><th>Proposta</th><th>Cliente</th><th>Situação</th><th>Versão</th><th className="right">Valor</th></tr></thead>
+              <thead><tr><th>Proposta</th><th>Cliente</th><th>Situação</th><th>Interesse do cliente</th><th>Versão</th><th className="right">Valor</th></tr></thead>
               <tbody>
                 {lista.map((p) => {
                   const u = [...p.versoes].sort((a, b) => b.numero - a.numero)[0];
@@ -66,6 +75,7 @@ export function Propostas() {
                       <td><b>{p.titulo}</b><div className="muted small">{p.codigo}</div></td>
                       <td>{p.pessoa?.nome}</td>
                       <td><span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span></td>
+                      <td className="small"><Interesse p={p} validade={u?.emitida ? u.validade : null} /></td>
                       <td className="small">{u ? `v${u.numero}${u.emitida ? '' : ' (rascunho)'}` : '—'}</td>
                       <td className="right">{u && <Dinheiro valor={doBanco(u.valor_total)} />}</td>
                     </tr>
@@ -77,6 +87,21 @@ export function Propostas() {
         )}
       </div>
     </>
+  );
+}
+
+/** Quantas vezes o cliente abriu o link e quando vence: ajuda a decidir quem ligar primeiro. */
+function Interesse({ p, validade }: { p: Proposta & { vistas?: { n: number; ultima: string } }; validade: string | null }) {
+  const aberta = ['enviada', 'em_negociacao'].includes(p.estado);
+  const dias = validade ? Math.round((Date.parse(`${validade}T12:00:00Z`) - Date.parse(`${hoje()}T12:00:00Z`)) / 86400000) : null;
+  if (!p.vistas && !aberta) return <span className="muted">—</span>;
+  return (
+    <span className="stack" style={{ gap: 2 }}>
+      {p.vistas ? (
+        <span><Icone nome="olho" /> {p.vistas.n}× · última {formatarDataHora(p.vistas.ultima)}{aberta && p.vistas.n >= 3 ? <span className="selo ok" style={{ marginLeft: 6 }}>quente</span> : null}</span>
+      ) : aberta ? <span className="muted">ainda não abriu</span> : null}
+      {aberta && dias !== null && <span className={dias <= 3 ? '' : 'muted'} style={dias <= 3 ? { color: 'var(--alerta)', fontWeight: 600 } : undefined}>{dias < 0 ? 'vencida' : dias === 0 ? 'vence hoje' : `vence em ${dias} dia(s)`}</span>}
+    </span>
   );
 }
 
