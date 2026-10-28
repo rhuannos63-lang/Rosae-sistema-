@@ -3,14 +3,14 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
-import { Topo } from '../components/Layout';
+import { Topo, useDepartamentos } from '../components/Layout';
 import { Ajuda, Carregando, Erro } from '../components/ui';
 import { Icone } from '../components/Icone';
 import { doBanco, formatar, type Centavos } from '../core/dinheiro';
 import { deslocarPeriodo, hoje, nomeMesCurto, periodo } from '../core/datas';
 import type { Empresa } from '../lib/tipos';
 import { LinhaPendencia, usePendencias } from './Pendencias';
-import { Faisca, NumeroAnimado } from '../components/graficos';
+import { Faisca, Medidor, NumeroAnimado } from '../components/graficos';
 import { formatarCompacto } from '../core/graficos';
 import { FluxoCaixa, ParaOndeFoi, ProjecaoCaixa } from './PainelGraficos';
 
@@ -53,6 +53,45 @@ function Kpi({ rotulo, valor, centavos, det, para, ajuda, destaque, meta, tenden
     <Link to={para} className={`kpi${destaque ? ' destaque' : ''}`}>{conteudo}</Link>
   ) : (
     <div className={`kpi${destaque ? ' destaque' : ''}`}>{conteudo}</div>
+  );
+}
+
+/** Indicador no estilo de painel de BI: rótulo, número grande, variação contra o período anterior e tendência. */
+function KpiBI({ rotulo, centavos, anterior, rotuloAnt, custo, tendencia, para, ajuda, det }: { rotulo: string; centavos: Centavos; anterior?: Centavos | null; rotuloAnt?: string; custo?: boolean; tendencia?: Tendencia; para?: string; ajuda?: string; det?: React.ReactNode }) {
+  let variacao: React.ReactNode = null;
+  if (anterior !== undefined && anterior !== null && anterior !== 0) {
+    const pct = Math.round(((centavos - anterior) / Math.abs(anterior)) * 1000) / 10;
+    const fav = pct === 0 ? null : custo ? pct < 0 : pct > 0;
+    variacao = (
+      <span className={`bi-var${fav === null ? '' : fav ? ' fav' : ' desfav'}`} title={`Comparado com ${rotuloAnt}`}>
+        {pct > 0 ? '▲' : pct < 0 ? '▼' : '•'} {String(Math.abs(pct)).replace('.', ',')}% <span className="muted">vs {rotuloAnt}</span>
+      </span>
+    );
+  } else if (anterior === 0 && rotuloAnt) {
+    variacao = <span className="bi-var"><span className="muted">sem base em {rotuloAnt}</span></span>;
+  }
+  const conteudo = (
+    <>
+      <div className="rotulo">{rotulo}{ajuda && <Ajuda>{ajuda}</Ajuda>}</div>
+      <div className="valor" style={centavos < 0 ? { color: 'var(--desfavoravel)' } : undefined}><NumeroAnimado valor={centavos} formatar={formatar} /></div>
+      {variacao}
+      {det && <div className="det">{det}</div>}
+      {tendencia && tendencia.valores.length > 1 && <Faisca valores={tendencia.valores} rotulos={tendencia.rotulos} formatar={formatarCompacto} />}
+      {para && <Icone nome="seta" className="seta" />}
+    </>
+  );
+  return para ? <Link to={para} className="kpi bi-kpi">{conteudo}</Link> : <div className="kpi bi-kpi">{conteudo}</div>;
+}
+
+/** Faixa de números menores, lado a lado, como os cartões de um painel de BI. */
+function Faixa({ itens }: { itens: { rotulo: string; valor: React.ReactNode; det?: React.ReactNode; para?: string; alerta?: boolean }[] }) {
+  return (
+    <div className="card bi-faixa" style={{ '--colunas': itens.length <= 4 ? itens.length : Math.ceil(itens.length / 2) } as React.CSSProperties}>
+      {itens.map((i) => {
+        const corpo = (<><span className="bi-faixa-rotulo">{i.rotulo}</span><b className="num">{i.valor}</b>{i.det && <span className={`bi-faixa-det${i.alerta ? ' alerta' : ''}`}>{i.det}</span>}</>);
+        return i.para ? <Link key={i.rotulo} to={i.para} className="bi-faixa-item">{corpo}</Link> : <div key={i.rotulo} className="bi-faixa-item">{corpo}</div>;
+      })}
+    </div>
   );
 }
 
@@ -99,10 +138,12 @@ export function Painel() {
         <button className="btn-secundario" aria-label="Período anterior" onClick={() => setRef(deslocarPeriodo(tipo, ref, -1))}>‹</button>
         <button className="btn-secundario" aria-label="Próximo período" onClick={() => setRef(deslocarPeriodo(tipo, ref, 1))}>›</button>
       </Topo>
+      <AtalhosDepartamentos />
       <Erro mensagem={erro} />
       {carregando && !dados && <Carregando />}
       {dados && (
         <ConteudoPainel
+          anterior={dados.comparar?.anterior ?? null} rotuloAnt={dados.comparar?.rotuloAnt}
           ind={dados.ind} serie={dados.serie} empresa={dados.empresa} qs={qs} rotulo={p.rotulo} tipo={tipo} ehAdmin={ehAdmin} inicio={p.inicio} fim={p.fim}
           aoAbrirMes={(mes) => { setTipo('mes'); setRef(mes); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
         />
@@ -112,7 +153,22 @@ export function Painel() {
   );
 }
 
-function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes }: { ind: Indicadores; serie: Serie[]; empresa: Empresa | null; qs: string; rotulo: string; tipo: TipoPeriodo; ehAdmin: boolean; inicio: string; fim: string; aoAbrirMes: (mes: string) => void }) {
+/** Entrada rápida nos departamentos (pastas) logo abaixo do título. */
+function AtalhosDepartamentos() {
+  const deps = useDepartamentos();
+  return (
+    <nav className="dep-atalhos" aria-label="Departamentos">
+      {deps.map((d) => (
+        <Link key={d.id} to={`/d/${d.id}`} className="dep-atalho">
+          <span className="dep-pasta-icone"><Icone nome={d.icone} /></span>
+          <span className="dep-pasta-texto"><b>{d.nome}</b><span>{d.subpastas.length} subpastas</span></span>
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes, anterior, rotuloAnt }: { anterior: Indicadores | null; rotuloAnt?: string; ind: Indicadores; serie: Serie[]; empresa: Empresa | null; qs: string; rotulo: string; tipo: TipoPeriodo; ehAdmin: boolean; inicio: string; fim: string; aoAbrirMes: (mes: string) => void }) {
   if (ind.sem_permissao) {
     return (
       <div className="grid grid-kpi">
@@ -127,6 +183,8 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes 
   const metaRec = ind.meta_recebimentos === null ? null : c('meta_recebimentos') * meses;
   const metaVen = ind.meta_vendas === null ? null : c('meta_vendas') * meses;
   const resultadoCaixa = c('recebido') - c('pago_obras') - c('pago_empresa');
+  const ca = (k: string) => (anterior ? doBanco(anterior[k] as string) : null);
+  const caixaDe = (i: Indicadores) => doBanco(i.recebido as string) - doBanco(i.pago_obras as string) - doBanco(i.pago_empresa as string);
   const rotulosSerie = serie.map((s) => nomeMesCurto(s.mes));
   const tend = (f: (s: Serie) => Centavos): Tendencia => ({ valores: serie.map(f), rotulos: rotulosSerie });
   const tRec = tend((s) => doBanco(s.recebido));
@@ -142,85 +200,64 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes 
           </span>
         </div>
       )}
-      <div className="grid grid-kpi">
-        <Kpi
-          destaque
-          rotulo="Recebido de clientes"
-          valor={formatar(c('recebido'))} centavos={c('recebido')} tendencia={tRec}
-          det={metaRec !== null ? <>Meta de recebimentos: {formatar(metaRec)}</> : 'Defina a meta em Configurações'}
-          meta={metaRec ? (c('recebido') / metaRec) * 100 : null}
+      <div className="bi-kpis">
+        <KpiBI
+          rotulo="Recebido de clientes" centavos={c('recebido')} anterior={ca('recebido')} rotuloAnt={rotuloAnt} tendencia={tRec}
           para={`/contas?grupo=recebido&${qs}`}
           ajuda="Dinheiro que de fato entrou de clientes no período (recebimentos registrados, já descontados estornos). Não inclui transferências entre suas contas nem rendimentos."
         />
-        <Kpi
-          rotulo="Vendido (contratado)"
-          valor={formatar(c('vendido'))} centavos={c('vendido')} tendencia={tVen}
-          det={metaVen !== null ? <>Meta de vendas: {formatar(metaVen)}</> : 'Sem meta de vendas definida'}
-          meta={metaVen ? (c('vendido') / metaVen) * 100 : null}
-          para={`/propostas?estado=aprovada`}
+        <KpiBI
+          rotulo="Vendido (contratado)" centavos={c('vendido')} anterior={ca('vendido')} rotuloAnt={rotuloAnt} tendencia={tVen}
+          para="/propostas?estado=aprovada"
           ajuda="Propostas e aditivos aceitos pelo cliente no período (versão aprovada), mais obras lançadas sem proposta pela data de contratação. Vendido não é dinheiro em caixa."
         />
-        <Kpi
-          rotulo="A receber"
-          valor={formatar(c('a_receber'))} centavos={c('a_receber')}
-          det={c('a_receber_vencido') > 0 ? <span style={{ color: 'var(--desfavoravel)' }}>Vencido: {formatar(c('a_receber_vencido'))}</span> : 'Nada vencido'}
-          para="/financeiro?tipo=receber&situacao=abertas"
-          ajuda="Parcelas a receber em aberto (todas as datas). Vencido = vencimento antes de hoje."
-        />
-        <Kpi
-          rotulo="A pagar"
-          valor={formatar(c('a_pagar'))} centavos={c('a_pagar')}
-          det={<>Próximos 7 dias (com vencidos): {formatar(c('a_pagar_7_dias'))}</>}
-          para="/financeiro?tipo=pagar&situacao=abertas"
-          ajuda="Parcelas a pagar em aberto, de obras e da empresa."
-        />
-        <Kpi
-          rotulo="Pago em obras"
-          valor={formatar(c('pago_obras'))} centavos={c('pago_obras')}
-          det="Material, parceiros, frete e locação"
-          para={`/contas?grupo=pago_obras&${qs}`}
-        />
-        <Kpi
-          rotulo="Despesas da empresa"
-          valor={formatar(c('pago_empresa'))} centavos={c('pago_empresa')}
-          det={<>Lançadas no período (competência): {formatar(c('despesas_empresa_competencia'))}</>}
-          para={`/contas?grupo=pago_empresa&${qs}`}
-          ajuda="Pago no período em despesas da empresa, impostos e outras saídas. Abaixo, o total dessas despesas pela data de competência, pago ou não."
-        />
-        <Kpi
-          rotulo="Resultado de caixa (gerencial)"
-          valor={formatar(resultadoCaixa)} centavos={resultadoCaixa} tendencia={tRes}
-          det="Recebido − pago em obras − despesas"
-          ajuda="Critério: regime de caixa, só o que entrou e saiu no período. Não é lucro contábil: não considera o que falta receber ou pagar, impostos ainda não pagos nem pró-labore e retiradas."
+        <KpiBI
+          rotulo="Resultado de caixa" centavos={resultadoCaixa} anterior={anterior ? caixaDe(anterior) : null} rotuloAnt={rotuloAnt} tendencia={tRes}
           para={`/contas?grupo=operacional&${qs}`}
+          ajuda="Critério: regime de caixa, só o que entrou e saiu no período (recebido − pago em obras − despesas da empresa). Não é lucro contábil."
         />
-        <Kpi
-          rotulo="Pró-labore e retiradas"
-          valor={formatar(c('retiradas'))} centavos={c('retiradas')}
-          para={`/contas?grupo=retiradas&${qs}`}
-          ajuda="O que saiu para você no período. Fica fora do resultado de caixa para não confundir resultado da empresa com o seu ganho."
+        <KpiBI
+          rotulo="Saldo nas contas" centavos={c('saldo_contas')} det="Hoje, somando todas as contas ativas" para="/contas"
         />
-        <Kpi rotulo="Saldo nas contas" valor={formatar(c('saldo_contas'))} centavos={c('saldo_contas')} det="Hoje, somando todas as contas ativas" para="/contas" />
-        <Kpi rotulo="Obras ativas" valor={String(ind.obras_ativas)} det="Contratadas ou em execução" para="/obras" />
-        <KpisComerciais c={ind.comercial} />
-        {c('outras_entradas') !== 0 && (
-          <Kpi rotulo="Outras entradas" valor={formatar(c('outras_entradas'))} det="Rendimentos, aportes e outras" para={`/contas?grupo=outras&${qs}`} />
-        )}
       </div>
 
-      <div className="grid grid-2-1 section">
+      <Faixa itens={[
+        { rotulo: 'A receber', valor: formatar(c('a_receber')), det: c('a_receber_vencido') > 0 ? `${formatar(c('a_receber_vencido'))} vencido` : 'Nada vencido', alerta: c('a_receber_vencido') > 0, para: '/financeiro?tipo=receber&situacao=abertas' },
+        { rotulo: 'A pagar', valor: formatar(c('a_pagar')), det: `${formatar(c('a_pagar_7_dias'))} em 7 dias`, para: '/financeiro?tipo=pagar&situacao=abertas' },
+        { rotulo: 'Pago em obras', valor: formatar(c('pago_obras')), det: 'Material e parceiros', para: `/contas?grupo=pago_obras&${qs}` },
+        { rotulo: 'Despesas da empresa', valor: formatar(c('pago_empresa')), det: 'Pagas no período', para: `/contas?grupo=pago_empresa&${qs}` },
+        { rotulo: 'Pró-labore', valor: formatar(c('retiradas')), det: 'Retiradas', para: `/contas?grupo=retiradas&${qs}` },
+        { rotulo: 'Obras ativas', valor: String(ind.obras_ativas), det: 'Contratadas ou em execução', para: '/obras' },
+        ...(ind.comercial ? [
+          { rotulo: 'Propostas em aberto', valor: String(ind.comercial.enviadas + ind.comercial.em_negociacao), det: `${ind.comercial.aprovadas_periodo} aprovada(s)`, para: '/propostas' },
+          { rotulo: 'Oportunidades', valor: String(ind.comercial.oportunidades_abertas), det: ind.comercial.acoes_atrasadas > 0 ? `${ind.comercial.acoes_atrasadas} atrasada(s)` : 'Em dia', alerta: ind.comercial.acoes_atrasadas > 0, para: '/comercial' },
+        ] : []),
+        ...(c('outras_entradas') !== 0 ? [{ rotulo: 'Outras entradas', valor: formatar(c('outras_entradas')), det: 'Rendimentos e aportes', para: `/contas?grupo=outras&${qs}` }] : []),
+      ]} />
+
+      <div className="grid bi-linha section">
         <FluxoCaixa fim={fim} aoAbrirMes={aoAbrirMes} />
         <ParaOndeFoi inicio={inicio} fim={fim} rotulo={rotulo} />
       </div>
-      <div className="grid grid-2-1 section">
+      <div className="grid bi-linha section">
         <ProjecaoCaixa saldoHoje={c('saldo_contas')} />
         <div className="card">
           <div className="card-titulo">
-            <h2>Pendências</h2>
-            <Link to="/pendencias" className="small">Ver todas</Link>
+            <div><h2>Metas do período</h2><div className="sub">{rotulo}</div></div>
+            {(metaRec === null || metaVen === null) && <Link to="/configuracoes" className="small">Definir metas</Link>}
           </div>
-          <ResumoPendencias />
+          <div className="bi-medidores">
+            <Medidor rotulo="Recebimentos" valor={c('recebido')} meta={metaRec} formatar={formatarCompacto} />
+            <Medidor rotulo="Vendas" valor={c('vendido')} meta={metaVen} formatar={formatarCompacto} />
+          </div>
         </div>
+      </div>
+      <div className="card section">
+        <div className="card-titulo">
+          <h2>Pendências</h2>
+          <Link to="/pendencias" className="small">Ver todas</Link>
+        </div>
+        <ResumoPendencias />
       </div>
     </>
   );

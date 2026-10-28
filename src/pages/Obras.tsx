@@ -18,6 +18,7 @@ import { Registros } from './ObraRegistros';
 import { ContratoObra } from './ObraContrato';
 import { FichasObra } from './Fichas';
 import { PortalObra } from './ObraPortal';
+import { MedicoesObra } from './ObraMedicoes';
 
 const ATIVAS: StatusObra[] = ['contratada', 'em_execucao'];
 
@@ -256,7 +257,7 @@ function ObraForm({ obra, financeiro, aoFechar, aoSalvar }: { obra: Obra | null;
 type Ambiente = { id: string; nome: string; ordem: number };
 type Servico = { id: string; nome: string; descricao: string | null; ordem: number; arquivado: boolean };
 
-const ABAS_OBRA = [['visao', 'Visão geral'], ['cronograma', 'Cronograma'], ['materiais', 'Materiais'], ['diario', 'Diário e fotos'], ['fichas', 'Fichas'], ['contrato', 'Contrato'], ['portal', 'Portal do cliente'], ['financeiro', 'Financeiro']] as const;
+const ABAS_OBRA = [['visao', 'Visão geral'], ['cronograma', 'Cronograma'], ['materiais', 'Materiais'], ['diario', 'Diário e fotos'], ['fichas', 'Fichas'], ['medicoes', 'Medições'], ['contrato', 'Contrato'], ['portal', 'Portal do cliente'], ['financeiro', 'Financeiro']] as const;
 type AbaObra = (typeof ABAS_OBRA)[number][0];
 
 export function ObraDetalhe() {
@@ -264,7 +265,7 @@ export function ObraDetalhe() {
   const { podeFinanceiro, usuario } = useAuth();
   const ehAdm = usuario?.papel === 'administrador' || usuario?.papel === 'administrativo';
   const [params, setParams] = useSearchParams();
-  const abas = ABAS_OBRA.filter(([k]) => ((k !== 'contrato' && k !== 'portal') || ehAdm) && (k !== 'financeiro' || podeFinanceiro));
+  const abas = ABAS_OBRA.filter(([k]) => ((k !== 'contrato' && k !== 'portal' && k !== 'medicoes') || ehAdm) && (k !== 'financeiro' || podeFinanceiro));
   const aba: AbaObra = (abas.find(([k]) => k === params.get('aba'))?.[0] ?? 'visao') as AbaObra;
   const [editar, setEditar] = useState(false);
   const [novoLanc, setNovoLanc] = useState<'receber' | 'pagar' | null>(null);
@@ -337,6 +338,7 @@ export function ObraDetalhe() {
       {aba === 'materiais' && <Materiais obraId={obra.id} servicos={dados.servicos} ambientes={dados.ambientes} ehAdm={ehAdm} podeFinanceiro={podeFinanceiro} />}
       {aba === 'diario' && <Registros obraId={obra.id} servicos={dados.servicos} ambientes={dados.ambientes} ehAdm={ehAdm} />}
       {aba === 'fichas' && <FichasObra obraId={obra.id} servicos={dados.servicos} ehAdm={ehAdm} />}
+      {aba === 'medicoes' && ehAdm && <MedicoesObra obra={obra} />}
       {aba === 'contrato' && ehAdm && <ContratoObra obra={obra} aoMudar={recarregar} />}
       {aba === 'portal' && ehAdm && <PortalObra obra={obra} aoMudar={recarregar} />}
 

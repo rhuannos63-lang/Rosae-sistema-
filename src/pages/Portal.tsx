@@ -11,7 +11,7 @@ import { formatarData, formatarDataHora } from '../core/datas';
 import {
   ESTADO_PORTAL, SITUACAO_MATERIAL_PORTAL, STATUS_OBRA_PORTAL, TIPO_COMENTARIO, TIPO_REGISTRO_PORTAL,
   cienciaDoItem, faseEtapa, paresAntesDepois, primeiroNome, proximaEtapa,
-  type AlvoTipo, type ComentarioPortal, type DadosPortal, type EtapaPortal, type FotoPortal, type PendenciaPortal, type RegistroPortal,
+  type AlvoTipo, type ComentarioPortal, type DadosPortal, type EtapaPortal, type FotoPortal, type MedicaoPortal, type PendenciaPortal, type RegistroPortal,
 } from '../core/portal';
 
 const CHAVE_TOKEN = 'rosae.portal.token';
@@ -120,7 +120,7 @@ export function ImagemPortal({ token, id, grande, alt, className }: { token: str
 // ---------------------------------------------------------------------
 // Tela
 // ---------------------------------------------------------------------
-type Aba = 'inicio' | 'cronograma' | 'ambientes' | 'fotos' | 'atualizacoes' | 'mensagens';
+type Aba = 'inicio' | 'cronograma' | 'ambientes' | 'fotos' | 'medicoes' | 'atualizacoes' | 'mensagens';
 type Ctx = { d: DadosPortal; token: string | null; recarregar: () => Promise<void> | void; nomeServico: (id: string | null) => string; nomeEtapa: (id: string | null) => string; abrirFoto: (f: FotoPortal) => void };
 
 function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: string | null; recarregar: () => Promise<void> | void; sair?: () => void }) {
@@ -139,8 +139,10 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
     ...d.registros.filter((r) => !cienciaDoItem(d.ciencias, 'registro', r.id, r.versao).euAtual(eu)),
     ...d.pendencias.filter((p) => p.estado === 'aberta' && !cienciaDoItem(d.ciencias, 'pendencia', p.id, p.versao).euAtual(eu)),
   ].length;
+  const medicoes = d.medicoes ?? [];
   const abas: [Aba, string, number?][] = [
     ['inicio', 'Início'], ['cronograma', 'Etapas'], ['ambientes', 'Ambientes'], ['fotos', 'Fotos', d.fotos.length],
+    ...(medicoes.length ? [['medicoes', 'Medições', medicoes.filter((m) => m.estado === 'enviada').length] as [Aba, string, number]] : []),
     ['atualizacoes', 'Atualizações', eu ? semCiencia : undefined], ['mensagens', 'Mensagens', d.comentarios.length],
   ];
   function irPara(a: Aba) {
@@ -177,6 +179,7 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
         {aba === 'cronograma' && <Etapas ctx={ctx} />}
         {aba === 'ambientes' && <Ambientes ctx={ctx} />}
         {aba === 'fotos' && <Fotos ctx={ctx} />}
+        {aba === 'medicoes' && <Medicoes ctx={ctx} />}
         {aba === 'atualizacoes' && <Atualizacoes ctx={ctx} />}
         {aba === 'mensagens' && <Mensagens ctx={ctx} />}
       </main>
@@ -268,6 +271,7 @@ function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
   const atuais = d.etapas.filter((e) => faseEtapa(e) === 'atual');
   const proxima = proximaEtapa(d.etapas);
   const decisoes = d.pendencias.filter((p) => p.estado === 'aberta' && p.responsavel === 'cliente');
+  const medicaoAberta = (d.medicoes ?? []).find((m) => m.estado === 'enviada');
   const ultimas = d.fotos.slice(0, 6);
   return (
     <div className="portal-stack">
@@ -285,6 +289,14 @@ function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
           “Conferido” é a parte já verificada pela engenharia.
         </p>
       </section>
+
+      {medicaoAberta && (
+        <section className="portal-card portal-destaque">
+          <h2><Icone nome="alerta" /> Medição nº {medicaoAberta.numero} aguardando sua aprovação</h2>
+          <p className="muted">Executado até {formatarData(medicaoAberta.data_corte)}: <strong>{fmtPct(medicaoAberta.percentual_atual)}</strong> da obra ({fmtPct(medicaoAberta.percentual_atual - medicaoAberta.percentual_anterior)} neste período).</p>
+          <button className="btn-primario" onClick={() => irPara('medicoes')}>Conferir e responder</button>
+        </section>
+      )}
 
       {decisoes.length > 0 && (
         <section className="portal-card portal-destaque">
@@ -608,6 +620,97 @@ function FotosDoRegistro({ ctx, id }: { ctx: Ctx; id: string }) {
         </button>
       ))}
     </div>
+  );
+}
+
+const fmtPct = (v: number) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+const ESTADO_MEDICAO_PORTAL = { enviada: { rotulo: 'Aguardando sua resposta', tom: 'alerta' }, aprovada: { rotulo: 'Aprovada', tom: 'ok' }, contestada: { rotulo: 'Contestada', tom: 'erro' } } as const;
+
+function Medicoes({ ctx }: { ctx: Ctx }) {
+  const lista = ctx.d.medicoes ?? [];
+  return (
+    <div className="portal-stack">
+      <section className="portal-card">
+        <h2>Medições</h2>
+        <p className="portal-nota" style={{ marginTop: 0 }}>
+          A medição registra quanto da obra foi executado até a data de corte, etapa por etapa. Confira e aprove, ou conteste dizendo o que não confere.
+          Os valores do período seguem pela cobrança combinada no contrato.
+        </p>
+      </section>
+      {lista.map((m) => <MedicaoCliente key={m.id} ctx={ctx} m={m} />)}
+    </div>
+  );
+}
+
+function MedicaoCliente({ ctx, m }: { ctx: Ctx; m: MedicaoPortal }) {
+  const { d, token } = ctx;
+  const [acao, setAcao] = useState<'aprovar' | 'contestar' | null>(null);
+  const [nome, setNome] = useState(d.eu?.nome ?? '');
+  const [texto, setTexto] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const e = ESTADO_MEDICAO_PORTAL[m.estado];
+  async function responder(ev: React.FormEvent) {
+    ev.preventDefault();
+    if (!acao) return;
+    setEnviando(true); setErro(null);
+    const r = await supabase.rpc('portal_responder_medicao', { p_token: token, p_medicao: m.id, p_hash: m.hash, p_acao: acao, p_nome: nome, p_texto: texto || null, p_user_agent: navigator.userAgent });
+    setEnviando(false);
+    if (r.error) return setErro(mensagemErro(r.error));
+    setOk((r.data as { mensagem: string }).mensagem);
+    setAcao(null);
+    await ctx.recarregar();
+  }
+  return (
+    <section className={`portal-card${m.estado === 'enviada' ? ' portal-destaque' : ''}`}>
+      <div className="portal-linha"><h2>Medição nº {m.numero}</h2><span className={`selo ${e.tom}`}>{e.rotulo}</span></div>
+      <p className="muted small">Data de corte {formatarData(m.data_corte)} · enviada em {formatarDataHora(m.enviada_em)}</p>
+      <dl className="portal-numeros">
+        <div><dt>Executado antes</dt><dd>{fmtPct(m.percentual_anterior)}</dd></div>
+        <div><dt>Executado até o corte</dt><dd>{fmtPct(m.percentual_atual)}</dd></div>
+        <div><dt>Neste período</dt><dd>{fmtPct(m.percentual_atual - m.percentual_anterior)}</dd></div>
+      </dl>
+      <Barra valor={Number(m.percentual_atual)} rotulo={`Executado até a medição ${m.numero}`} />
+      <details className="portal-medicao-itens" open={m.estado === 'enviada'}>
+        <summary>Ver etapa por etapa ({m.itens.length})</summary>
+        <ul className="portal-lista">
+          {m.itens.map((i, k) => (
+            <li key={k}>
+              <div className="portal-linha"><strong>{i.etapa}</strong><span className="small">{fmtPct(i.anterior)} → <strong>{fmtPct(i.atual)}</strong></span></div>
+              <span className="muted small">{i.servico}</span>
+              <Barra valor={Number(i.atual)} rotulo={`Andamento de ${i.etapa}`} />
+            </li>
+          ))}
+        </ul>
+      </details>
+      {m.observacao && <p><strong>Observação da ROSAE:</strong> {m.observacao}</p>}
+      {m.respondida_em && (
+        <p className="small">{m.estado === 'aprovada' ? 'Aprovada' : 'Contestada'} por <strong>{m.resposta_nome}</strong> em {formatarDataHora(m.respondida_em)}{m.resposta_texto ? `: “${m.resposta_texto}”` : '.'}</p>
+      )}
+      {ok && <div className="aviso ok"><span>{ok}</span></div>}
+      {m.estado === 'enviada' && !d.previa && token && (
+        !acao ? (
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn-primario" onClick={() => setAcao('aprovar')}>Aprovar medição</button>
+            <button className="btn-secundario" onClick={() => setAcao('contestar')}>Algo não confere</button>
+          </div>
+        ) : (
+          <form className="stack" onSubmit={responder}>
+            <h3>{acao === 'aprovar' ? 'Aprovar a medição' : 'Contestar a medição'}</h3>
+            <label className="campo">Seu nome completo<input value={nome} onChange={(ev) => setNome(ev.target.value)} required minLength={3} autoComplete="name" /></label>
+            <label className="campo">{acao === 'aprovar' ? 'Comentário (opcional)' : 'O que não confere?'}<textarea value={texto} onChange={(ev) => setTexto(ev.target.value)} required={acao === 'contestar'} /></label>
+            {acao === 'aprovar' && <p className="portal-nota">Ao aprovar, você confirma que o andamento acima (código {m.hash.toUpperCase()}) corresponde ao que foi executado até {formatarData(m.data_corte)}.</p>}
+            {erro && <p className="erro-campo" role="alert">{erro}</p>}
+            <div className="row">
+              <button className="btn-primario" disabled={enviando}>{enviando ? 'Enviando…' : 'Confirmar'}</button>
+              <button type="button" className="btn-link" onClick={() => setAcao(null)}>Voltar</button>
+            </div>
+          </form>
+        )
+      )}
+      {m.estado === 'enviada' && d.previa && <p className="portal-nota">Na prévia, os botões de aprovar e contestar ficam desligados.</p>}
+    </section>
   );
 }
 

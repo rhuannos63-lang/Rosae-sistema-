@@ -284,7 +284,7 @@ export function Faisca({ valores, rotulos, formatar, cor = 'var(--serie-1)', cla
   const y = (v: number) => 3 + (1 - (v - lo) / (hi - lo || 1)) * (H - 6);
   const linha = valores.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
   const area = `${linha}L${x(n - 1)},${H}L${x(0)},${H}Z`;
-  const traco = claro ? '#a7e0c4' : cor;
+  const traco = claro ? 'rgba(255, 255, 255, 0.85)' : cor;
   function mover(e: React.PointerEvent) {
     const r = (e.currentTarget as SVGElement).getBoundingClientRect();
     setFoco(Math.max(0, Math.min(n - 1, Math.round(((e.clientX - r.left - 3) / Math.max(1, largura - 6)) * (n - 1)))));
@@ -367,4 +367,77 @@ export function useContagem(alvo: number, duracao = 750): number {
 export function NumeroAnimado({ valor, formatar }: { valor: number; formatar: (v: number) => string }) {
   const v = useContagem(valor);
   return <>{formatar(v)}</>;
+}
+
+export type FatiaRosca = { chave: string; nome: string; valor: number; cor: string };
+
+/** Rosca (parte do todo) com total no centro, legenda com valores e destaque ao passar o mouse.
+ *  Use no máximo 5 fatias: o resto deve vir somado em "Outras". */
+export function Rosca({ fatias, formatar, rotuloTotal = 'Total', selecionado, aoSelecionar }: { fatias: FatiaRosca[]; formatar: (v: number) => string; rotuloTotal?: string; selecionado?: string | null; aoSelecionar?: (k: string) => void }) {
+  const [foco, setFoco] = useState<string | null>(null);
+  const total = fatias.reduce((s, f) => s + Math.max(0, f.valor), 0);
+  const R = 70, r = 48, C = 80;
+  let ang = -Math.PI / 2;
+  const arcos = fatias.map((f) => {
+    const a = total ? (Math.max(0, f.valor) / total) * Math.PI * 2 : 0;
+    const ini = ang; ang += a;
+    return { ...f, ini, fim: ang, pct: total ? (f.valor / total) * 100 : 0 };
+  });
+  const ponto = (rad: number, a: number) => `${(C + rad * Math.cos(a)).toFixed(2)},${(C + rad * Math.sin(a)).toFixed(2)}`;
+  const caminho = (ini: number, fim: number) => {
+    const fol = fim - ini > Math.PI ? 1 : 0;
+    const f2 = Math.min(fim, ini + Math.PI * 2 - 0.0001);
+    return `M${ponto(R, ini)}A${R},${R} 0 ${fol} 1 ${ponto(R, f2)}L${ponto(r, f2)}A${r},${r} 0 ${fol} 0 ${ponto(r, ini)}Z`;
+  };
+  const ativo = foco ?? selecionado ?? null;
+  const fatiaAtiva = arcos.find((f) => f.chave === ativo);
+  return (
+    <div className="g-rosca">
+      <svg viewBox="0 0 160 160" role="img" aria-label={`${rotuloTotal}: ${formatar(total)}`}>
+        {arcos.map((f) => f.fim - f.ini > 0.0005 && (
+          <path key={f.chave} d={caminho(f.ini, f.fim)} fill={f.cor} stroke="var(--papel)" strokeWidth="2"
+            opacity={ativo && ativo !== f.chave ? 0.35 : 1} className="g-rosca-fatia"
+            onPointerEnter={() => setFoco(f.chave)} onPointerLeave={() => setFoco(null)} onClick={() => aoSelecionar?.(f.chave)} />
+        ))}
+        <text x={C} y={C - 4} textAnchor="middle" className="g-rosca-total">{fatiaAtiva ? `${Math.round(fatiaAtiva.pct)}%` : formatarCurto(total, formatar)}</text>
+        <text x={C} y={C + 13} textAnchor="middle" className="g-rosca-rotulo">{fatiaAtiva ? fatiaAtiva.nome.slice(0, 18) : rotuloTotal}</text>
+      </svg>
+      <ul className="g-rosca-legenda">
+        {arcos.map((f) => (
+          <li key={f.chave} className={ativo === f.chave ? 'sel' : ''}>
+            <button type="button" onPointerEnter={() => setFoco(f.chave)} onPointerLeave={() => setFoco(null)} onClick={() => aoSelecionar?.(f.chave)}>
+              <i style={{ background: f.cor }} />
+              <span className="g-rosca-nome">{f.nome}</span>
+              <span className="g-rosca-pct num">{Math.round(f.pct)}%</span>
+              <b className="num">{formatar(f.valor)}</b>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+function formatarCurto(v: number, formatar: (v: number) => string) {
+  const s = formatar(v);
+  return s.length > 11 ? s.replace(/,\d\d$/, '') : s;
+}
+
+/** Medidor semicircular de meta (0 a 100%+), com o valor e a meta embaixo. */
+export function Medidor({ rotulo, valor, meta, formatar }: { rotulo: string; valor: number; meta: number | null; formatar: (v: number) => string }) {
+  const pct = meta ? (valor / meta) * 100 : 0;
+  const p = Math.max(0, Math.min(1, pct / 100));
+  const anim = useContagem(p * 1000) / 1000;
+  const R = 62, C = 80, Y = 78;
+  const ponto = (t: number) => `${(C - R * Math.cos(Math.PI * t)).toFixed(2)},${(Y - R * Math.sin(Math.PI * t)).toFixed(2)}`;
+  return (
+    <div className="g-medidor">
+      <svg viewBox="0 0 160 92" role="img" aria-label={meta ? `${rotulo}: ${Math.round(pct)}% da meta` : `${rotulo}: sem meta`}>
+        <path d={`M${ponto(0)}A${R},${R} 0 0 1 ${ponto(1)}`} fill="none" stroke="var(--trilho)" strokeWidth="12" strokeLinecap="round" />
+        {meta ? <path d={`M${ponto(0)}A${R},${R} 0 0 1 ${ponto(Math.max(0.001, anim))}`} fill="none" stroke={pct >= 100 ? 'var(--favoravel)' : 'var(--verde)'} strokeWidth="12" strokeLinecap="round" /> : null}
+        <text x={C} y={Y - 12} textAnchor="middle" className="g-medidor-pct">{meta ? `${Math.round(pct)}%` : '—'}</text>
+      </svg>
+      <div className="g-medidor-rotulo">{rotulo}</div>
+      <div className="g-medidor-det num">{formatar(valor)}{meta ? <span className="muted"> de {formatar(meta)}</span> : <span className="muted"> · sem meta</span>}</div>
+    </div>
+  );
 }

@@ -25,6 +25,7 @@ const Propostas = preguicoso(() => import('./pages/Propostas'), 'Propostas');
 const PropostaEditor = preguicoso(() => import('./pages/Propostas'), 'PropostaEditor');
 const PropostaImprimir = preguicoso(() => import('./pages/Propostas'), 'PropostaImprimir');
 const PropostaPublica = preguicoso(() => import('./pages/PropostaPublica'), 'PropostaPublica');
+const ContratoPublico = preguicoso(() => import('./pages/ContratoPublico'), 'ContratoPublico');
 const NovoOrcamento = preguicoso(() => import('./pages/Orcamento'), 'NovoOrcamento');
 const PrecosOrcamento = preguicoso(() => import('./pages/Orcamento'), 'PrecosOrcamento');
 const Agenda = preguicoso(() => import('./pages/Agenda'), 'Agenda');
@@ -41,6 +42,9 @@ const Notas = preguicoso(() => import('./pages/Notas'), 'Notas');
 const NotaDetalhe = preguicoso(() => import('./pages/Notas'), 'NotaDetalhe');
 const Pendencias = preguicoso(() => import('./pages/Pendencias'), 'Pendencias');
 const Ajuda = preguicoso(() => import('./pages/Ajuda'), 'Ajuda');
+const Manual = preguicoso(() => import('./pages/Manual'), 'Manual');
+const Departamento = preguicoso(() => import('./pages/Departamento'), 'Departamento');
+const Aparencia = preguicoso(() => import('./pages/Aparencia'), 'Aparencia');
 const RelatorioObra = preguicoso(() => import('./pages/Relatorios'), 'RelatorioObra');
 const RelatorioClientePrevia = preguicoso(() => import('./pages/Relatorios'), 'RelatorioClientePrevia');
 const RelatorioClientePortal = preguicoso(() => import('./pages/Relatorios'), 'RelatorioClientePortal');
@@ -66,8 +70,11 @@ function Rotas() {
           <Route path="fichas/:id/imprimir" element={<FichaImprimir />} />
           <Route element={<Layout />}>
             <Route index element={<Painel />} />
+            <Route path="d/:id" element={<Departamento />} />
             <Route path="pendencias" element={<Pendencias />} />
             <Route path="ajuda" element={<Ajuda />} />
+            <Route path="manual" element={<Manual />} />
+            <Route path="aparencia" element={<Aparencia />} />
             <Route path="obras" element={<Obras />} />
             <Route path="obras/:id" element={<ObraDetalhe />} />
             <Route path="pessoas" element={<Pessoas />} />
@@ -105,6 +112,8 @@ export function App() {
         <Routes>
           {/* Link da proposta para o cliente: sem login. */}
           <Route path="/p/:token" element={<PropostaPublica />} />
+          {/* Assinatura do contrato pelo link: sem login. */}
+          <Route path="/a/:token" element={<ContratoPublico />} />
           {/* Portal do cliente: link pessoal, com expiração e revogação. */}
           <Route path="/c/relatorio" element={<RelatorioClientePortal />} />
           <Route path="/c/:token" element={<PortalEntrada />} />

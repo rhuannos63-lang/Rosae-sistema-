@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { Ajuda, Erro } from '../components/ui';
-import { BarrasRanking, Grafico, TabelaDados, type Serie } from '../components/graficos';
+import { BarrasRanking, Grafico, Rosca, TabelaDados, type Serie } from '../components/graficos';
 import { Icone } from '../components/Icone';
 import { doBanco, formatar, type Centavos } from '../core/dinheiro';
 import { acumular, formatarCompacto } from '../core/graficos';
@@ -125,6 +125,7 @@ export function FluxoCaixa({ fim, aoAbrirMes }: { fim: string; aoAbrirMes: (mes:
 /** Para onde foi (ou de onde veio) o dinheiro no período, por categoria, com detalhe ao clicar. */
 export function ParaOndeFoi({ inicio, fim, rotulo }: { inicio: string; fim: string; rotulo: string }) {
   const [lado, setLado] = useState<'saidas' | 'entradas'>('saidas');
+  const [forma, setForma] = useState<'rosca' | 'barras'>('rosca');
   const [sel, setSel] = useState<string | null>(null);
   const { dados, erro, carregando } = useConsulta(async () => {
     const r = await supabase.from('v_movimento').select('id, data, valor_assinado, categoria_nome, categoria_natureza, lancamento_id, lancamento_descricao, descricao, conta_nome')
@@ -144,12 +145,16 @@ export function ParaOndeFoi({ inicio, fim, rotulo }: { inicio: string; fim: stri
   }, [dados, lado]);
   const total = grupos.reduce((s, g) => s + g.valor, 0);
   // Mais de 7 categorias: o resto vira "Outras" para o ranking continuar legível.
-  const visiveis = grupos.length > 7 ? [...grupos.slice(0, 6), { chave: '__outras', nome: `Outras (${grupos.length - 6})`, valor: grupos.slice(6).reduce((s, g) => s + g.valor, 0), det: undefined }] : grupos;
+  // Na rosca, só 4 fatias com cor própria e o resto somado em "Outras" (cores fixas e legíveis).
+  const limite = forma === 'rosca' ? 4 : 6;
+  const visiveis = grupos.length > limite + 1 ? [...grupos.slice(0, limite), { chave: '__outras', nome: `Outras (${grupos.length - limite})`, valor: grupos.slice(limite).reduce((s, g) => s + g.valor, 0), det: undefined }] : grupos;
+  const CORES = ['var(--serie-1)', 'var(--serie-2)', 'var(--serie-3)', 'var(--serie-4)'];
+  const fatias = visiveis.map((g, i) => ({ chave: g.chave, nome: g.nome, valor: g.valor, cor: g.chave === '__outras' ? 'var(--serie-neutra)' : CORES[i] ?? 'var(--serie-neutra)' }));
   const movsSel = useMemo(() => {
     if (!sel) return [];
-    const nomes = sel === '__outras' ? new Set(grupos.slice(6).map((g) => g.chave)) : new Set([sel]);
+    const nomes = sel === '__outras' ? new Set(grupos.slice(limite).map((g) => g.chave)) : new Set([sel]);
     return (dados ?? []).filter((m) => nomes.has(m.categoria_nome)).sort((a, b) => Math.abs(doBanco(b.valor_assinado)) - Math.abs(doBanco(a.valor_assinado))).slice(0, 8);
-  }, [sel, dados, grupos]);
+  }, [sel, dados, grupos, limite]);
 
   return (
     <div className={`card${carregando && dados ? ' g-carregando' : ''}`}>
@@ -158,14 +163,22 @@ export function ParaOndeFoi({ inicio, fim, rotulo }: { inicio: string; fim: stri
           <h2>{lado === 'saidas' ? 'Para onde foi o dinheiro' : 'De onde veio o dinheiro'}</h2>
           <div className="sub">{rotulo} · total <b className="num">{formatar(total)}</b></div>
         </div>
-        <div className="segmentado mini" role="group" aria-label="Entradas ou saídas">
-          <button className={lado === 'saidas' ? 'ativo' : ''} onClick={() => { setLado('saidas'); setSel(null); }}>Saídas</button>
-          <button className={lado === 'entradas' ? 'ativo' : ''} onClick={() => { setLado('entradas'); setSel(null); }}>Entradas</button>
+        <div className="g-barra-ferramentas">
+          <div className="segmentado mini" role="group" aria-label="Entradas ou saídas">
+            <button className={lado === 'saidas' ? 'ativo' : ''} onClick={() => { setLado('saidas'); setSel(null); }}>Saídas</button>
+            <button className={lado === 'entradas' ? 'ativo' : ''} onClick={() => { setLado('entradas'); setSel(null); }}>Entradas</button>
+          </div>
+          <div className="segmentado mini" role="group" aria-label="Forma do gráfico">
+            <button className={forma === 'rosca' ? 'ativo' : ''} onClick={() => { setForma('rosca'); setSel(null); }} aria-label="Rosca" title="Rosca"><Icone nome="planejador" /></button>
+            <button className={forma === 'barras' ? 'ativo' : ''} onClick={() => { setForma('barras'); setSel(null); }} aria-label="Barras" title="Barras"><Icone nome="lista" /></button>
+          </div>
         </div>
       </div>
       <Erro mensagem={erro} />
       {dados && !grupos.length && <p className="muted" style={{ margin: 0 }}>Nenhum movimento {lado === 'saidas' ? 'de saída' : 'de entrada'} no período.</p>}
-      {grupos.length > 0 && <BarrasRanking key={lado + inicio} itens={visiveis} formatar={formatar} total={total} selecionado={sel} aoSelecionar={(k) => setSel(sel === k ? null : k)} />}
+      {grupos.length > 0 && (forma === 'rosca'
+        ? <Rosca key={lado + inicio} fatias={fatias} formatar={formatar} rotuloTotal={lado === 'saidas' ? 'Saídas' : 'Entradas'} selecionado={sel} aoSelecionar={(k) => setSel(sel === k ? null : k)} />
+        : <BarrasRanking key={lado + inicio} itens={visiveis} formatar={formatar} total={total} selecionado={sel} aoSelecionar={(k) => setSel(sel === k ? null : k)} />)}
       {sel && (
         <div className="detalhe-mes" style={{ marginTop: 10 }}>
           <div className="row"><b>{sel === '__outras' ? 'Outras categorias' : sel}</b><div className="spacer" /><span className="muted small">maiores movimentos</span></div>
