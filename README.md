@@ -49,3 +49,9 @@ Baixe o arquivo em Actions → Backup diário, depois:
 gpg -d rosae-backup-AAAA-MM-DD.tar.gz.gpg | tar xz
 psql "<conexão do banco novo>" -f backup/papeis.sql -f backup/estrutura.sql -f backup/dados.sql
 ```
+
+## Publicação
+
+- O site é publicado pela Cloudflare (Workers Builds) a cada push no `main`. O banco é atualizado antes, pelo workflow `banco.yml`.
+- Cada ramo fora do `main` ganha um link de prévia (`npx wrangler preview`). Esse comando exige o bloco `"previews": {}` no `wrangler.jsonc`: sem ele, o build falha no passo de deploy.
+- Para conferir se a produção publicou, veja o check "Workers Builds" do commit no `main`. O link de detalhes deve conter `/production/builds/`, e não `/previews/`.
