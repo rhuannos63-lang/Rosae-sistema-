@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Usuario } from '../lib/tipos';
+import { aoMudarAparencia, definirAparencia, normalizar } from '../lib/aparencia';
 
 type Estado = {
   carregando: boolean;
@@ -17,6 +18,18 @@ type Estado = {
 };
 
 const Ctx = createContext<Estado | null>(null);
+
+// Aparência escolhida vale em todos os aparelhos: lê do banco ao entrar e grava a cada mudança.
+// Se a tabela ainda não existir, fica só no aparelho (sem erro na tela).
+let espera: ReturnType<typeof setTimeout> | undefined;
+async function sincronizarAparencia() {
+  const { data } = await supabase.from('preferencia_usuario').select('aparencia').maybeSingle();
+  if (data?.aparencia && Object.keys(data.aparencia).length) definirAparencia(normalizar(data.aparencia), 'banco');
+  aoMudarAparencia((a) => {
+    clearTimeout(espera);
+    espera = setTimeout(() => { void supabase.from('preferencia_usuario').upsert({ aparencia: a }); }, 600);
+  });
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessao, setSessao] = useState<Session | null>(null);
@@ -40,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsuario((u as Usuario) ?? null);
     setExisteAdmin(Boolean(adm));
     setCarregando(false);
+    if (u) sincronizarAparencia();
   }, []);
 
   useEffect(() => {
@@ -62,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     existeAdmin,
     recarregar: () => carregarPerfil(sessao),
     sair: async () => {
+      aoMudarAparencia(null);
       await supabase.auth.signOut();
     },
     // Só controla o que aparece na tela; quem decide de verdade é o banco (RLS).

@@ -13,8 +13,8 @@ export default defineConfig({
         short_name: 'ROSAE',
         description: 'Sistema de gestão da ROSAE Engenharia & Estruturas',
         lang: 'pt-BR',
-        theme_color: '#0E3B2C',
-        background_color: '#F4F7F5',
+        theme_color: '#5B6B2E',
+        background_color: '#FFFFFF',
         display: 'standalone',
         start_url: '/',
         icons: [

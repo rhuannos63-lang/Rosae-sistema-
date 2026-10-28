@@ -2,16 +2,27 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Icone } from './Icone';
 import { useAuth } from '../auth/AuthProvider';
 import { BuscaRapida, useBuscaRapida } from './BuscaRapida';
-import { useTema, type Tema } from '../lib/tema';
+import { useAparencia, type Modo } from '../lib/aparencia';
 
-const PROXIMO: Record<Tema, Tema> = { auto: 'claro', claro: 'escuro', escuro: 'auto' };
-const ROTULO_TEMA: Record<Tema, string> = { auto: 'Tema automático', claro: 'Modo claro', escuro: 'Modo escuro' };
-const ICONE_TEMA: Record<Tema, string> = { auto: 'monitor', claro: 'sol', escuro: 'lua' };
-function BotaoTema({ tema, setTema }: { tema: Tema; setTema: (t: Tema) => void }) {
+const PROXIMO: Record<Modo, Modo> = { auto: 'claro', claro: 'escuro', escuro: 'auto' };
+const ROTULO_TEMA: Record<Modo, string> = { auto: 'Tema automático', claro: 'Modo claro', escuro: 'Modo escuro' };
+const ICONE_TEMA: Record<Modo, string> = { auto: 'monitor', claro: 'sol', escuro: 'lua' };
+function BotaoTema() {
+  const [a, mudar] = useAparencia();
   return (
-    <button onClick={() => setTema(PROXIMO[tema])} aria-label={`${ROTULO_TEMA[tema]} (trocar)`} title={`${ROTULO_TEMA[tema]}: clique para trocar`}>
-      <Icone nome={ICONE_TEMA[tema]} />
+    <button onClick={() => mudar({ modo: PROXIMO[a.modo] })} aria-label={`${ROTULO_TEMA[a.modo]} (trocar)`} title={`${ROTULO_TEMA[a.modo]}: clique para trocar`}>
+      <Icone nome={ICONE_TEMA[a.modo]} />
     </button>
+  );
+}
+
+/** Logo que acompanha o menu: colorida no menu claro, branca no menu escuro ou colorido. */
+function Logo({ tipo = 'horizontal' }: { tipo?: 'horizontal' | 'nome' }) {
+  return (
+    <>
+      <img className="logo-pos" src={`/marca/rosae-${tipo === 'nome' ? 'nome' : 'logo-horizontal'}.svg`} alt="ROSAE Engenharia & Estruturas" />
+      <img className="logo-neg" src={`/marca/rosae-${tipo === 'nome' ? 'nome' : 'logo-horizontal'}-negativo.svg`} alt="ROSAE Engenharia & Estruturas" />
+    </>
   );
 }
 
@@ -29,7 +40,9 @@ const itens: Item[] = [
   { para: '/contas', rotulo: 'Contas', icone: 'contas', fin: true, grupo: 'Financeiro' },
   { para: '/planejador', rotulo: 'Planejador', icone: 'planejador', fin: true, grupo: 'Financeiro' },
   { para: '/pessoas', rotulo: 'Cadastros', icone: 'pessoas', fin: false, grupo: 'Sistema' },
-  { para: '/ajuda', rotulo: 'Ajuda', icone: 'ajuda', fin: false, grupo: 'Sistema' },
+  { para: '/manual', rotulo: 'Manual', icone: 'livro', fin: false, grupo: 'Sistema' },
+  { para: '/aparencia', rotulo: 'Aparência', icone: 'paleta', fin: false, grupo: 'Sistema' },
+  { para: '/ajuda', rotulo: 'Ajuda rápida', icone: 'ajuda', fin: false, grupo: 'Sistema' },
   { para: '/configuracoes', rotulo: 'Configurações', icone: 'config', fin: false, admin: true, grupo: 'Sistema' },
 ];
 const GRUPOS = ['Gestão', 'Financeiro', 'Sistema'];
@@ -53,16 +66,13 @@ export function Layout() {
   const visiveis = useItens();
   const local = useLocation();
   const [busca, setBusca] = useBuscaRapida();
-  const [tema, setTema] = useTema();
   const mobile = visiveis.length > 5 ? [...naBarra(visiveis), { para: '/mais', rotulo: 'Mais', icone: 'menu', fin: false }] : visiveis;
   const ehMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const destinos = [...visiveis, ...(visiveis.some((i) => i.para === '/comercial') ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'documento' }, { para: '/orcamento/precos', rotulo: 'Tabela de preços do orçamento', icone: 'config' }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista' }] : [])];
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="logo">
-          <img src="/marca/rosae-logo-horizontal-negativo.svg" alt="ROSAE Engenharia & Estruturas" />
-        </div>
+        <Link to="/" className="logo" aria-label="Início"><Logo /></Link>
         <button type="button" className="busca-atalho" onClick={() => setBusca(true)}>
           <Icone nome="busca" /> Buscar… <kbd>{ehMac ? '⌘' : 'Ctrl'} K</kbd>
         </button>
@@ -89,17 +99,18 @@ export function Layout() {
             <b>{usuario?.nome}</b>
             <span>{PAPEL[usuario?.papel ?? ''] ?? usuario?.papel}</span>
           </div>
-          <BotaoTema tema={tema} setTema={setTema} />
+          <BotaoTema />
           <button onClick={sair} aria-label="Sair" title="Sair"><Icone nome="sair" /></button>
         </div>
       </aside>
       <div>
         <header className="topo-mobile">
-          <img src="/marca/rosae-logo-horizontal-negativo.svg" alt="ROSAE" />
+          <Link to="/" className="logo" aria-label="Início"><Logo tipo="nome" /></Link>
           <div className="row" style={{ gap: 2 }}>
             <button onClick={() => setBusca(true)} aria-label="Buscar"><Icone nome="busca" /></button>
-            <BotaoTema tema={tema} setTema={setTema} />
-            <button onClick={sair} aria-label="Sair"><Icone nome="sair" /></button>
+            <BotaoTema />
+            <Link to="/aparencia" className="botao-icone" aria-label="Aparência"><Icone nome="paleta" /></Link>
+            <span className="avatar avatar-mini" aria-label={usuario?.nome} title={usuario?.nome}>{iniciais(usuario?.nome)}</span>
           </div>
         </header>
         <main className="main">
@@ -133,19 +144,38 @@ export function Topo({ titulo, sub, children }: { titulo: string; sub?: React.Re
   );
 }
 
-/** Menu "Mais" do celular: o que não cabe na barra de baixo. */
+/** Menu "Mais" do celular: o que não cabe na barra de baixo, em blocos por área. */
 export function Mais() {
   const visiveis = useItens();
+  const { usuario, sair } = useAuth();
+  const extras: Item[] = visiveis.some((i) => i.para === '/comercial')
+    ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'documento', fin: false, grupo: 'Gestão' }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista', fin: false, grupo: 'Gestão' }, { para: '/orcamento/precos', rotulo: 'Tabela de preços', icone: 'config', fin: false, grupo: 'Gestão' }]
+    : [];
+  const resto = [...visiveis.filter((i) => !naBarra(visiveis).includes(i)), ...extras];
   return (
     <>
-      <Topo titulo="Mais" />
-      <div className="lista-cartoes" style={{ display: 'grid' }}>
-        {visiveis.filter((i) => !naBarra(visiveis).includes(i)).concat(visiveis.some((i) => i.para === '/comercial') ? [{ para: '/propostas', rotulo: 'Propostas', icone: 'comercial', fin: false }, { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'comercial', fin: false }] : []).map((i) => (
-          <Link key={i.para} to={i.para} className="item-cartao">
-            <span className="row"><Icone nome={i.icone} />{i.rotulo}</span>
-          </Link>
-        ))}
+      <div className="mais-perfil card">
+        <span className="avatar" aria-hidden="true">{iniciais(usuario?.nome)}</span>
+        <div className="quem"><b>{usuario?.nome}</b><span className="muted small">{PAPEL[usuario?.papel ?? ''] ?? usuario?.papel}</span></div>
+        <button className="btn-secundario" onClick={sair}><Icone nome="sair" /> Sair</button>
       </div>
+      {GRUPOS.map((g) => {
+        const doGrupo = resto.filter((i) => i.grupo === g);
+        if (!doGrupo.length) return null;
+        return (
+          <section key={g} className="mais-grupo">
+            <h2 className="mais-titulo">{g}</h2>
+            <div className="mais-grade">
+              {doGrupo.map((i) => (
+                <Link key={i.para} to={i.para} className="mais-item">
+                  <span className="mais-icone"><Icone nome={i.icone} /></span>
+                  {i.rotulo}
+                </Link>
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </>
   );
 }

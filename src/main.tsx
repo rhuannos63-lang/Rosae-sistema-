@@ -9,9 +9,9 @@ import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
 import './styles.css';
 import { App } from './App';
-import { aplicarTema } from './lib/tema';
+import { aplicar } from './lib/aparencia';
 
-aplicarTema();
+aplicar();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
