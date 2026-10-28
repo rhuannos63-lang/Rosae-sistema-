@@ -78,15 +78,17 @@ export const MANUAL: Capitulo[] = [
     id: 'obras', titulo: 'Obras: do contrato à entrega', icone: 'obras', link: { para: '/obras', rotulo: 'Abrir as obras' },
     resumo: 'Contrato, cronograma, materiais, diário com fotos, fichas de campo e financeiro de cada obra.',
     passos: [
-      { titulo: 'Gere o contrato', texto: 'Na aba Contrato, confira os dados que faltam (documento, endereço), revise as cláusulas e emita. Registre a assinatura e toque em “Liberar obra”.' },
+      { titulo: 'Gere o contrato', texto: 'Na aba Contrato, confira os dados que faltam (documento, endereço), revise as cláusulas e emita. Depois toque em “Liberar obra”.' },
+      { titulo: 'Colha a assinatura pelo link', texto: 'Com o contrato emitido, toque em “Gerar link de assinatura” e envie pelo WhatsApp. O cliente lê no celular e assina com nome completo e CPF/CNPJ. O contrato passa sozinho a “Assinado”, com data, hora e código da versão. Se ele assinar fora (papel ou gov.br), use “Registrar assinatura”.' },
       { titulo: 'Monte o cronograma', texto: 'Na aba Cronograma, ajuste etapas, pesos e durações, use “Programar datas” e, quando combinar com o cliente, “Guardar linha de base”. A Curva S compara o previsto com o realizado.' },
       { titulo: 'Controle os materiais', texto: 'Na aba Materiais, cadastre o que é necessário e registre compra, entrega na obra, devolução ou cancelamento. O sistema mostra o que falta comprar e entregar.' },
       { titulo: 'Registre o dia a dia', texto: 'No Diário e fotos, toque em Registrar, escolha o tipo (execução, visita, ocorrência, condição existente) e anexe fotos de antes, durante e depois.' },
       { titulo: 'Use as fichas de campo', texto: 'Na aba Fichas, gere a ficha do serviço para a equipe ou parceiro usar no canteiro, com o que fazer e o que conferir.' },
+      { titulo: 'Faça as medições', texto: 'Na aba Medições, atualize antes o percentual das etapas no Cronograma e toque em “Gerar medição” com a data de corte. Confira o rascunho e toque em “Enviar ao cliente”: ele aprova ou contesta pelo portal, sem ver valores. Aprovada, toque em “Lançar cobrança” (ou ligue a uma parcela existente).' },
       { titulo: 'Acompanhe o financeiro da obra', texto: 'Na aba Financeiro, veja o vendido, recebido, gasto e o resultado por serviço. Lance contas a pagar e a receber da obra direto daqui.' },
       { titulo: 'Gere os relatórios', texto: 'No topo da obra, toque em Relatório para abrir o relatório administrativo (uso interno) e use “Imprimir ou salvar PDF”. O relatório do cliente, sem valores, também fica disponível no portal.' },
     ],
-    atencao: ['O percentual da obra só sobe com execução registrada, nunca com compra ou pagamento.'],
+    atencao: ['O percentual da obra só sobe com execução registrada, nunca com compra ou pagamento.', 'Medição contestada não se edita: converse com o cliente, ajuste o cronograma, cancele a medição e gere outra.'],
   },
   {
     id: 'portal', titulo: 'Portal do cliente', icone: 'olho', link: { para: '/obras', rotulo: 'Escolher uma obra' },
@@ -96,6 +98,7 @@ export const MANUAL: Capitulo[] = [
       { titulo: 'Publique o que o cliente deve ver', texto: 'Em “Publicar no portal”, escolha os registros, fotos e etapas e toque em Publicar. Só aparece o que você publicar.' },
       { titulo: 'Confira como cliente', texto: 'Use “Ver como cliente” para ver exatamente a tela dele antes de avisar.' },
       { titulo: 'Responda e colha ciência', texto: 'O cliente pode mandar mensagens e dar ciência nas decisões. Tudo fica registrado com data.' },
+      { titulo: 'Medições para aprovar', texto: 'Quando você envia uma medição, ela aparece em destaque no início do portal e numa aba própria. O cliente vê etapa por etapa, aprova ou diz o que não confere. A resposta aparece na aba Medições da obra e na central de pendências.' },
     ],
   },
   {

@@ -57,7 +57,16 @@ export type DadosPortal = {
   materiais: MaterialPortal[];
   comentarios: ComentarioPortal[];
   ciencias: CienciaPortal[];
+  medicoes?: MedicaoPortal[];
   ultima_atualizacao: string | null;
+};
+
+/** Medição como o cliente vê: só percentuais, nunca valores. */
+export type MedicaoPortal = {
+  id: string; numero: number; data_corte: string; estado: 'enviada' | 'aprovada' | 'contestada';
+  itens: { servico: string; etapa: string; anterior: number; atual: number }[];
+  percentual_anterior: number; percentual_atual: number; observacao: string | null; hash: string;
+  enviada_em: string; respondida_em: string | null; resposta_nome: string | null; resposta_texto: string | null;
 };
 
 export const ESTADO_PORTAL: Record<EstadoEtapaPortal, { rotulo: string; tom: 'ok' | 'info' | 'alerta' | 'neutro' }> = {

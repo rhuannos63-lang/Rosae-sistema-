@@ -1,7 +1,7 @@
 // Aparência do sistema escolhida por cada usuário: modo claro/escuro, cor principal,
 // estilo do menu, fundo, cantos, densidade e tamanho do texto. Fica salva no aparelho
 // e, com login, também no banco (vale no celular e no computador).
-// As páginas que o cliente abre (proposta e portal) ficam sempre no visual da marca.
+// As páginas que o cliente abre (proposta, portal e assinatura) ficam sempre no visual da marca.
 import { useSyncExternalStore } from 'react';
 
 export type Modo = 'claro' | 'escuro' | 'auto';
@@ -111,7 +111,7 @@ export function variaveis(a: Aparencia, escuro: boolean): Record<string, string>
 
 // ---------- Aplicar ----------
 const escuroNoSistema = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-const ehPublica = () => /^\/(p|c)(\/|$)/.test(window.location.pathname);
+const ehPublica = () => /^\/(p|c|a)(\/|$)/.test(window.location.pathname);
 let aplicadas: string[] = [];
 
 export function aplicar(a: Aparencia = estado) {

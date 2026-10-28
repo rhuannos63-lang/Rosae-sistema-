@@ -1409,3 +1409,13 @@ a.bi-faixa-item:hover { background: var(--verde-tinta); }
 .grid > .card + .card, .grid > .card + .kpi, .bi-linha > * { margin-top: 0; }
 .shell > div { min-width: 0; }
 @media (max-width: 860px) { .shell { grid-template-columns: minmax(0, 1fr); } .topo .row { flex-wrap: wrap; } }
+
+/* Medições e assinatura do contrato pelo link */
+.bloco-assinatura { margin-top: 4px; padding: 14px 16px; border: 1px solid var(--linha); border-radius: var(--raio); background: var(--verde-tinta); }
+.bloco-assinatura h3 { margin: 0; }
+.linha-detalhe > td { background: var(--verde-tinta); padding: 14px 16px; }
+.medicao-detalhe .tabela-wrap { background: var(--papel); border-radius: var(--raio-p); }
+.seta-expandir { display: inline-block; font-size: 1.25rem; line-height: 1; transition: transform .15s ease; transform: rotate(90deg); color: var(--texto-3); }
+.seta-expandir.aberta { transform: rotate(-90deg); }
+.portal-medicao-itens { margin: 12px 0; }
+.portal-medicao-itens summary { cursor: pointer; font-weight: 600; color: var(--verde-escuro); }

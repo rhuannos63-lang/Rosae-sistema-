@@ -13,7 +13,7 @@ export type ItemPendencia = { chave: string; tipo: string; prioridade: number; t
 
 export const TIPOS_PENDENCIA: Record<string, string> = {
   proposta: 'Propostas', comercial: 'Comercial', nota: 'Notas', pagamento: 'Pagamentos', recebimento: 'Recebimentos', material: 'Materiais',
-  obra: 'Obras', decisao: 'Decisões do cliente', pendencia: 'Pendências de obra', portal: 'Portal', documento: 'Documentos',
+  obra: 'Obras', decisao: 'Decisões do cliente', pendencia: 'Pendências de obra', portal: 'Portal', documento: 'Documentos', medicao: 'Medições',
 };
 const PRIORIDADE: Record<number, [string, string]> = { 1: ['Urgente', 'erro'], 2: ['Atenção', 'alerta'], 3: ['Quando puder', 'neutro'] };
 

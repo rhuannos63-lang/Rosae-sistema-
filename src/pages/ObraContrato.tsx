@@ -32,7 +32,7 @@ function parteEmpresa(e: Empresa | null): Parte {
   };
 }
 
-export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome: string } | null }; aoMudar: () => void }) {
+export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome: string; telefone?: string | null } | null }; aoMudar: () => void }) {
   const toast = useToast();
   const navegar = useNavigate();
   const [gerar, setGerar] = useState<Contrato | 'novo' | null>(null);
@@ -133,6 +133,7 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
               <div className="aviso"><Icone nome="alerta" /><span>Faltam dados: {atual.conteudo.faltando.map(ROTULO_FALTANDO).join(', ')}. Complete em Configurações (dados da ROSAE), no cadastro do cliente ou em “Revisar”.</span></div>
             )}
             {atual.estado === 'assinado' && <div className="aviso ok"><Icone nome="check" /><span>Assinado em {formatarData(atual.assinado_em)} · {atual.assinatura_registro}. Código de verificação {atual.hash?.slice(0, 16).toUpperCase()}.</span></div>}
+            {(atual.estado === 'emitido' || atual.estado === 'assinado') && <AssinaturaPorLink contrato={atual} cliente={obra.cliente} />}
             <div className="contrato-previa"><ContratoDocumento c={atual} /></div>
           </div>
         )}
@@ -170,6 +171,86 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
 
       {gerar && <GerarContrato obra={obra} contrato={gerar === 'novo' ? null : gerar} aoFechar={() => setGerar(null)} aoSalvar={() => { setGerar(null); recarregar(); }} />}
       {assinar && atual && <AssinarContrato contrato={atual} aoFechar={() => setAssinar(false)} aoSalvar={() => { setAssinar(false); recarregar(); aoMudar(); }} />}
+    </div>
+  );
+}
+
+type LinkContrato = { id: string; expira_em: string; revogado_em: string | null; visualizacoes: number; ultima_visualizacao: string | null; criado_em: string };
+type AceiteContrato = { id: string; nome: string; documento: string; email: string | null; declaracao: string; hash_contrato: string; em: string };
+
+/** Link para o contratante ler e assinar pelo celular, com o aceite guardado (nome, documento, data, versão). */
+function AssinaturaPorLink({ contrato, cliente }: { contrato: Contrato; cliente: { nome: string; telefone?: string | null } | null }) {
+  const toast = useToast();
+  const [novo, setNovo] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const { dados, recarregar } = useConsulta(async () => {
+    const [l, a] = await Promise.all([
+      supabase.from('contrato_link').select('id, expira_em, revogado_em, visualizacoes, ultima_visualizacao, criado_em').eq('contrato_id', contrato.id).order('criado_em', { ascending: false }),
+      supabase.from('contrato_aceite').select('*').eq('contrato_id', contrato.id).order('em', { ascending: false }),
+    ]);
+    return { links: ok(l) as LinkContrato[], aceites: ok(a) as AceiteContrato[] };
+  }, [contrato.id, contrato.estado]);
+  const vigente = dados?.links.find((l) => !l.revogado_em && new Date(l.expira_em) > new Date());
+
+  async function gerar() {
+    if (vigente && !window.confirm('Já existe um link ativo. Gerar outro desativa o anterior. Continuar?')) return;
+    setOcupado(true);
+    const r = await supabase.rpc('criar_link_contrato', { p_contrato: contrato.id, p_dias: 15 });
+    setOcupado(false);
+    if (r.error) return toast(mensagemErro(r.error));
+    setNovo(`${window.location.origin}/a/${r.data as string}`);
+    recarregar();
+  }
+  async function revogar() {
+    if (!window.confirm('Desativar o link de assinatura? Quem tiver o link não consegue mais abrir.')) return;
+    const r = await supabase.rpc('revogar_link_contrato', { p_contrato: contrato.id });
+    if (r.error) return toast(mensagemErro(r.error));
+    toast('Link desativado.');
+    setNovo(null);
+    recarregar();
+  }
+  async function copiar(t: string) {
+    try { await navigator.clipboard.writeText(t); toast('Link copiado.'); } catch { window.prompt('Copie o link:', t); }
+  }
+  const tel = (cliente?.telefone ?? '').replace(/\D/g, '');
+  const whats = novo && tel ? `https://wa.me/${tel.length <= 11 ? `55${tel}` : tel}?text=${encodeURIComponent(`Olá${cliente?.nome ? `, ${cliente.nome.split(' ')[0]}` : ''}! Segue o contrato ${contrato.codigo} da ROSAE para leitura e assinatura pelo celular: ${novo}`)}` : null;
+
+  return (
+    <div className="bloco-assinatura">
+      <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+        <h3>Assinatura pelo link <Ajuda>O cliente abre o link no celular, lê o contrato congelado e assina com nome completo e CPF/CNPJ. Ficam guardados a data, a hora, o aparelho e o código da versão. Ao assinar, o contrato passa a “Assinado” e a obra a “Contratada”. Para assinatura com certificado (gov.br), use “Registrar assinatura”.</Ajuda></h3>
+        {contrato.estado === 'emitido' && (
+          <div className="row" style={{ gap: 8 }}>
+            {vigente && <button className="btn-link" onClick={revogar}>Desativar link</button>}
+            <button className="btn-primario" disabled={ocupado} onClick={gerar}><Icone nome="link" /> {vigente ? 'Gerar novo link' : 'Gerar link de assinatura'}</button>
+          </div>
+        )}
+      </div>
+      {novo && (
+        <div className="stack" style={{ marginTop: 10 }}>
+          <div className="aviso ok"><Icone nome="check" /><span>Link criado. Ele aparece só agora: copie e envie ao cliente. Vale por 15 dias.</span></div>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <input readOnly value={novo} onFocus={(e) => e.target.select()} style={{ flex: '1 1 260px' }} aria-label="Link de assinatura" />
+            <button className="btn-secundario" onClick={() => copiar(novo)}>Copiar</button>
+            {whats && <a className="btn-secundario" href={whats} target="_blank" rel="noopener noreferrer">Enviar no WhatsApp</a>}
+          </div>
+        </div>
+      )}
+      {!novo && contrato.estado === 'emitido' && (
+        <p className="muted small" style={{ margin: '8px 0 0' }}>
+          {vigente ? `Link ativo até ${formatarData(vigente.expira_em)} · ${vigente.visualizacoes ? `aberto ${vigente.visualizacoes}× (último em ${formatarDataHora(vigente.ultima_visualizacao)})` : 'ainda não aberto'}.` : 'Nenhum link ativo. Gere um link para o cliente assinar pelo celular.'}
+        </p>
+      )}
+      {(dados?.aceites.length ?? 0) > 0 && (
+        <ul className="lista-adm" style={{ marginTop: 10 }}>
+          {dados!.aceites.map((a) => (
+            <li key={a.id}>
+              <b>{a.nome}</b> · doc. {a.documento} · {formatarDataHora(a.em)}{a.email ? ` · ${a.email}` : ''}
+              <div className="muted small">{a.declaracao}</div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -25,6 +25,7 @@ const Propostas = preguicoso(() => import('./pages/Propostas'), 'Propostas');
 const PropostaEditor = preguicoso(() => import('./pages/Propostas'), 'PropostaEditor');
 const PropostaImprimir = preguicoso(() => import('./pages/Propostas'), 'PropostaImprimir');
 const PropostaPublica = preguicoso(() => import('./pages/PropostaPublica'), 'PropostaPublica');
+const ContratoPublico = preguicoso(() => import('./pages/ContratoPublico'), 'ContratoPublico');
 const NovoOrcamento = preguicoso(() => import('./pages/Orcamento'), 'NovoOrcamento');
 const PrecosOrcamento = preguicoso(() => import('./pages/Orcamento'), 'PrecosOrcamento');
 const Agenda = preguicoso(() => import('./pages/Agenda'), 'Agenda');
@@ -109,6 +110,8 @@ export function App() {
         <Routes>
           {/* Link da proposta para o cliente: sem login. */}
           <Route path="/p/:token" element={<PropostaPublica />} />
+          {/* Assinatura do contrato pelo link: sem login. */}
+          <Route path="/a/:token" element={<ContratoPublico />} />
           {/* Portal do cliente: link pessoal, com expiração e revogação. */}
           <Route path="/c/relatorio" element={<RelatorioClientePortal />} />
           <Route path="/c/:token" element={<PortalEntrada />} />
