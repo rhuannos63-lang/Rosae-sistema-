@@ -387,6 +387,13 @@ pre.codigo { background: var(--grafite); color: rgba(255, 255, 255, 0.8); paddin
 .abas > button.ativo { background: var(--papel); box-shadow: var(--sombra); font-weight: 600; }
 .abas > button.ativo .n { background: var(--verde); color: #fff; }
 .resumo-lateral { margin-top: 12px; padding: 12px; border-radius: var(--raio-p); background: var(--papel); border: 1px solid var(--linha); display: grid; gap: 2px; }
+/* Valor total editável e edição de versão emitida */
+.total-proposta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--linha); background: var(--verde-tinta); }
+.total-proposta > div:first-child { display: grid; gap: 2px; }
+.total-proposta > div:first-child b { font-family: var(--fonte-titulo); font-size: 1.35rem; }
+.total-proposta-editar { display: grid; gap: 6px; min-width: min(100%, 280px); }
+.editar-emitida { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--verde-claro); background: var(--verde-tinta); }
+.editar-emitida > div { flex: 1 1 260px; display: grid; gap: 3px; }
 .bloco-ambiente { border: 1px solid var(--linha); border-radius: 12px; padding: 12px; display: grid; gap: 10px; background: var(--fundo); }
 .titulo-amb { font-family: var(--fonte-titulo); font-weight: 600; flex: 1; background: transparent; border-color: transparent; }
 .titulo-amb:focus { background: var(--campo-fundo); }
@@ -1072,6 +1079,11 @@ div.campo .dica, label.campo .dica { font-weight: 400; color: var(--texto-2); fo
 .pacote-nome { font-weight: 700; display: flex; gap: 8px; align-items: center; }
 .pacote-valor { font-family: var(--fonte-titulo); font-weight: 600; font-size: 1.1rem; grid-row: span 2; align-self: center; }
 .pacote-sub { font-size: .8rem; color: var(--texto-2); }
+/* Meu preço no orçamento automático */
+.pacote-ajustado { grid-column: 1 / -1; font-size: .75rem; font-weight: 600; color: var(--verde); }
+.preco-manual-abrir { margin-top: 10px; width: 100%; justify-content: center; }
+.preco-manual { margin-top: 10px; border: 1px solid var(--verde-claro); background: var(--verde-tinta); border-radius: var(--raio-p); padding: 10px 12px; display: grid; gap: 6px; }
+.preco-manual .campo input { font-size: 1.05rem; font-weight: 600; }
 .analise-interna { margin-top: 12px; border: 1px dashed var(--linha-forte); border-radius: var(--raio-p); padding: 10px 12px; display: grid; gap: 6px; }
 .analise-linha { display: flex; justify-content: space-between; gap: 10px; font-size: .88rem; }
 .avisos-gerador { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }

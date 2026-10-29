@@ -4,21 +4,24 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icone } from './Icone';
 import { formatar } from '../core/dinheiro';
+import { CampoValor } from './ui';
+import type { ValoresManuais } from '../core/proposta';
 import {
   camposDe, DEFINICOES, gerarOrcamento, respostasPadrao, TIPOS,
-  type Campo, type Contexto, type Orcamento, type Respostas, type TipoServico,
+  type Campo, type Contexto, type Orcamento, type Pacote, type Respostas, type TipoServico,
 } from '../core/orcamento';
 import type { TabelaPrecos } from '../lib/orcamentoParametros';
 
 const reais = (v: number) => formatar(Math.round(v * 100));
 const SIGLA: Record<TipoServico, string> = { projeto_estrutural: 'PE', reforco: 'RE', reforma: 'RF', construcao: 'CO', laudo: 'LT', pericia: 'PT' };
 
-export type EstadoGerador = { tipo: TipoServico | null; respostas: Respostas; pacote: 1 | 2 | 3 };
+/** valores: o preço que você definiu para cada pacote, no lugar do calculado. */
+export type EstadoGerador = { tipo: TipoServico | null; respostas: Respostas; pacote: 1 | 2 | 3; valores?: ValoresManuais };
 
-export function estadoInicial(g?: { tipo: string; respostas: Respostas; pacote: number } | null): EstadoGerador {
+export function estadoInicial(g?: { tipo: string; respostas: Respostas; pacote: number; valores?: ValoresManuais } | null): EstadoGerador {
   if (g && (TIPOS as string[]).includes(g.tipo)) {
     const tipo = g.tipo as TipoServico;
-    return { tipo, respostas: { ...respostasPadrao(tipo), ...g.respostas }, pacote: (Math.min(3, Math.max(1, g.pacote)) as 1 | 2 | 3) };
+    return { tipo, respostas: { ...respostasPadrao(tipo), ...g.respostas }, pacote: (Math.min(3, Math.max(1, g.pacote)) as 1 | 2 | 3), valores: g.valores ?? {} };
   }
   return { tipo: null, respostas: {}, pacote: 2 };
 }
@@ -27,14 +30,19 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
   estado: EstadoGerador; setEstado: (e: EstadoGerador) => void; precos: TabelaPrecos; contexto: Contexto; podeFinanceiro: boolean;
   acao: (o: Orcamento) => React.ReactNode;
 }) {
-  const { tipo, respostas, pacote } = estado;
-  const orc = useMemo(() => (tipo ? gerarOrcamento(tipo, respostas, precos[tipo], pacote, contexto) : null), [tipo, respostas, pacote, precos, contexto]);
+  const { tipo, respostas, pacote, valores } = estado;
+  const orc = useMemo(() => (tipo ? gerarOrcamento(tipo, respostas, precos[tipo], pacote, { ...contexto, valores }) : null), [tipo, respostas, pacote, precos, contexto, valores]);
   const [verLinhas, setVerLinhas] = useState(false);
 
   function escolherTipo(t: TipoServico) {
-    setEstado({ tipo: t, respostas: respostasPadrao(t), pacote: 2 });
+    setEstado({ tipo: t, respostas: respostasPadrao(t), pacote: 2, valores: {} });
   }
   const set = (id: string, v: Respostas[string]) => setEstado({ ...estado, respostas: { ...respostas, [id]: v } });
+  const definirValor = (k: 1 | 2 | 3, v: number | null) => {
+    const n = { ...valores };
+    if (v && v > 0) n[k] = v; else delete n[k];
+    setEstado({ ...estado, valores: n });
+  };
 
   return (
     <div className="gerador">
@@ -69,10 +77,12 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
                     <span className="pacote-nome">{p.nome}{p.numero === 2 && orc.pacotes.length > 1 && <span className="selo">recomendado</span>}</span>
                     <span className="pacote-valor num">{reais(p.valor)}</span>
                     <span className="pacote-sub">{p.subtitulo}</span>
+                    {valores?.[p.numero] ? <span className="pacote-ajustado">Seu preço · pela tabela {reais(p.calculado)}</span> : null}
                   </button>
                 ))}
               </div>
               {orc.pacotes.length > 1 && <p className="muted small" style={{ margin: '8px 0 0' }}>O pacote escolhido é o valor da proposta. Os outros aparecem lado a lado para o cliente comparar.</p>}
+              <PrecoManual key={`${tipo}-${orc.principal.numero}`} pacote={orc.principal} manual={!!valores?.[orc.principal.numero]} varios={orc.pacotes.length > 1} aoMudar={(v) => definirValor(orc.principal.numero, v)} />
               <dl className="dl" style={{ marginTop: 12 }}>
                 <dt>Prazo</dt><dd><b>{orc.conteudo.prazo_total_dias} dias</b> em {orc.conteudo.etapas.length} etapas</dd>
                 <dt>Pagamento</dt><dd>{orc.conteudo.pagamento.parcelas.length} parcela(s)</dd>
@@ -102,6 +112,36 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
           </aside>
         </div>
       )}
+    </div>
+  );
+}
+
+/** "Meu preço": troca o valor calculado do pacote pelo que você quiser cobrar. */
+function PrecoManual({ pacote, manual, varios, aoMudar }: { pacote: Pacote; manual: boolean; varios: boolean; aoMudar: (v: number | null) => void }) {
+  const [aberto, setAberto] = useState(manual);
+  const [texto, setTexto] = useState<number | null>(manual ? Math.round(pacote.valor * 100) : null);
+  if (!aberto) {
+    return (
+      <button type="button" className="btn-secundario preco-manual-abrir" onClick={() => { setAberto(true); setTexto(Math.round(pacote.valor * 100)); }}>
+        <Icone nome="editar" /> Definir meu preço{varios ? ` do ${pacote.nome}` : ''}
+      </button>
+    );
+  }
+  const dif = pacote.calculado > 0 ? ((pacote.valor - pacote.calculado) / pacote.calculado) * 100 : 0;
+  return (
+    <div className="preco-manual">
+      <label className="campo">
+        <span>Meu preço{varios ? ` · pacote ${pacote.nome}` : ''}</span>
+        <CampoValor valor={texto} aoMudar={(c) => { setTexto(c); aoMudar(c && c > 0 ? c / 100 : null); }} />
+      </label>
+      <div className="small muted">
+        Pela tabela: <b className="num">{reais(pacote.calculado)}</b>
+        {manual && Math.abs(dif) >= 0.05 && <> · {dif > 0 ? '+' : ''}{dif.toFixed(1).replace('.', ',')}%</>}
+      </div>
+      <p className="muted small" style={{ margin: 0 }}>A diferença é repartida entre os itens do pacote, e o pagamento acompanha o novo valor.</p>
+      <div className="row">
+        <button type="button" className="btn-link small" onClick={() => { aoMudar(null); setTexto(null); setAberto(false); }}>Voltar ao preço da tabela</button>
+      </div>
     </div>
   );
 }

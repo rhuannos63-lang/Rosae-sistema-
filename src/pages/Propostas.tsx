@@ -10,7 +10,7 @@ import { PropostaDocumento, type DadosDocumento, type EmpresaPublica } from '../
 import { doBanco, formatar, paraBanco, somar, type Centavos } from '../core/dinheiro';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
 import {
-  aplicarModelos, compararVersoes, itemDoModelo, normalizar, novoId, paraCentavos, pendencias, prepararParaSalvar, rascunhoDoTexto,
+  acompanharTotal, ajustarTotal, aplicarModelos, compararVersoes, parcelasAoTotal, itemDoModelo, normalizar, novoId, paraCentavos, pendencias, prepararParaSalvar, rascunhoDoTexto,
   somaParcelas, sugerirPagamento, totalAmbiente, totalConteudo, totalItem, UNIDADES,
   type Ambiente, type Conteudo, type Item, type ModeloServico,
 } from '../core/proposta';
@@ -46,6 +46,7 @@ export function Propostas() {
       <Topo titulo="Propostas" sub="Cada proposta guarda todas as versões. A versão enviada fica congelada; mudanças viram uma nova versão.">
         <Link className="btn-secundario" to="/comercial"><Icone nome="voltar" /> Comercial</Link>
         <Link className="btn-secundario" to="/biblioteca">Biblioteca de serviços</Link>
+        <Link className="btn-secundario" to="/orcamento/precos"><Icone nome="tabela" /> Tabela de preços</Link>
         <Link className="btn-primario" to="/orcamento"><Icone nome="varinha" /> Novo orçamento</Link>
       </Topo>
       <div className="card">
@@ -158,8 +159,9 @@ export function PropostaEditor() {
     setErro(null);
     const r = await supabase.rpc('nova_versao_proposta', { p_proposta: p.id });
     if (r.error) return setErro(mensagemErro(r.error));
-    toast('Nova versão criada a partir da anterior.');
-    setParams({});
+    const nova = r.data as string;
+    toast(ultima?.emitida ? `Versão ${ultima.numero + 1} criada a partir da ${ultima.numero}. Mude o que precisar e emita de novo.` : 'Versão criada.');
+    setParams(ultima?.emitida ? { v: nova, aba: 'escopo' } : {});
     recarregar();
   }
 
@@ -183,13 +185,13 @@ export function PropostaEditor() {
             v{x.numero} {x.emitida ? (p.versao_aprovada_id === x.id ? '· aprovada' : '· emitida') : '· rascunho'}
           </button>
         ))}
-        {ultima?.emitida && p.estado !== 'aprovada' && <button className="btn-secundario" onClick={novaVersao}><Icone nome="mais" /> Nova versão (revisão)</button>}
+        {ultima?.emitida && p.estado !== 'aprovada' && <button className="btn-secundario" onClick={novaVersao}><Icone nome="editar" /> Editar (nova versão)</button>}
       </div>
       <Erro mensagem={erro} />
       {!versao ? (
         <Vazio titulo="Sem versão"><button className="btn-primario" onClick={novaVersao}>Criar versão 1</button></Vazio>
       ) : versao.emitida ? (
-        <VersaoEmitida key={versao.id} carga={dados} versao={versao} anterior={versoes.find((x) => x.numero === versao.numero - 1)} ehUltima={versao.id === ultima?.id} aoMudar={recarregar} />
+        <VersaoEmitida key={versao.id} carga={dados} versao={versao} anterior={versoes.find((x) => x.numero === versao.numero - 1)} ehUltima={versao.id === ultima?.id} aoMudar={recarregar} aoEditar={novaVersao} />
       ) : (
         <EditorVersao key={versao.id} carga={dados} versao={versao} anterior={versoes.find((x) => x.numero === versao.numero - 1)} podeFinanceiro={podeFinanceiro} aoEmitir={recarregar} />
       )}
@@ -271,6 +273,8 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
     toast('Custos internos salvos (não aparecem para o cliente).');
   }
 
+  // Mudou item ou preço: parcelas, pacote na comparação e valor à vista acompanham o novo total.
+  const setCValores: SetC = useCallback((f) => setC((x) => acompanharTotal(x, typeof f === 'function' ? f(x) : f)), []);
   const total = totalConteudo(c);
   const pend = pendencias(c, carga.proposta.tipo === 'aditivo');
   const set = <K extends keyof Conteudo>(k: K, v: Conteudo[K]) => setC((x) => ({ ...x, [k]: v }));
@@ -320,7 +324,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
           }} />
         )}
         {aba === 'geral' && <AbaGeral c={c} setC={setC} biblioteca={carga.biblioteca} irPara={setAba} aditivo={carga.proposta.tipo === 'aditivo'} />}
-        {aba === 'escopo' && <AbaEscopo c={c} setC={setC} biblioteca={carga.biblioteca} />}
+        {aba === 'escopo' && <AbaEscopo c={c} setC={setCValores} biblioteca={carga.biblioteca} />}
         {aba === 'incluso' && (
           <div className="grid grid-2">
             <ListaTexto rotulo="Incluso" valor={c.inclusoes} aoMudar={(v) => set('inclusoes', v)} />
@@ -352,7 +356,13 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
             {carga.empresa && !carga.empresa.registro && (
               <div className="aviso info"><span>O registro no CREA não aparece na proposta até ser conferido em Configurações → Empresa.</span></div>
             )}
-            <div className="row"><button className="btn-primario" onClick={emitir} disabled={pend.length > 0}>Emitir versão {versao.numero}</button></div>
+            <div className="row">
+              <button className="btn-primario" onClick={emitir} disabled={pend.length > 0}>Emitir versão {versao.numero}</button>
+              <span className="muted small">Quer mudar algo antes?</span>
+              <button className="btn-secundario" onClick={() => setAba('escopo')}><Icone nome="editar" /> Valores e itens</button>
+              <button className="btn-link" onClick={() => setAba('pagamento')}>Pagamento</button>
+              <button className="btn-link" onClick={() => setAba('prazo')}>Prazo</button>
+            </div>
             <PropostaDocumento d={doc} />
           </div>
         )}
@@ -470,6 +480,7 @@ function AbaEscopo({ c, setC, biblioteca }: { c: Conteudo; setC: SetC; bibliotec
   const grupos = Array.from(new Set(biblioteca.map((m) => m.grupo)));
   return (
     <div className="stack">
+      {c.ambientes.length > 0 && <TotalProposta c={c} setC={setC} />}
       <p className="muted small" style={{ margin: 0 }}>Organize por ambiente (sala, cozinha…) ou use um único bloco “Escopo geral”. Ao escolher um serviço da biblioteca, os textos padrão dele entram nas outras partes.</p>
       {c.ambientes.map((a) => (
         <div key={a.id} className="bloco-ambiente">
@@ -519,6 +530,41 @@ function AbaEscopo({ c, setC, biblioteca }: { c: Conteudo; setC: SetC; bibliotec
       <div className="row">
         <button className="btn-secundario" onClick={() => setC((x) => ({ ...x, ambientes: [...x.ambientes, { id: novoId(), nome: x.ambientes.length ? 'Novo ambiente' : 'Escopo geral', itens: [] }] }))}><Icone nome="mais" /> Ambiente</button>
       </div>
+    </div>
+  );
+}
+
+/** Valor total editável: digite o novo total e a diferença é repartida entre os itens. */
+function TotalProposta({ c, setC }: { c: Conteudo; setC: SetC }) {
+  const total = totalConteudo(c);
+  const [aberto, setAberto] = useState(false);
+  const [alvo, setAlvo] = useState<Centavos | null>(null);
+  const toast = useToast();
+  function aplicar() {
+    if (!alvo || alvo <= 0) return;
+    setC((x) => ajustarTotal(x, alvo));
+    setAberto(false);
+    toast('Valor ajustado nos itens. Parcelas e pacote acompanharam o novo total.');
+  }
+  const dif = alvo && total > 0 ? ((alvo - total) / total) * 100 : 0;
+  return (
+    <div className="total-proposta">
+      <div>
+        <span className="muted small">Valor da proposta</span>
+        <b className="num">{formatar(total)}</b>
+      </div>
+      {aberto ? (
+        <div className="total-proposta-editar">
+          <label className="campo"><span>Novo valor total</span><CampoValor valor={alvo} aoMudar={setAlvo} autoFocus /></label>
+          {!!alvo && alvo !== total && <span className="small muted">{dif > 0 ? '+' : ''}{dif.toFixed(1).replace('.', ',')}% · repartido entre os itens na proporção de cada um</span>}
+          <div className="row">
+            <button className="btn-primario" onClick={aplicar} disabled={!alvo || alvo <= 0 || alvo === total}>Aplicar</button>
+            <button className="btn-link" onClick={() => setAberto(false)}>Cancelar</button>
+          </div>
+        </div>
+      ) : (
+        <button className="btn-secundario" onClick={() => { setAlvo(total); setAberto(true); }}><Icone nome="editar" /> Mudar o valor total</button>
+      )}
     </div>
   );
 }
@@ -598,6 +644,7 @@ function AbaPagamento({ c, setC }: { c: Conteudo; setC: SetC }) {
             Soma {formatar(soma)} de {formatar(total)}{soma !== total ? ` · diferença ${formatar(total - soma)}` : ' · confere'}
           </span>
         )}
+        {parcelas.length > 0 && soma !== total && total > 0 && <button className="btn-link" onClick={() => setC((x) => parcelasAoTotal(x))}>Ajustar as parcelas ao total</button>}
       </div>
       <label className="campo">Observação sobre pagamento<input value={c.pagamento.descricao} onChange={(e) => setC({ ...c, pagamento: { ...c.pagamento, descricao: e.target.value } })} placeholder="Ex.: PIX ou transferência. Materiais pagos diretamente pelo cliente." /></label>
     </div>
@@ -634,7 +681,7 @@ function AbaCustos({ custos, setCustos, notas, setNotas, total, carregado, salva
 // ---------------------------------------------------------------------
 // Versão emitida: link, envio e respostas do cliente
 // ---------------------------------------------------------------------
-function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar }: { carga: Carga; versao: PropostaVersao; anterior?: PropostaVersao; ehUltima: boolean; aoMudar: () => void }) {
+function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }: { carga: Carga; versao: PropostaVersao; anterior?: PropostaVersao; ehUltima: boolean; aoMudar: () => void; aoEditar: () => void }) {
   const toast = useToast();
   const p = carga.proposta;
   const [link, setLink] = useState<string | null>(null);
@@ -698,6 +745,20 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar }: { carga: 
             </>
           )}
           {!ehUltima && <div className="aviso info" style={{ marginTop: 10 }}><span>Existe versão mais nova. Esta continua guardada como histórico, mas não pode mais ser aceita.</span></div>}
+          {ehUltima && p.estado !== 'aprovada' && (
+            <div className="editar-emitida">
+              <div>
+                <b>Precisa mudar ou inserir algo?</b>
+                <span className="muted small">A versão {versao.numero} fica guardada como enviada. A edição vira a versão {versao.numero + 1}, com tudo copiado desta: você muda preço, itens, prazo ou pagamento, emite e envia o link novo.</span>
+              </div>
+              <button className="btn-primario" onClick={aoEditar}><Icone nome="editar" /> Editar orçamento</button>
+            </div>
+          )}
+          {p.estado === 'aprovada' && p.versao_aprovada_id === versao.id && (
+            <div className="aviso info" style={{ marginTop: 10 }}>
+              <span>Já aprovada pelo cliente, então não muda mais. Para inserir ou mudar algo agora, crie um <b>aditivo</b> na obra (aba Contrato): ele tem preço próprio e o cliente aprova pelo link. Para reaproveitar este orçamento em outro cliente, use Duplicar.</span>
+            </div>
+          )}
           <Erro mensagem={erro} />
           {ehUltima && p.estado !== 'aprovada' && (
             <div className="stack" style={{ marginTop: 12 }}>

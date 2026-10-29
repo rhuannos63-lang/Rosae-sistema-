@@ -16,17 +16,20 @@ import {
   type Orcamento, type Parametros, type TipoServico,
 } from '../core/orcamento';
 
+const reaisTexto = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
 type PessoaMin = { id: string; nome: string; telefone: string | null; email: string | null };
 type Op = { id: string; titulo: string; pessoa_id: string; resumo: string | null; local_obra: string | null; estado_id: string };
 
 /** Grava o orçamento gerado como proposta (versão 1 em rascunho) e os custos internos. */
 export async function gravarOrcamento(o: Orcamento, versaoId: string, podeFinanceiro: boolean) {
   const pr = prepararParaSalvar(o.conteudo);
+  const manual = Math.round(o.principal.valor * 100) !== Math.round(o.principal.calculado * 100);
   ok(await supabase.from('proposta_versao').update({ conteudo: pr.conteudo, valor_total: pr.valor_total }).eq('id', versaoId).select('id'));
   if (podeFinanceiro) {
     ok(await supabase.from('proposta_custo').upsert({
       versao_id: versaoId, custos: { linhas: o.custos }, custo_total: paraBanco(Math.round(o.analise.custo * 100)),
-      notas_internas: `Gerado pelo orçamento automático (${NOME_TIPO[o.tipo]}, pacote ${o.principal.nome}). Margem estimada ${o.analise.margem_pct.toFixed(0)}%.`,
+      notas_internas: `Gerado pelo orçamento automático (${NOME_TIPO[o.tipo]}, pacote ${o.principal.nome}).${manual ? ` Preço definido por você; pela tabela seria ${reaisTexto(o.principal.calculado)}.` : ''} Margem estimada ${o.analise.margem_pct.toFixed(0)}%.`,
     }));
   }
 }

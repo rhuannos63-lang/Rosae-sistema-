@@ -4,7 +4,7 @@
 import { ratear, type Centavos } from './dinheiro';
 import {
   APRESENTACAO_PADRAO, conteudoVazio, novoId, parcelasPorPercentual,
-  type Conteudo, type Etapa, type Item, type ModeloServico, type OpcaoProposta, type ParcelaProposta, type Pergunta as PerguntaFaq, type Responsabilidade, type Topico,
+  type Conteudo, type Etapa, type Item, type ModeloServico, type OpcaoProposta, type ParcelaProposta, type Pergunta as PerguntaFaq, type Responsabilidade, type Topico, type ValoresManuais,
 } from './proposta';
 
 export type TipoServico = 'projeto_estrutural' | 'reforco' | 'reforma' | 'construcao' | 'laudo' | 'pericia';
@@ -918,7 +918,8 @@ export function faltando(tipo: TipoServico, r: Respostas): string[] {
 // ---------------------------------------------------------------------
 // Montagem final
 // ---------------------------------------------------------------------
-export type Pacote = { numero: 1 | 2 | 3; nome: string; subtitulo: string; valor: number; custo: number; linhas: Linha[]; destaques: string[] };
+/** calculado = valor pela tabela de preços; valor = o que vai na proposta (pode ter sido definido por você). */
+export type Pacote = { numero: 1 | 2 | 3; nome: string; subtitulo: string; valor: number; calculado: number; custo: number; linhas: Linha[]; destaques: string[] };
 export type Orcamento = {
   tipo: TipoServico;
   titulo: string;
@@ -981,7 +982,15 @@ const DIFERENCIAIS: Topico[] = [
   { titulo: 'Mudanças só com o seu aceite', texto: 'Qualquer alteração de escopo, prazo ou valor vira aditivo e só segue com a sua aprovação.' },
 ];
 
-export type Contexto = { necessidade?: string; local?: string; biblioteca?: ModeloServico[]; base?: Conteudo };
+export type Contexto = { necessidade?: string; local?: string; biblioteca?: ModeloServico[]; base?: Conteudo; valores?: ValoresManuais };
+
+/** Leva as linhas de um pacote para o valor definido por você, na proporção de cada uma (soma exata ao centavo). */
+function aplicarValor(ls: Linha[], valor: number | undefined): Linha[] {
+  const soma = ls.reduce((t, l) => t + l.valor, 0);
+  if (!valor || !(valor > 0) || soma <= 0 || Math.round(valor * 100) === Math.round(soma * 100)) return ls;
+  const partes = ratear(Math.round(valor * 100), ls.map((l) => Math.max(0, Math.round(l.valor * 100))));
+  return ls.map((l, k) => ({ ...l, valor: partes[k] / 100 }));
+}
 
 /** Gera o orçamento completo. pacote = qual opção vai como valor da proposta (as outras aparecem para comparação). */
 export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, pacoteEscolhido: 1 | 2 | 3 = 2, ctx: Contexto = {}): Orcamento {
@@ -991,11 +1000,12 @@ export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, p
   const urg = b(r, 'urgencia');
   const pacotes: Pacote[] = base.pacotes.map((pc, i) => {
     const k = (i + 1) as 1 | 2 | 3;
-    const ls = linhasDoPacote(base, base.pacotes.length === 1 ? 3 : k, r, pp);
+    const calc = linhasDoPacote(base, base.pacotes.length === 1 ? 3 : k, r, pp);
+    const ls = aplicarValor(calc, ctx.valores?.[k]);
     const novos = base.pacotes.length === 1 ? [] : base.linhas.filter((l) => l.pacote === k && l.valor > 0).map((l) => l.titulo);
     return {
       numero: k, nome: pc.nome, subtitulo: pc.subtitulo, linhas: ls,
-      valor: ls.reduce((t, l) => t + l.valor, 0), custo: ls.reduce((t, l) => t + l.custo, 0),
+      valor: Math.round(ls.reduce((t, l) => t + l.valor, 0) * 100) / 100, calculado: calc.reduce((t, l) => t + l.valor, 0), custo: ls.reduce((t, l) => t + l.custo, 0),
       destaques: k === 1 || base.pacotes.length === 1 ? base.entregaveis.slice(0, 4) : [`Tudo do ${base.pacotes[i - 1].nome}`, ...novos, ...pc.extras],
     };
   });
@@ -1065,7 +1075,7 @@ export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, p
     opcoes,
     condicao_especial: avista ? `Pagamento à vista com ${fmtN(desc, 1)}% de desconto: ${reaisFmt(avista)}, para aceite dentro da validade.` : '',
     prazo_total_dias: prazoTotal,
-    gerador: { tipo, respostas: r, pacote: principal.numero, em: new Date().toISOString() },
+    gerador: { tipo, respostas: r, pacote: principal.numero, ...(ctx.valores && Object.keys(ctx.valores).length ? { valores: ctx.valores } : {}), em: new Date().toISOString() },
   };
 
   const custos = principal.linhas.filter((l) => l.custo > 0).map((l) => ({ descricao: l.titulo, valor: Math.round(l.custo) }));
