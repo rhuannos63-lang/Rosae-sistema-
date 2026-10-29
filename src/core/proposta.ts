@@ -27,6 +27,8 @@ export type Topico = { titulo: string; texto: string };
 export type Pergunta = { pergunta: string; resposta: string };
 export type OpcaoProposta = { nome: string; subtitulo: string; valor: number; destaques: string[]; recomendado: boolean; principal: boolean };
 
+export type ValoresManuais = Partial<Record<1 | 2 | 3, number>>;
+
 export type Conteudo = {
   apresentacao: string;
   necessidade: string;
@@ -58,7 +60,8 @@ export type Conteudo = {
   opcoes?: OpcaoProposta[];
   condicao_especial?: string;
   prazo_total_dias?: number | null;
-  gerador?: { tipo: string; respostas: Record<string, string | number | boolean | null>; pacote: number; em: string };
+  // valores: preço que você definiu para um pacote, no lugar do calculado pela tabela (reais, por número do pacote).
+  gerador?: { tipo: string; respostas: Record<string, string | number | boolean | null>; pacote: number; valores?: ValoresManuais; em: string };
 };
 
 export type ModeloServico = {
@@ -345,4 +348,83 @@ export function prepararParaSalvar(c: Conteudo): { conteudo: Conteudo; valor_tot
     ambientes: c.ambientes.map((a) => ({ ...a, itens: a.itens.map((i) => ({ ...i, total: totalItem(i) })) })),
   };
   return { conteudo, valor_total: reais(totalConteudo(conteudo)) };
+}
+
+// ---------------------------------------------------------------------
+// Editar valores de um orçamento pronto
+// ---------------------------------------------------------------------
+const brl = (c: Centavos) => (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const arred10c = (c: Centavos): Centavos => Math.max(0, Math.round(c / 1000) * 1000);
+
+/** Atualiza o valor à vista escrito pelo orçamento automático ("À vista: R$ … (5% de desconto)"). */
+export function atualizarAvista(texto: string, total: Centavos): string {
+  const pct = (s: string) => Number(s.replace(',', '.')) || 0;
+  return texto
+    .replace(/À vista: R\$\s?[\d.]+,\d{2} \(([\d,]+)% de desconto\)/, (_, d: string) => `À vista: ${brl(arred10c(total * (1 - pct(d) / 100)))} (${d}% de desconto)`)
+    .replace(/à vista com ([\d,]+)% de desconto: R\$\s?[\d.]+,\d{2}/, (_, d: string) => `à vista com ${d}% de desconto: ${brl(arred10c(total * (1 - pct(d) / 100)))}`);
+}
+
+/**
+ * Depois de mudar itens ou valores: leva o novo total para as parcelas (se elas fechavam
+ * com o total anterior), para o pacote escolhido na comparação e para o valor à vista.
+ */
+export function acompanharTotal(antes: Conteudo, depois: Conteudo): Conteudo {
+  const tA = totalConteudo(antes);
+  const tD = totalConteudo(depois);
+  if (tA === tD) return depois;
+  let r = depois;
+  const parcelas = r.pagamento.parcelas;
+  const pesos = parcelas.map((p) => Math.max(0, paraCentavos(p.valor)));
+  if (tD > 0 && parcelas.length > 0 && somaParcelas(antes) === tA && pesos.some((p) => p > 0)) {
+    const novos = ratear(tD, pesos);
+    r = { ...r, pagamento: { ...r.pagamento, parcelas: parcelas.map((p, k) => ({ ...p, valor: reais(novos[k]) })) } };
+  }
+  if (r.opcoes?.some((o) => o.principal)) r = { ...r, opcoes: r.opcoes.map((o) => (o.principal ? { ...o, valor: reais(tD) } : o)) };
+  r = { ...r, pagamento: { ...r.pagamento, descricao: atualizarAvista(r.pagamento.descricao, tD) } };
+  if (r.condicao_especial) r = { ...r, condicao_especial: atualizarAvista(r.condicao_especial, tD) };
+  return r;
+}
+
+/**
+ * Leva o total da proposta para o valor pedido, repartindo a diferença entre os itens
+ * na proporção de cada um. A soma fecha ao centavo: se nenhum preço unitário fecha,
+ * o maior item passa a ser cobrado como verba.
+ */
+export function ajustarTotal(c: Conteudo, alvo: Centavos): Conteudo {
+  const atual = totalConteudo(c);
+  if (alvo <= 0 || atual <= 0 || alvo === atual) return c;
+  const lista = c.ambientes.flatMap((a, ai) => a.itens.map((i, ii) => ({ ai, ii, i, t: paraCentavos(totalItem(i)) })));
+  const metas = ratear(alvo, lista.map((x) => Math.max(0, x.t)));
+  const novos = lista.map((x, k) => {
+    const mult = (Number(x.i.quantidade) || 0) * (x.i.fator && x.i.fator > 0 ? x.i.fator : 1);
+    if (!(mult > 0) || x.t <= 0) return x.i;
+    return { ...x.i, preco_unitario: reais(Math.round(metas[k] / mult)) };
+  });
+  // Diferença de arredondamento: vai para um item de quantidade 1, ou o maior vira verba.
+  const falta = alvo - somar(novos.map((i) => paraCentavos(totalItem(i))));
+  if (falta !== 0) {
+    const k1 = novos.findIndex((i, k) => lista[k].t > 0 && Number(i.quantidade) === 1 && (!i.fator || i.fator === 1));
+    if (k1 >= 0) novos[k1] = { ...novos[k1], preco_unitario: reais(paraCentavos(novos[k1].preco_unitario) + falta) };
+    else {
+      const km = lista.reduce((m, x, k) => (x.t > lista[m].t ? k : m), 0);
+      const t = paraCentavos(totalItem(novos[km])) + falta;
+      novos[km] = { ...novos[km], quantidade: 1, unidade: 'vb', fator: 1, complexidade: null, preco_unitario: reais(t) };
+    }
+  }
+  const porPosicao = new Map(lista.map((x, k) => [`${x.ai}:${x.ii}`, novos[k]]));
+  const depois: Conteudo = {
+    ...c,
+    ambientes: c.ambientes.map((a, ai) => ({ ...a, itens: a.itens.map((i, ii) => { const n = porPosicao.get(`${ai}:${ii}`) ?? i; return { ...n, total: totalItem(n) }; }) })),
+  };
+  return acompanharTotal(c, depois);
+}
+
+/** Reparte o total entre as parcelas na proporção atual de cada uma (ou em partes iguais, se estiverem zeradas). */
+export function parcelasAoTotal(c: Conteudo): Conteudo {
+  const total = totalConteudo(c);
+  const ps = c.pagamento.parcelas;
+  if (!ps.length || total <= 0) return c;
+  const pesos = ps.map((p) => Math.max(0, paraCentavos(p.valor)));
+  const novos = ratear(total, pesos.some((p) => p > 0) ? pesos : ps.map(() => 1));
+  return { ...c, pagamento: { ...c.pagamento, parcelas: ps.map((p, k) => ({ ...p, valor: reais(novos[k]) })) } };
 }
