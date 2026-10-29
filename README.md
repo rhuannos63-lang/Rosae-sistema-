@@ -41,6 +41,8 @@ Testes: `npm test` (regras) e `npm run test:db` (banco, precisa do PostgreSQL in
 
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` e, opcional, `BACKUP_SENHA` (senha da criptografia do backup; sem ela, usa a senha do banco).
 
+Assistente de IA (opcional): `ANTHROPIC_API_KEY` (Claude), `GEMINI_API_KEY` (Gemini; também transcreve áudio do WhatsApp) e, para o WhatsApp oficial da Meta, `WHATSAPP_TOKEN`, `WHATSAPP_NUMERO_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` e `WHATSAPP_NUMERO_EXIBICAO`. Depois de cadastrar, rode o workflow **Publicar assistente**: ele copia as chaves para o Supabase e publica as funções `assistente` e `whatsapp` (`supabase/functions`). O passo a passo completo está no sistema, em Empresa e Sistema › Assistente IA › Ligar.
+
 ## Restaurar um backup
 
 Baixe o arquivo em Actions → Backup diário, depois:
