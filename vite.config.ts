@@ -31,5 +31,5 @@ export default defineConfig({
       },
     }),
   ],
-  test: { include: ['src/**/*.test.ts'] },
+  test: { include: ['src/**/*.test.ts', 'supabase/functions/_shared/**/*.test.ts'] },
 });

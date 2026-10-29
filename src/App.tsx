@@ -45,6 +45,7 @@ const Ajuda = preguicoso(() => import('./pages/Ajuda'), 'Ajuda');
 const Manual = preguicoso(() => import('./pages/Manual'), 'Manual');
 const Departamento = preguicoso(() => import('./pages/Departamento'), 'Departamento');
 const Aparencia = preguicoso(() => import('./pages/Aparencia'), 'Aparencia');
+const Assistente = preguicoso(() => import('./pages/Assistente'), 'Assistente');
 const RelatorioObra = preguicoso(() => import('./pages/Relatorios'), 'RelatorioObra');
 const RelatorioClientePrevia = preguicoso(() => import('./pages/Relatorios'), 'RelatorioClientePrevia');
 const RelatorioClientePortal = preguicoso(() => import('./pages/Relatorios'), 'RelatorioClientePortal');
@@ -75,6 +76,7 @@ function Rotas() {
             <Route path="ajuda" element={<Ajuda />} />
             <Route path="manual" element={<Manual />} />
             <Route path="aparencia" element={<Aparencia />} />
+            <Route path="assistente" element={<Assistente />} />
             <Route path="obras" element={<Obras />} />
             <Route path="obras/:id" element={<ObraDetalhe />} />
             <Route path="pessoas" element={<Pessoas />} />
