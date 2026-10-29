@@ -345,3 +345,13 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# Assistente de IA. O login é conferido dentro da função (tela do sistema)
+# ou pela assinatura da Meta (WhatsApp), por isso o verify_jwt fica desligado.
+[functions.assistente]
+verify_jwt = false
+import_map = "./functions/deno.json"
+
+[functions.whatsapp]
+verify_jwt = false
+import_map = "./functions/deno.json"
