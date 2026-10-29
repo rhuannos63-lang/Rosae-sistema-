@@ -355,3 +355,8 @@ import_map = "./functions/deno.json"
 [functions.whatsapp]
 verify_jwt = false
 import_map = "./functions/deno.json"
+
+# E-mail das propostas (Resend). O login é conferido dentro da função.
+[functions.email]
+verify_jwt = false
+import_map = "./functions/deno.json"

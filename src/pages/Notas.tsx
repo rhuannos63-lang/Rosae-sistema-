@@ -9,11 +9,11 @@ import { Ajuda, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../co
 import { Icone } from '../components/Icone';
 import { doBanco, formatar, paraBanco, somar } from '../core/dinheiro';
 import { formatarData, hoje } from '../core/datas';
-import { lerNfe, type NotaLida } from '../core/nfe';
+import { lerNfe, notaDaLeitura, type LeituraIa, type NotaLida } from '../core/nfe';
 import type { Categoria } from '../lib/tipos';
 
 type Nota = {
-  id: string; origem: 'xml' | 'manual'; chave: string | null; numero: string | null; serie: string | null; emitente_documento: string | null;
+  id: string; origem: 'xml' | 'manual' | 'leitura'; chave: string | null; numero: string | null; serie: string | null; emitente_documento: string | null;
   emitente_nome: string | null; fornecedor_id: string | null; data_emissao: string | null; valor_produtos: string; valor_frete: string;
   valor_desconto: string; valor_outros: string; valor_total: string; criterio_rateio: string; duplicatas: { numero: string | null; vencimento: string; valor: number }[];
   avisos: string[]; estado: 'rascunho' | 'confirmada' | 'descartada'; descarte_motivo: string | null; lancamento_id: string | null;
@@ -27,12 +27,46 @@ type ItemNota = {
 type Semelhante = { tipo: 'nota' | 'lancamento'; id: string; descricao: string; motivo: string };
 const ESTADO: Record<Nota['estado'], [string, string]> = { rascunho: ['Para conferir', 'alerta'], confirmada: ['Confirmada', 'ok'], descartada: ['Descartada', 'neutro'] };
 const soDigitos = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '');
+type Lida = { nota: NotaLida; original: Blob; nome: string; tipo: 'xml' | 'leitura' };
+
+/** Foto ou PDF para a IA: fotos são reduzidas (2000 px) para a leitura ficar rápida e barata. */
+async function prepararArquivo(f: File): Promise<{ mime: string; base64: string; blob: Blob }> {
+  if (f.type === 'application/pdf') {
+    if (f.size > 10_000_000) throw new Error('PDF maior que 10 MB. Envie só a página da nota.');
+    const b = new Uint8Array(await f.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode(...b.subarray(i, i + 0x8000));
+    return { mime: 'application/pdf', base64: btoa(bin), blob: f };
+  }
+  const bitmap = await createImageBitmap(f);
+  const escala = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bitmap.width * escala); c.height = Math.round(bitmap.height * escala);
+  c.getContext('2d')!.drawImage(bitmap, 0, 0, c.width, c.height);
+  const url = c.toDataURL('image/jpeg', 0.88);
+  const blob = await (await fetch(url)).blob();
+  return { mime: 'image/jpeg', base64: url.split(',')[1], blob };
+}
+
+async function lerComIa(f: File): Promise<Lida> {
+  const a = await prepararArquivo(f);
+  const { data, error } = await supabase.functions.invoke('assistente', { body: { acao: 'ler_nota', arquivo: { mime: a.mime, base64: a.base64 } } });
+  if (error) {
+    let msg = error.message;
+    try { const j = await (error as { context?: Response }).context?.json(); if (j?.erro) msg = j.erro; } catch { /* sem corpo */ }
+    if (/Failed to send|FunctionsFetchError|404/i.test(msg)) msg = 'A leitura por IA ainda não foi publicada no servidor. Use a nota manual por enquanto.';
+    throw new Error(msg);
+  }
+  return { nota: notaDaLeitura((data as { leitura: LeituraIa }).leitura), original: a.blob, nome: f.name, tipo: 'leitura' };
+}
 
 export function Notas() {
   const navegar = useNavigate();
   const toast = useToast();
   const arquivo = useRef<HTMLInputElement>(null);
-  const [lida, setLida] = useState<{ nota: NotaLida; xml: string; nome: string } | null>(null);
+  const foto = useRef<HTMLInputElement>(null);
+  const [lida, setLida] = useState<Lida | null>(null);
+  const [lendo, setLendo] = useState(false);
   const [manual, setManual] = useState(false);
   const { dados, erro, carregando } = useConsulta(async () => ok(await supabase.from('nota_fiscal').select('*').order('criado_em', { ascending: false }).limit(200)) as Nota[], []);
 
@@ -40,7 +74,7 @@ export function Notas() {
     if (!f) return;
     try {
       const xml = await f.text();
-      setLida({ nota: lerNfe(xml), xml, nome: f.name });
+      setLida({ nota: lerNfe(xml), original: new Blob([xml], { type: 'text/xml' }), nome: f.name, tipo: 'xml' });
     } catch (e) {
       toast(mensagemErro(e));
     } finally {
@@ -48,16 +82,28 @@ export function Notas() {
     }
   }
 
+  async function abrirFoto(f: File | undefined) {
+    if (!f) return;
+    setLendo(true);
+    try { setLida(await lerComIa(f)); } catch (e) { toast(mensagemErro(e)); } finally {
+      setLendo(false);
+      if (foto.current) foto.current.value = '';
+    }
+  }
+
   return (
     <>
       <Topo titulo="Notas fiscais">
         <button className="btn-secundario" onClick={() => setManual(true)}>Nota manual</button>
+        <button className="btn-secundario" onClick={() => foto.current?.click()} disabled={lendo}><Icone nome="camera" /> {lendo ? 'Lendo a nota…' : 'Foto ou PDF'}</button>
         <button className="btn-primario" onClick={() => arquivo.current?.click()}><Icone nome="anexo" /> Importar XML</button>
         <input ref={arquivo} type="file" accept=".xml,text/xml,application/xml" hidden onChange={(e) => abrirXml(e.target.files?.[0])} aria-label="Arquivo XML da nota" />
+        <input ref={foto} type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" hidden onChange={(e) => abrirFoto(e.target.files?.[0])} aria-label="Foto ou PDF da nota" />
       </Topo>
       <div className="card aviso small" style={{ marginBottom: 12 }}>
         <strong>Como entra uma nota:</strong> o XML da NF-e é lido aqui no aparelho (peça ao fornecedor ou baixe no portal da SEFAZ).
-        Foto, PDF e QR code ainda não têm leitura automática confiável neste sistema: para esses, use “Nota manual” e anexe o arquivo na conta a pagar.
+        Foto ou PDF: a IA lê emitente, itens e valores e tudo chega marcado para você conferir; nada é lançado sem a sua confirmação (precisa da IA ligada em Assistente IA).
+        QR code de cupom ainda não é consultado na SEFAZ: fotografe o cupom ou use “Nota manual”.
         A nota só vira conta a pagar quando você confirma, e nunca em dobro.
       </div>
       {carregando && !dados ? <Carregando /> : erro ? <Erro mensagem={erro} /> : !dados?.length ? (
@@ -86,7 +132,7 @@ export function Notas() {
   );
 }
 
-function PreviaImportacao({ nota, xml, nome, fechar, aoCriar }: { nota: NotaLida; xml: string; nome: string; fechar: () => void; aoCriar: (id: string) => void }) {
+function PreviaImportacao({ nota, original, nome, tipo, fechar, aoCriar }: Lida & { fechar: () => void; aoCriar: (id: string) => void }) {
   const toast = useToast();
   const [salvando, setSalvando] = useState(false);
   const [cadastrar, setCadastrar] = useState(true);
@@ -112,7 +158,7 @@ function PreviaImportacao({ nota, xml, nome, fechar, aoCriar }: { nota: NotaLida
         fornecedor = p.data.id;
       }
       const r = await supabase.from('nota_fiscal').insert({
-        origem: 'xml', chave: nota.chave, modelo: nota.modelo, numero: nota.numero, serie: nota.serie,
+        origem: tipo, chave: nota.chave, modelo: nota.modelo, numero: nota.numero, serie: nota.serie,
         emitente_documento: nota.emitente.documento, emitente_nome: nota.emitente.nome, fornecedor_id: fornecedor, data_emissao: nota.data_emissao,
         valor_produtos: paraBanco(nota.totais.produtos), valor_frete: paraBanco(nota.totais.frete), valor_desconto: paraBanco(nota.totais.desconto),
         valor_outros: paraBanco(nota.totais.outros), valor_total: paraBanco(nota.totais.total), criterio_rateio: nota.criterio,
@@ -125,11 +171,12 @@ function PreviaImportacao({ nota, xml, nome, fechar, aoCriar }: { nota: NotaLida
         valor_bruto: paraBanco(i.valor_bruto), frete: paraBanco(i.frete), desconto: paraBanco(i.desconto), outros: paraBanco(i.outros),
       })));
       if (it.error) throw it.error;
-      // Guarda o XML original (restrito ao financeiro).
-      const caminho = `financeiro/notas/${id}.xml`;
-      const up = await supabase.storage.from('documentos').upload(caminho, new Blob([xml], { type: 'text/xml' }), { contentType: 'text/xml', upsert: false });
+      // Guarda o original (XML, foto ou PDF), restrito ao financeiro.
+      const ext = original.type === 'application/pdf' ? 'pdf' : original.type.startsWith('image/') ? 'jpg' : 'xml';
+      const caminho = `financeiro/notas/${id}.${ext}`;
+      const up = await supabase.storage.from('documentos').upload(caminho, original, { contentType: original.type || 'text/xml', upsert: false });
       if (!up.error) await supabase.from('nota_fiscal').update({ arquivo_caminho: caminho }).eq('id', id);
-      else toast('Nota criada, mas o XML original não foi guardado: ' + mensagemErro(up.error));
+      else toast('Nota criada, mas o arquivo original não foi guardado: ' + mensagemErro(up.error));
       aoCriar(id);
     } catch (e) {
       toast(mensagemErro(e));
@@ -265,7 +312,9 @@ export function NotaDetalhe() {
     if (r.error) { setEnviando(false); return toast(mensagemErro(r.error)); }
     // O XML passa a acompanhar a conta a pagar como documento.
     if (nota.arquivo_caminho) {
-      await supabase.from('arquivo').insert({ caminho: nota.arquivo_caminho, nome_original: `NF-e ${nota.numero ?? ''}.xml`, mime: 'text/xml', natureza: 'nota_fiscal', lancamento_id: r.data as string });
+      const ext = nota.arquivo_caminho.split('.').pop() ?? 'xml';
+      const mime = ext === 'pdf' ? 'application/pdf' : ext === 'jpg' ? 'image/jpeg' : 'text/xml';
+      await supabase.from('arquivo').insert({ caminho: nota.arquivo_caminho, nome_original: `Nota ${nota.numero ?? ''}.${ext}`.replace('  ', ' '), mime, natureza: 'nota_fiscal', lancamento_id: r.data as string });
     }
     setEnviando(false);
     toast('Nota confirmada e conta a pagar lançada.');

@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { cancelar, confirmar, conversar, textoDecisoes, type Dependencias } from '../_shared/assistente/nucleo.ts';
 import { CHAVES, lerConfig, montarModelo } from '../_shared/assistente/provedor.ts';
+import { lerNota, MIMES_NOTA } from '../_shared/assistente/nota.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
 const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -49,6 +50,16 @@ Deno.serve(async (req) => {
       const texto = textoDecisoes(decisoes, corpo.acao === 'confirmar');
       await db.from('assistente_mensagem').insert({ usuario_id: perfil.id, canal: 'sistema', papel: 'assistente', texto });
       return json({ texto, decisoes });
+    }
+    if (corpo.acao === 'ler_nota') {
+      // Notas são do administrativo: a equipe de campo não lê.
+      if (perfil.papel === 'campo') return json({ erro: 'Notas fiscais são do escritório.' }, 403);
+      if (!dep.modelo) return json({ erro: 'A IA ainda não está ligada: falta cadastrar a chave. Veja Empresa e Sistema › Assistente IA › Ligar.' }, 409);
+      const a = corpo.arquivo;
+      if (!a || !MIMES_NOTA.includes(a.mime) || typeof a.base64 !== 'string' || a.base64.length > 14_000_000) {
+        return json({ erro: 'Envie uma foto (JPG, PNG ou WEBP) ou um PDF de até 10 MB.' }, 400);
+      }
+      return json({ leitura: await lerNota(dep.modelo, { mime: String(a.mime), base64: a.base64 }) });
     }
     if (corpo.acao === 'mensagem') {
       const texto = String(corpo.texto ?? '').slice(0, 4000);

@@ -189,3 +189,68 @@ export function lerNfe(xml: string): NotaLida {
     itens, duplicatas, criterio: usaItem ? 'informado_no_xml' : 'proporcional', avisos,
   };
 }
+
+// ---------------------------------------------------------------------
+// Leitura de foto ou PDF pela IA: os dados chegam como sugestão e passam
+// pelas mesmas contas do XML (rateio de frete/desconto, soma exata, avisos).
+// ---------------------------------------------------------------------
+export type LeituraIa = {
+  emitente_nome?: string | null; emitente_documento?: string | null; numero?: string | null; serie?: string | null; chave?: string | null;
+  data_emissao?: string | null; frete?: number | null; desconto?: number | null; outros?: number | null; total?: number | null;
+  itens: { descricao: string; quantidade?: number | null; unidade?: string | null; valor_total?: number | null }[];
+  duplicatas?: { vencimento: string; valor: number }[];
+  incertos: string[];
+};
+
+const emCentavos = (v: number | null | undefined): Centavos => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.round(v * 100) : 0);
+const texto = (v: string | null | undefined, max = 120): string | null => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+
+export function notaDaLeitura(l: LeituraIa): NotaLida {
+  const avisos = ['Lida pela IA a partir de foto ou PDF: confira emitente, número, itens e valores com o documento antes de confirmar.'];
+  for (const x of (l.incertos ?? []).slice(0, 10)) avisos.push(`A IA não teve certeza: ${String(x).slice(0, 160)}.`);
+  const digitos = (l.chave ?? '').replace(/\D/g, '');
+  const chave = digitos.length === 44 && chaveValida(digitos) ? digitos : null;
+  if (digitos && !chave) avisos.push('A chave de acesso lida não confere (dígito verificador): ficou em branco.');
+  const data = texto(l.data_emissao, 10);
+  const data_emissao = data && /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : null;
+  if (!data_emissao) avisos.push('Data de emissão não encontrada.');
+
+  const itens: ItemLido[] = (l.itens ?? []).slice(0, 300).map((i, k) => ({
+    numero: k + 1, codigo: null, descricao: (texto(i.descricao, 300) ?? 'Item sem descrição'), ncm: null, unidade: texto(i.unidade, 10),
+    quantidade: typeof i.quantidade === 'number' && i.quantidade > 0 ? i.quantidade : 1,
+    valor_bruto: emCentavos(i.valor_total), frete: 0, desconto: 0, outros: 0,
+  })).filter((i) => i.valor_bruto > 0);
+  const vProdItens = itens.reduce((s, i) => s + i.valor_bruto, 0);
+  const vFrete = emCentavos(l.frete), vDesc = emCentavos(l.desconto);
+  let vOutros = emCentavos(l.outros);
+  const vNF = emCentavos(l.total) || vProdItens + vFrete + vOutros - vDesc;
+  if (vNF <= 0) throw new Error('Não consegui ler o total da nota. Tente uma foto mais nítida ou use a nota manual.');
+  if (!itens.length) {
+    itens.push({ numero: 1, codigo: null, descricao: 'Itens da nota (não lidos um a um)', ncm: null, unidade: null, quantidade: 1, valor_bruto: vNF - vFrete - vOutros + vDesc, frete: 0, desconto: 0, outros: 0 });
+    avisos.push('Os itens não foram lidos um a um: entrou um item único com o valor dos produtos.');
+  }
+  let vProd = itens.reduce((s, i) => s + i.valor_bruto, 0);
+  let descontoExtra = 0;
+  const resto = vNF - vProd - vFrete - vOutros + vDesc;
+  if (resto > 0) { vOutros += resto; avisos.push(`A soma dos itens ficou ${formatarReais(resto)} abaixo do total: a diferença entrou como acréscimo. Confira se faltou algum item.`); }
+  if (resto < 0) { descontoExtra = -resto; avisos.push(`A soma dos itens passou ${formatarReais(-resto)} do total: a diferença entrou como desconto. Confira os valores.`); }
+  vProd = itens.reduce((s, i) => s + i.valor_bruto, 0);
+  const pesos = itens.map((i) => i.valor_bruto);
+  const fr = distribuir(vFrete, pesos), de = distribuir(vDesc + descontoExtra, pesos), ou = distribuir(vOutros, pesos);
+  itens.forEach((i, k) => { i.frete = fr[k]; i.desconto = de[k]; i.outros = ou[k]; });
+
+  const duplicatas = (l.duplicatas ?? []).map((d) => ({ numero: null, vencimento: String(d.vencimento ?? ''), valor: emCentavos(d.valor) }))
+    .filter((d) => d.valor > 0 && /^\d{4}-\d{2}-\d{2}$/.test(d.vencimento));
+  const docEmit = (l.emitente_documento ?? '').replace(/\D/g, '');
+  return {
+    chave, modelo: null, numero: texto(l.numero, 20), serie: texto(l.serie, 5),
+    emitente: { documento: docEmit.length === 11 || docEmit.length === 14 ? docEmit : null, nome: texto(l.emitente_nome, 120) },
+    data_emissao,
+    totais: { produtos: vProd, frete: vFrete, desconto: vDesc + descontoExtra, outros: vOutros, total: vNF },
+    itens,
+    duplicatas: duplicatas.reduce((s, d) => s + d.valor, 0) === vNF ? duplicatas : [],
+    criterio: 'proporcional', avisos,
+  };
+}
+
+const formatarReais = (c: Centavos) => (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

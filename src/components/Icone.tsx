@@ -43,6 +43,7 @@ const P: Record<string, string> = {
   livro: 'M4 4.5A1.5 1.5 0 0 1 5.5 3H20v15H5.5A1.5 1.5 0 0 0 4 19.5zM4 19.5A1.5 1.5 0 0 0 5.5 21H20M8 7h8M8 11h6',
   paleta: 'M12 21a9 9 0 1 1 9-9c0 2.5-2 3.5-3.5 3.5H15a1.5 1.5 0 0 0-1 2.6c.6.6.4 2.9-2 2.9zM7.5 11.5h.01M10 7.5h.01M15 7.5h.01M17 11.5h.01',
   alerta: 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01',
+  cadeado: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
 };
 
 export function Icone({ nome, className }: { nome: keyof typeof P | string; className?: string }) {

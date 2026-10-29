@@ -1,5 +1,5 @@
 name: Publicar assistente
-# Publica as funções do assistente de IA e do WhatsApp no Supabase e copia as
+# Publica as funções do servidor (assistente de IA, WhatsApp e e-mail) no Supabase e copia as
 # chaves cadastradas nos segredos do GitHub. Depois de cadastrar ou trocar uma
 # chave, rode este workflow à mão (Actions › Publicar assistente › Run workflow).
 on:
@@ -20,6 +20,8 @@ jobs:
       WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
       WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
       WHATSAPP_NUMERO_EXIBICAO: ${{ secrets.WHATSAPP_NUMERO_EXIBICAO }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
     steps:
       - uses: actions/checkout@v4
       - name: Projeto
@@ -39,7 +41,7 @@ jobs:
         if: steps.p.outputs.ok == 'sim'
         run: |
           : > segredos.env
-          for n in ANTHROPIC_API_KEY GEMINI_API_KEY WHATSAPP_TOKEN WHATSAPP_NUMERO_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN WHATSAPP_NUMERO_EXIBICAO; do
+          for n in ANTHROPIC_API_KEY GEMINI_API_KEY WHATSAPP_TOKEN WHATSAPP_NUMERO_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN WHATSAPP_NUMERO_EXIBICAO RESEND_API_KEY EMAIL_REMETENTE; do
             v="${!n}"
             if [ -n "$v" ]; then echo "$n=$v" >> segredos.env; echo "• $n cadastrada"; else echo "• $n ainda não cadastrada"; fi
           done

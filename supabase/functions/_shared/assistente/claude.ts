@@ -9,7 +9,9 @@ function converter(mensagens: Mensagem[]): Anthropic.Beta.BetaMessageParam[] {
   return mensagens.map((m): Anthropic.Beta.BetaMessageParam => {
     if (m.papel === 'usuario') {
       const conteudo: Bloco[] = [];
-      if (m.imagem) {
+      if (m.imagem?.mime === 'application/pdf') {
+        conteudo.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: m.imagem.base64 } });
+      } else if (m.imagem) {
         conteudo.push({ type: 'image', source: { type: 'base64', media_type: m.imagem.mime as 'image/jpeg', data: m.imagem.base64 } });
       }
       conteudo.push({ type: 'text', text: m.texto || '(foto enviada sem texto)' });

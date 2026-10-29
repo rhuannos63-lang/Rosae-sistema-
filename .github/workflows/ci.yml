@@ -17,9 +17,9 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Funções do assistente (Deno)
+      - name: Funções do servidor (Deno)
         working-directory: supabase/functions
-        run: deno lint && deno check assistente/index.ts whatsapp/index.ts
+        run: deno lint && deno check assistente/index.ts whatsapp/index.ts email/index.ts
       - name: Testes do banco (permissões e regras financeiras)
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql >/dev/null

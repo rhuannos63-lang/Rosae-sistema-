@@ -21,10 +21,13 @@ export function Pessoas() {
   const [busca, setBusca] = useState(params.get('busca') ?? '');
   useEffect(() => { const b = params.get('busca'); if (b !== null) setBusca(b); }, [params]);
   const [editando, setEditando] = useState<Pessoa | 'nova' | null>(null);
+  const [mesclar, setMesclar] = useState<{ a?: string; b?: string } | null>(null);
+  const { ehAdmin } = useAuth();
   const { dados, erro, carregando, recarregar } = useConsulta(
     async () => ok(await supabase.from('pessoa').select('*').order('nome')) as Pessoa[],
     [],
   );
+  const duplicados = useConsulta(async () => (ehAdmin ? ok(await supabase.rpc('pessoas_duplicadas')) as Duplicado[] : []), [ehAdmin, dados]);
 
   const lista = useMemo(() => {
     const b = busca.trim().toLowerCase();
@@ -41,10 +44,25 @@ export function Pessoas() {
   return (
     <>
       <Topo titulo="Cadastros" sub="Clientes, parceiros e fornecedores em um só lugar. Uma pessoa pode ter vários papéis.">
+        {ehAdmin && <button className="btn-secundario" onClick={() => setMesclar({})}>Mesclar cadastros</button>}
         <button className="btn-primario" onClick={() => setEditando('nova')}>
           <Icone nome="mais" /> Nova pessoa
         </button>
       </Topo>
+      {!!duplicados.dados?.length && (
+        <div className="card duplicados" style={{ marginBottom: 16 }}>
+          <div className="row"><Icone nome="pessoas" /><h2 style={{ margin: 0 }}>Possíveis cadastros repetidos</h2></div>
+          <p className="muted small" style={{ margin: '4px 0 10px' }}>Contatos que chegaram pelo site ou WhatsApp às vezes já existiam. Mesclar junta propostas, obras e contas num cadastro só.</p>
+          <ul className="lista-duplicados">
+            {duplicados.dados.slice(0, 8).map((d) => (
+              <li key={d.a + d.b}>
+                <span><b>{d.a_nome}</b> e <b>{d.b_nome}</b> <span className="muted small">· {d.motivo}</span></span>
+                <button className="btn-link" onClick={() => setMesclar({ a: d.a, b: d.b })}>Conferir e mesclar</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="card">
         <div className="row" style={{ marginBottom: 12 }}>
           <div className="segmentado" role="group" aria-label="Filtrar">
@@ -104,7 +122,65 @@ export function Pessoas() {
           aoSalvar={() => { setEditando(null); recarregar(); }}
         />
       )}
+      {mesclar && dados && <MesclarPessoas pessoas={dados} inicial={mesclar} aoFechar={() => setMesclar(null)} aoMesclar={() => { setMesclar(null); recarregar(); }} />}
     </>
+  );
+}
+
+type Duplicado = { a: string; a_nome: string; b: string; b_nome: string; motivo: string };
+
+/** Junta dois cadastros da mesma pessoa: escolhe qual fica; o outro passa tudo para ele e é apagado. */
+function MesclarPessoas({ pessoas, inicial, aoFechar, aoMesclar }: { pessoas: Pessoa[]; inicial: { a?: string; b?: string }; aoFechar: () => void; aoMesclar: () => void }) {
+  const toast = useToast();
+  const [a, setA] = useState(inicial.a ?? '');
+  const [b, setB] = useState(inicial.b ?? '');
+  const [fica, setFica] = useState<'a' | 'b'>('a');
+  const [erro, setErro] = useState<string | null>(null);
+  const [rodando, setRodando] = useState(false);
+  const pa = pessoas.find((p) => p.id === a);
+  const pb = pessoas.find((p) => p.id === b);
+  const manter = fica === 'a' ? pa : pb;
+  const remover = fica === 'a' ? pb : pa;
+  async function confirmar() {
+    if (!manter || !remover) return;
+    if (!window.confirm(`Mesclar "${remover.nome}" em "${manter.nome}"? Tudo de "${remover.nome}" passa para "${manter.nome}" e o cadastro repetido é apagado.`)) return;
+    setErro(null); setRodando(true);
+    const r = await supabase.rpc('mesclar_pessoas', { p_manter: manter.id, p_remover: remover.id });
+    setRodando(false);
+    if (r.error) return setErro(mensagemErro(r.error));
+    const n = (r.data as { total?: number } | null)?.total ?? 0;
+    toast(`Cadastros mesclados. ${n} registro(s) passaram para "${manter.nome}".`);
+    aoMesclar();
+  }
+  const opcoes = pessoas.filter((p) => !p.arquivado || p.id === a || p.id === b);
+  const cartao = (p: Pessoa | undefined, lado: 'a' | 'b') => p && (
+    <label className={`mesclar-cartao${fica === lado ? ' ativo' : ''}`}>
+      <input type="radio" name="fica" checked={fica === lado} onChange={() => setFica(lado)} />
+      <span>
+        <span className="row" style={{ gap: 8 }}><b>{p.nome}</b>{fica === lado ? <span className="selo ok">fica</span> : <span className="selo neutro">some</span>}</span>
+        <span className="muted small">{[papeis(p).join(', '), p.telefone, p.email, p.documento, p.codigo].filter(Boolean).join(' · ') || 'Sem outros dados'}</span>
+      </span>
+    </label>
+  );
+  return (
+    <Modal titulo="Mesclar cadastros" aoFechar={aoFechar}
+      rodape={<><button className="btn-link" onClick={aoFechar}>Cancelar</button><button className="btn-primario" disabled={!manter || !remover || a === b || rodando} onClick={confirmar}>{rodando ? 'Mesclando…' : 'Mesclar'}</button></>}>
+      <div className="stack">
+        <div className="grid grid-2">
+          <label className="campo">Cadastro 1<select value={a} onChange={(e) => setA(e.target.value)}><option value="">Escolha…</option>{opcoes.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></label>
+          <label className="campo">Cadastro 2<select value={b} onChange={(e) => setB(e.target.value)}><option value="">Escolha…</option>{opcoes.filter((p) => p.id !== a).map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}</select></label>
+        </div>
+        {pa && pb && (
+          <>
+            <span className="muted small">Qual cadastro fica?</span>
+            {cartao(pa, 'a')}
+            {cartao(pb, 'b')}
+            <p className="muted small" style={{ margin: 0 }}>Oportunidades, propostas, obras, contas, contratações e materiais passam para o que fica. Telefone, e-mail e documento vazios são completados com os do outro. Quem já usa o portal do cliente não pode ser apagado: nesse caso, mantenha esse cadastro.</p>
+          </>
+        )}
+        <Erro mensagem={erro} />
+      </div>
+    </Modal>
   );
 }
 
@@ -115,7 +191,7 @@ const vazia = {
 
 export function PessoaForm({ pessoa, aoFechar, aoSalvar, padrao }: { pessoa: Pessoa | null; aoFechar: () => void; aoSalvar: (p: Pessoa) => void; padrao?: Partial<typeof vazia> }) {
   const toast = useToast();
-  const { podeFinanceiro } = useAuth();
+  const { podeFinanceiro, ehAdmin } = useAuth();
   const [f, setF] = useState(() => (pessoa ? { ...vazia, ...Object.fromEntries(Object.entries(pessoa).map(([k, v]) => [k, v ?? ''])) } : { ...vazia, ...padrao }) as typeof vazia);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -192,6 +268,19 @@ export function PessoaForm({ pessoa, aoFechar, aoSalvar, padrao }: { pessoa: Pes
           </div>
         )}
         {pessoa && f.eh_prestador && podeFinanceiro && <HistoricoParceiro pessoaId={pessoa.id} />}
+        {pessoa && ehAdmin && !pessoa.nome.startsWith('Cadastro anonimizado') && (
+          <details className="privacidade">
+            <summary>Privacidade (LGPD)</summary>
+            <p className="muted small">Se a pessoa pedir a exclusão dos dados pessoais, anonimize: nome, documento, telefone, e-mail, endereço e Pix saem do cadastro e do histórico, e os acessos ao portal são desativados. Propostas, contratos, contas e obras continuam guardados com os valores e datas, porque fazem parte da história da empresa e das obrigações fiscais.</p>
+            <button type="button" className="btn-secundario" onClick={async () => {
+              if (!window.confirm(`Anonimizar "${pessoa.nome}"? Não dá para desfazer.`)) return;
+              const r = await supabase.rpc('anonimizar_pessoa', { p_pessoa: pessoa.id });
+              if (r.error) return setErro(mensagemErro(r.error));
+              toast('Cadastro anonimizado.');
+              aoSalvar({ ...pessoa, nome: 'Cadastro anonimizado' });
+            }}>Anonimizar cadastro</button>
+          </details>
+        )}
         {f.eh_prestador && (
           <label className="campo">
             Especialidade

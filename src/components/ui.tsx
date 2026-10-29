@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Icone } from './Icone';
 import { formatar, formatarCampo, lerDigitado, type Centavos } from '../core/dinheiro';
 
@@ -8,7 +9,9 @@ export function Modal({ titulo, aoFechar, children, rodape, largo }: { titulo: s
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
   }, [aoFechar]);
-  return (
+  // No body: a animação de entrada da página cria um novo contexto de posição, e a janela
+  // sairia do centro da tela em páginas longas.
+  return createPortal(
     <div className="modal-fundo" onMouseDown={(e) => e.target === e.currentTarget && aoFechar()}>
       <div className={`modal${largo ? ' largo' : ''}`} role="dialog" aria-modal="true" aria-label={titulo}>
         <div className="modal-cab">
@@ -20,7 +23,8 @@ export function Modal({ titulo, aoFechar, children, rodape, largo }: { titulo: s
         <div className="modal-corpo">{children}</div>
         {rodape && <div className="modal-rodape">{rodape}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
