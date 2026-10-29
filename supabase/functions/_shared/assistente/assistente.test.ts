@@ -62,9 +62,9 @@ function bancoFalso(tabelas: Record<string, Linha[]>, rpcs: Record<string, (a: L
 function iaRoteirizada(roteiro: Resposta[]) {
   const recebidas: Mensagem[][] = [];
   const modelo: Modelo = {
-    responder: async (_s, mensagens) => {
+    responder: (_s, mensagens) => {
       recebidas.push(structuredClone(mensagens));
-      return roteiro.shift() ?? { texto: 'fim', chamadas: [], bruto: null };
+      return Promise.resolve(roteiro.shift() ?? { texto: 'fim', chamadas: [], bruto: null });
     },
   };
   return { modelo, recebidas };
