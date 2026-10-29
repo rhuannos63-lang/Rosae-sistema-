@@ -43,6 +43,16 @@ Testes: `npm test` (regras) e `npm run test:db` (banco, precisa do PostgreSQL in
 
 Assistente de IA (opcional): `ANTHROPIC_API_KEY` (Claude), `GEMINI_API_KEY` (Gemini; também transcreve áudio do WhatsApp) e, para o WhatsApp oficial da Meta, `WHATSAPP_TOKEN`, `WHATSAPP_NUMERO_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` e `WHATSAPP_NUMERO_EXIBICAO`. Depois de cadastrar, rode o workflow **Publicar assistente**: ele copia as chaves para o Supabase e publica as funções `assistente` e `whatsapp` (`supabase/functions`). O passo a passo completo está no sistema, em Empresa e Sistema › Assistente IA › Ligar.
 
+E-mail das propostas (opcional): `RESEND_API_KEY` (conta em resend.com, com o domínio rosaeengenharia.com verificado) e `EMAIL_REMETENTE` (por exemplo `ROSAE Engenharia <propostas@rosaeengenharia.com>`). Depois de cadastrar, rode **Publicar assistente**: ele publica também a função `email`. Sem essas chaves o sistema avisa e abre a mensagem no aplicativo de e-mail; nada aparece como enviado. A mesma chave da IA (`ANTHROPIC_API_KEY`) liga a leitura de notas por foto ou PDF.
+
+## Privacidade e guarda dos dados
+
+- Permissões são conferidas no banco (RLS e funções), não só na tela. O cliente acessa só a própria obra por link pessoal com prazo e revogação.
+- Não são apagados: propostas emitidas, contratos, aceites, medições, lançamentos, pagamentos, notas e a auditoria. O prazo de guarda de documentos fiscais e financeiros deve ser definido com o contador.
+- Pedido de exclusão de dados pessoais (LGPD): Cadastros › Privacidade › Anonimizar (só administrador). Tira nome, documento, contatos, endereço e Pix do cadastro e da auditoria, desativa os acessos ao portal e mantém os registros financeiros e contratuais.
+- Backup diário criptografado, guardado 30 dias (workflow `backup.yml`).
+- Logs das funções não gravam chaves nem o conteúdo de documentos.
+
 ## Restaurar um backup
 
 Baixe o arquivo em Actions → Backup diário, depois:

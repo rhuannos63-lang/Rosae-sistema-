@@ -72,7 +72,8 @@ export const MANUAL: Capitulo[] = [
       { titulo: 'Confira a prévia', texto: 'Use a prévia para ver exatamente o documento que o cliente vai receber, página por página.' },
       { titulo: 'Emita a versão', texto: 'Toque em “Emitir versão”. Ela fica congelada com código de verificação, que prova ao cliente que o documento não mudou depois de enviado.' },
       { titulo: 'Edite um orçamento já pronto', texto: 'Na proposta emitida, toque em “Editar orçamento”. O sistema cria a versão seguinte com tudo copiado e abre direto em “Escopo e valores”. Mude o que precisar, emita e envie o link novo. A versão anterior fica guardada e dá para comparar o que mudou. Depois de aprovada, mudanças viram aditivo na obra (aba Contrato).' },
-      { titulo: 'Envie o link', texto: 'Toque em “Enviar por WhatsApp” ou “Enviar por e-mail”. O aplicativo abre com a mensagem e o link seguro prontos.' },
+      { titulo: 'Envie por e-mail', texto: 'Toque em “Enviar por e-mail”, confira o destinatário, o assunto e a mensagem na prévia e toque em Enviar. O e-mail sai do endereço da ROSAE com o botão do link seguro. No histórico da versão aparece a situação: enviado ao provedor, entregue, voltou ou falhou (com “Tentar de novo”, que nunca manda em dobro). Entregue não é aceite: o aceite aparece em Respostas do cliente.' },
+      { titulo: 'Ou envie pelo WhatsApp', texto: 'Toque em “Enviar por WhatsApp”: o aplicativo abre com a mensagem e o link prontos para você conferir e enviar.' },
       { titulo: 'Acompanhe o aceite', texto: 'O cliente abre no celular, lê e toca em Aceitar ou pede ajuste. O aceite fica registrado com nome, data e a versão exata, e a proposta passa a Aprovada.' },
       { titulo: 'Converta em obra', texto: 'Na proposta aprovada, toque em “Converter em obra”. Serviços, etapas, materiais e recebimentos são criados sem redigitar.' },
     ],
@@ -124,9 +125,10 @@ export const MANUAL: Capitulo[] = [
       { titulo: 'Cadastre suas contas', texto: 'Em Configurações → Contas bancárias, cadastre conta corrente, poupança e cofrinhos com o saldo inicial.' },
       { titulo: 'Transfira entre contas', texto: 'Em Contas, toque em “Transferir entre contas”. Transferência não conta como receita nem despesa.' },
       { titulo: 'Importe notas fiscais', texto: 'Em Notas fiscais, toque em Importar XML, confira emitente e itens, classifique e toque em “Confirmar e lançar”. A conta a pagar e as compras de material são criadas sozinhas, sem duplicar.' },
+      { titulo: 'Nota em foto ou PDF', texto: 'Toque em “Foto ou PDF” e fotografe a nota ou escolha o arquivo. A IA lê emitente, número, itens e valores; o que ela não teve certeza vem marcado. A nota entra como rascunho, igual ao XML: confira cada campo com o papel antes de confirmar.' },
       { titulo: 'Planeje a destinação', texto: 'No Planejador, veja quanto do dinheiro que entrou deve ir para impostos, reserva, reinvestimento e pró-labore, conforme os percentuais definidos em Configurações.' },
     ],
-    dicas: ['Notas em foto ou PDF: lance como conta a pagar comum e anexe o arquivo.'],
+    dicas: ['A leitura por foto precisa da IA ligada (Empresa e Sistema › Assistente IA). Sem ela, use “Nota manual” e anexe o arquivo.'],
   },
   {
     id: 'agenda', titulo: 'Agenda e pendências', icone: 'calendario', link: { para: '/pendencias', rotulo: 'Ver pendências' },
@@ -142,6 +144,7 @@ export const MANUAL: Capitulo[] = [
     resumo: 'Clientes, fornecedores e parceiros num cadastro único, e os serviços que você vende.',
     passos: [
       { titulo: 'Cadastre a pessoa uma vez só', texto: 'Toque em “Nova pessoa” e marque os papéis: cliente, fornecedor, parceiro. A mesma pessoa pode ter mais de um papel. O sistema avisa se já existe alguém com o mesmo telefone, e-mail ou documento.' },
+      { titulo: 'Junte cadastros repetidos', texto: 'Quando o mesmo cliente chega duas vezes (pelo site e pelo WhatsApp, por exemplo), a tela de Cadastros mostra “Possíveis cadastros repetidos”. Toque em “Conferir e mesclar”, escolha qual fica e confirme: propostas, obras e contas passam para ele, e os dados que faltavam são completados.' },
       { titulo: 'Monte a biblioteca', texto: 'Em Biblioteca de serviços, cadastre cada serviço com unidade, preço, o que inclui, o que não inclui e as etapas. As propostas e o escopo automático usam essa biblioteca.' },
     ],
   },
@@ -154,6 +157,17 @@ export const MANUAL: Capitulo[] = [
       { titulo: 'Convide usuários', texto: 'Na aba Usuários, convide pessoas e escolha o papel: Administrativo (com ou sem acesso ao financeiro) ou Campo. Cada um vê só o que o papel permite.' },
       { titulo: 'Faça backup', texto: 'Na aba Exportar e backup, baixe todos os dados em planilha (CSV) ou JSON. Há também backup automático.' },
       { titulo: 'Consulte o histórico', texto: 'A aba Histórico mostra quem alterou o quê e quando.' },
+    ],
+  },
+  {
+    id: 'privacidade', titulo: 'Privacidade e guarda dos dados', icone: 'cadeado',
+    resumo: 'O que o sistema guarda, quem vê, por quanto tempo e como atender um pedido de exclusão.',
+    passos: [
+      { titulo: 'Quem vê o quê', texto: 'Cada pessoa da equipe vê só o que o papel permite, e o banco confere isso em cada consulta. O cliente vê só a própria obra pelo link pessoal, sem valores, notas ou observações internas. Notas, comprovantes e custos ficam só com quem tem acesso ao financeiro.' },
+      { titulo: 'O que fica guardado', texto: 'Propostas emitidas, contratos, aceites, medições, contas, pagamentos, notas e o histórico de alterações não são apagados: são a prova do que foi combinado e pago. Por quanto tempo guardar documentos fiscais e financeiros é definido com o seu contador.' },
+      { titulo: 'Links com prazo', texto: 'Links de proposta, contrato e portal vencem sozinhos e podem ser desativados a qualquer momento. Um link novo do portal desativa o anterior da mesma pessoa.' },
+      { titulo: 'Pedido de exclusão (LGPD)', texto: 'Se um cliente ou contato pedir a exclusão dos dados pessoais, abra o cadastro dele em Cadastros › Privacidade (LGPD) › Anonimizar. Nome, documento, telefone, e-mail, endereço e Pix saem do cadastro e do histórico; os registros financeiros e contratuais ficam, sem os dados pessoais. Só o administrador faz isso, e não tem volta.' },
+      { titulo: 'Backup', texto: 'O banco tem cópia diária automática e criptografada, guardada por 30 dias, e em Configurações › Exportar e backup você baixa tudo quando quiser. O passo a passo de restauração está no README do projeto.' },
     ],
   },
   {

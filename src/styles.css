@@ -1551,3 +1551,26 @@ a.bi-faixa-item:hover { background: var(--verde-tinta); }
   .dep-atalho { padding: 10px; gap: 9px; }
   .dep-atalho .dep-pasta-texto b { font-size: 0.8rem; line-height: 1.25; }
 }
+
+/* Envio de e-mail */
+.envio-email { align-items: start; }
+.previa-email { border: 1px solid var(--linha); border-radius: 12px; overflow: hidden; background: var(--papel); }
+.previa-email-cab { padding: 10px 14px; border-bottom: 1px solid var(--linha); font-size: .9rem; line-height: 1.6; }
+.previa-email-corpo { padding: 14px; border-top: 3px solid var(--verde); font-size: .92rem; }
+.previa-email-corpo p { margin: 0 0 10px; white-space: pre-wrap; }
+.previa-email-botao { display: inline-block; margin-top: 6px; background: var(--verde); color: #fff; font-weight: 600; padding: 9px 16px; border-radius: 8px; }
+.lista-emails { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lista-emails li { display: grid; gap: 4px; padding-bottom: 10px; border-bottom: 1px solid var(--linha); }
+.lista-emails li:last-child { border-bottom: 0; padding-bottom: 0; }
+
+/* Cadastros repetidos */
+.lista-duplicados { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lista-duplicados li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--linha); }
+.mesclar-cartao { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--linha); border-radius: 10px; cursor: pointer; }
+.mesclar-cartao.ativo { border-color: var(--verde); background: var(--verde-tinta); }
+.mesclar-cartao > span { display: grid; gap: 3px; }
+.mesclar-cartao input[type=radio] { width: auto; flex: none; margin-top: 4px; accent-color: var(--verde); }
+
+.privacidade { border-top: 1px solid var(--linha); padding-top: 10px; }
+.privacidade summary { cursor: pointer; font-weight: 600; font-size: .9rem; }
+.envio-email .campo :is(input, textarea) { font-weight: 400; }

@@ -19,9 +19,9 @@ export const AJUDA: TopicoAjuda[] = [
   {
     id: 'envio', titulo: 'Enviar proposta ao cliente', onde: 'Proposta emitida', link: '/propostas',
     serve: 'Mandar o link seguro da versão emitida para o cliente ler, aceitar ou pedir ajuste.',
-    passos: ['Na versão emitida, toque em Enviar.', 'Escolha e-mail ou WhatsApp: o sistema abre o aplicativo com a mensagem e o link prontos, e registra o envio como “preparado”.', 'O aceite do cliente fica registrado com nome, data e a versão exata.'],
-    exemplo: 'Você envia por WhatsApp; o cliente abre o link no celular e toca em Aceitar. A proposta passa para Aprovada.',
-    erros: ['Achar que abrir o e-mail é aceite: só o botão Aceitar no link conta como aprovação.', 'O envio automático por servidor de e-mail ainda não está ligado; por isso o envio sai pelo seu aplicativo.'],
+    passos: ['Na versão emitida, toque em “Enviar por e-mail”.', 'Confira destinatário, assunto e mensagem na prévia e toque em Enviar. O link seguro entra sozinho no e-mail.', 'Acompanhe no histórico da versão: enviado ao provedor, entregue, voltou ou falhou. O aceite do cliente fica registrado com nome, data e a versão exata.'],
+    exemplo: 'Você envia por e-mail; o histórico mostra “Entregue”; o cliente abre o link no celular e toca em Aceitar. A proposta passa para Aprovada.',
+    erros: ['Achar que “Entregue” ou abrir o e-mail é aceite: só o botão Aceitar no link conta como aprovação.', 'Clicar em Enviar de novo achando que não foi: cada envio tem identificação própria e não duplica; use “Tentar de novo” só quando aparecer “Falhou”.', 'Sem o envio automático ligado, o sistema avisa e abre a mensagem no seu aplicativo de e-mail; nada aparece como enviado.'],
   },
   {
     id: 'obra', titulo: 'Criar obra', onde: 'Proposta aprovada ou Obras', link: '/obras',
@@ -47,9 +47,9 @@ export const AJUDA: TopicoAjuda[] = [
   {
     id: 'nota', titulo: 'Distribuir uma nota', onde: 'Financeiro → Notas fiscais', link: '/notas',
     serve: 'Ler o XML da NF-e, distribuir itens por obra e serviço, e lançar a conta a pagar uma única vez.',
-    passos: ['Em Notas fiscais, toque em Importar XML e escolha o arquivo.', 'Confira emitente, total e os pontos marcados como incertos. O sistema avisa se a nota já foi importada.', 'Classifique os itens (um a um ou “Aplicar a todos”), ligue a um material se for o caso e toque em Confirmar e lançar.'],
+    passos: ['Em Notas fiscais, toque em Importar XML e escolha o arquivo (ou “Foto ou PDF” para a IA ler a nota).', 'Confira emitente, total e os pontos marcados como incertos. O sistema avisa se a nota já foi importada.', 'Classifique os itens (um a um ou “Aplicar a todos”), ligue a um material se for o caso e toque em Confirmar e lançar.'],
     exemplo: 'Nota de R$ 910 com frete de R$ 20: cimento para a obra A e areia para a obra B. O frete é distribuído pelo valor de cada item e a conta a pagar sai rateada entre as duas obras.',
-    erros: ['Lançar a conta à mão e depois importar a nota: na confirmação, escolha “Esta nota é de uma conta já lançada” para não duplicar.', 'Foto ou PDF da nota: ainda sem leitura automática; use Nota manual e anexe o arquivo.'],
+    erros: ['Lançar a conta à mão e depois importar a nota: na confirmação, escolha “Esta nota é de uma conta já lançada” para não duplicar.', 'Confirmar nota lida por foto sem conferir: a IA pode errar um número; os pontos incertos vêm marcados.'],
   },
   {
     id: 'pagamento', titulo: 'Registrar pagamento', onde: 'Financeiro → lançamento', link: '/financeiro',

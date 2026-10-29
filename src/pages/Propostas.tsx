@@ -18,6 +18,7 @@ import { ESTADO_PROPOSTA, EVENTO_PROPOSTA, type EstadoProposta, type Proposta, t
 import { linkWhatsApp } from './Comercial';
 import { estadoInicial, OrcamentoGerador, type EstadoGerador } from '../components/OrcamentoGerador';
 import { carregarPrecos } from '../lib/orcamentoParametros';
+import { EnviarEmail, HistoricoEmails } from '../components/EnvioEmail';
 import type { Orcamento } from '../core/orcamento';
 
 type PropostaLista = Proposta & { versoes: { id: string; numero: number; valor_total: string; emitida: boolean; validade: string | null }[] };
@@ -687,6 +688,8 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
   const [link, setLink] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [comparar, setComparar] = useState(false);
+  const [email, setEmail] = useState(false);
+  const [emails, setEmails] = useState(0);
   const c = normalizar(versao.conteudo as Partial<Conteudo>);
   const eventos = carga.eventos.filter((e) => e.versao_id === versao.id);
   const respostas = carga.eventos.filter((e) => ['aceita', 'ajuste_pedido', 'recusada'].includes(e.tipo));
@@ -764,7 +767,7 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
             <div className="stack" style={{ marginTop: 12 }}>
               <div className="row">
                 <button className="btn-primario" onClick={() => enviar('whatsapp')}>Enviar por WhatsApp</button>
-                <button className="btn-secundario" onClick={() => enviar('email')}>Enviar por e-mail</button>
+                <button className="btn-secundario" onClick={() => setEmail(true)}>Enviar por e-mail</button>
                 <button className="btn-secundario" onClick={gerarLink}>Gerar link</button>
               </div>
               {link && (
@@ -772,7 +775,7 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
                   <span>{link} <button className="btn-link" onClick={() => { navigator.clipboard.writeText(link); toast('Link copiado.'); }}>Copiar</button></span>
                 </div>
               )}
-              <p className="muted small" style={{ margin: 0 }}>O envio abre o seu WhatsApp ou o seu aplicativo de e-mail com a mensagem pronta; você confere e envia. O link vale 60 dias e mostra só o que está nesta versão.</p>
+              <p className="muted small" style={{ margin: 0 }}>O e-mail sai pelo sistema com prévia e registro de entrega (quando o envio automático está ligado). O WhatsApp abre com a mensagem pronta para você conferir e enviar. O link vale 60 dias e mostra só o que está nesta versão.</p>
             </div>
           )}
           <div className="row" style={{ marginTop: 12 }}>
@@ -781,6 +784,7 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
             {ehUltima && <button className="btn-link" onClick={revogar}>Desativar links</button>}
           </div>
         </div>
+        <HistoricoEmails key={emails} versaoId={versao.id} versao={versao.numero} />
         {respostas.length > 0 && (
           <div className="card">
             <h2 style={{ marginBottom: 8 }}>Respostas do cliente</h2>
@@ -811,6 +815,10 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
       </div>
       <div className="card"><PropostaDocumento d={doc} /></div>
       {comparar && anterior && <Comparacao a={normalizar(anterior.conteudo as Partial<Conteudo>)} b={c} na={anterior.numero} nb={versao.numero} aoFechar={() => setComparar(false)} />}
+      {email && (
+        <EnviarEmail versaoId={versao.id} codigo={p.codigo} versao={versao.numero} titulo={p.titulo} cliente={p.pessoa?.nome ?? ''} emailCliente={p.pessoa?.email ?? null}
+          aoFechar={() => setEmail(false)} aoEnviar={() => { setEmails((n) => n + 1); aoMudar(); }} abrirNoAplicativo={() => enviar('email')} />
+      )}
     </div>
   );
 }
