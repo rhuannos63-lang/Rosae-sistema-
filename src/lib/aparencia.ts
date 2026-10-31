@@ -65,6 +65,30 @@ export function contraste(a: string, b: string) {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+function hsl(h: string): [number, number, number] {
+  const [r, g, b] = rgb(h).map((v) => v / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (d === 0) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const hh = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(hh * 60 + 360) % 360, s, l];
+}
+function deHsl(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return hex([r, g, b].map((v) => (v + m) * 255) as RGB);
+}
+/**
+ * Segunda cor dos degradês: o verde que se mistura ao musgo. Em tons de verde, puxa o
+ * matiz para o verde floresta; nas outras cores, um vizinho próximo e mais fundo.
+ */
+export function corCompanheira(c: string): string {
+  const [h, s, l] = hsl(c);
+  const verde = h >= 45 && h <= 185;
+  const alvo = verde ? Math.min(150, h + 70) : (h + 22) % 360;
+  return deHsl(alvo, Math.min(0.62, Math.max(0.28, s * 1.12)), Math.max(0.16, l * 0.88));
+}
+
 const FUNDOS = { branco: '#ffffff', gelo: '#f7f8f5', cinza: '#f1f3f4' } as const;
 const RAIOS = { retos: 4, suaves: 10, redondos: 16 } as const;
 const FONTES = { pequena: 14, normal: 15, grande: 16.5 } as const;
@@ -94,8 +118,11 @@ export function variaveis(a: Aparencia, escuro: boolean): Record<string, string>
         '--fundo': FUNDOS[a.fundo],
       };
   const btn = base['--btn-fundo'];
+  const comp = corCompanheira(c);
   return {
     ...base,
+    '--verde-2': escuro ? misturar(comp, '#ffffff', 0.32) : comp,
+    '--verde-2-rgb': rgb(escuro ? misturar(comp, '#ffffff', 0.32) : comp).join(', '),
     '--cor-rgb': rgb(escuro ? base['--verde'] : c).join(', '),
     '--btn-texto': escuro ? (contraste(btn, '#ffffff') >= 3 ? '#ffffff' : '#14171a') : textoBotao,
     '--btn-fundo-hover': escuro ? misturar(btn, '#ffffff', 0.12) : misturar(c, '#000000', 0.18),

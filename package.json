@@ -16,8 +16,8 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@fontsource/inter": "^5.1.0",
-    "@fontsource/montserrat": "^5.1.0",
+    "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
     "@supabase/supabase-js": "^2.45.4",
     "@types/qrcode": "^1.5.5",
     "qrcode": "^1.5.4",
