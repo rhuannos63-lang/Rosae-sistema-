@@ -1647,3 +1647,135 @@ a.bi-faixa-item:hover { background: var(--verde-tinta); }
 .barra-pagina { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; background: var(--papel); padding: 8px 0; border-bottom: 1px solid var(--linha); }
 .dica-pagina { display: flex; gap: 8px; align-items: flex-start; margin: 0; font-size: .86rem; color: var(--texto-2); }
 .slide-corpo, .slide-cab, .slide-rodape { padding-left: 5cqw; padding-right: 5cqw; }
+
+/* ---------------------------------------------------------------------
+   Portal: jornada imersiva por tipo de serviço
+   --------------------------------------------------------------------- */
+.portal-jornada { position: relative; overflow: hidden; border-radius: 22px; padding: 20px 18px 18px; color: var(--grafite);
+  background: radial-gradient(120% 90% at 100% 0%, rgba(var(--cor-rgb), .10), transparent 60%), linear-gradient(180deg, #ffffff, #f7f8f3);
+  border: 1px solid var(--linha); box-shadow: 0 1px 2px rgba(16,33,26,.05), 0 18px 40px -18px rgba(16,33,26,.22); }
+.pj-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+.pj-topo h2 { font-size: clamp(1.15rem, 3.4vw, 1.55rem); line-height: 1.25; margin: 4px 0 0; color: var(--verde-escuro); text-wrap: balance; max-width: 34ch; }
+.pj-kicker { font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; color: var(--verde); font-weight: 700; }
+.pj-pct { display: grid; justify-items: end; line-height: 1; flex: none; }
+.pj-pct strong { font-family: var(--fonte-titulo); font-size: clamp(2.2rem, 7vw, 3.2rem); letter-spacing: -.03em; color: var(--verde-escuro); }
+.pj-pct span { font-size: .75rem; color: var(--texto-2); margin-top: 4px; }
+.pj-grade { display: grid; gap: 16px; margin-top: 14px; }
+.pj-cena { position: relative; border-radius: 16px; background: linear-gradient(180deg, #eef1e6 0%, #f9faf6 70%); padding: 8px 8px 4px; border: 1px solid var(--linha); }
+.perfil-projeto .pj-cena { background: linear-gradient(160deg, #26301a, #3b451e); border-color: transparent; }
+.cena-servico { width: 100%; height: auto; display: block; }
+.pj-legenda { display: flex; gap: 6px 12px; flex-wrap: wrap; align-items: center; justify-content: center; font-size: .72rem; color: var(--texto-2); padding: 6px 0 4px; }
+.perfil-projeto .pj-legenda { color: rgba(255,255,255,.7); }
+.pj-legenda span { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: -6px; }
+.l-feito { background: var(--verde); } .l-agora { background: #e0a43a; } .l-depois { border: 1.5px dashed var(--verde-claro); }
+
+/* Camadas da cena */
+.camada-fantasma { opacity: .2; }
+.camada.futura .camada-fantasma { opacity: .11; }
+.camada.futura .camada-fantasma * { stroke-dasharray: 4 4; }
+.camada.concluida .camada-fantasma { opacity: 0; }
+.camada.atual .camada-cheia { animation: pj-pulsar 2.4s ease-in-out infinite; }
+@keyframes pj-pulsar { 50% { opacity: .78; } }
+.camada-cheia rect, .camada-cheia path, .camada-cheia circle, .camada-cheia line { transition: opacity .6s; }
+.cena-servico .chao { stroke: #9aa284; stroke-width: 2; }
+.cena-servico .concreto { fill: #9ea3a8; stroke: #7d8389; stroke-width: 1; }
+.cena-servico .parede { fill: #e9dcc4; stroke: #c9b896; stroke-width: 1; }
+.cena-servico .telhado { fill: #a8553a; stroke: #87412b; stroke-width: 1.5; }
+.cena-servico .cano { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.cena-servico .cano.agua { stroke: #3f6fd8; } .cena-servico .cano.luz { stroke: #e08a3a; }
+.cena-servico .ponto { fill: #fff; stroke: #e08a3a; stroke-width: 2; }
+.cena-servico .janela { fill: #cfe3ef; stroke: #5d7f93; stroke-width: 1.5; }
+.cena-servico .porta { fill: #7a5536; stroke: #5b3e26; stroke-width: 1.5; }
+.cena-servico .arvore { fill: #6f8f3a; } .cena-servico .tronco { fill: #7a5536; }
+.cena-servico .caminho { stroke: #b9a98a; stroke-width: 3; fill: none; }
+.camada.atual .camada-cheia .concreto, .camada.atual .camada-cheia .parede, .camada.atual .camada-cheia .reforco { filter: drop-shadow(0 0 4px rgba(224,164,58,.65)); }
+/* reforma */
+.cena-servico .planta-borda { fill: #fff; stroke: #3b451e; stroke-width: 3; }
+.cena-servico .comodo-fundo { fill: #f1f2ec; stroke: #c9cdb9; stroke-dasharray: 4 3; }
+.cena-servico .comodo-cheio { fill: rgba(91,107,46,.22); }
+.cena-servico .comodo.concluida .comodo-cheio { fill: rgba(91,107,46,.42); }
+.cena-servico .comodo.atual .comodo-cheio { fill: rgba(224,164,58,.35); animation: pj-pulsar 2.4s ease-in-out infinite; }
+.cena-servico .comodo-nome { font: 600 13px var(--fonte-titulo, sans-serif); fill: #2f3818; }
+.cena-servico .comodo-pct { font: 700 15px var(--fonte-titulo, sans-serif); fill: #5b6b2e; }
+.cena-servico .piso-base { fill: #ddd6c6; } .cena-servico .parede-fundo { fill: #ece6d9; } .cena-servico .parede-lado { fill: #e2dbcb; }
+.cena-servico .entulho { fill: #9a8f7c; }
+.cena-servico .reboco { fill: #f6f1e7; stroke: #d9cfba; }
+.cena-servico .piso-novo { fill: #c8b08a; }
+.cena-servico .quadro { fill: #8c9768; } .cena-servico .movel { fill: #5b6b2e; } .cena-servico .movel-claro { fill: #8c9768; }
+/* reforço */
+.cena-servico .fissura { fill: none; stroke: #c2412d; stroke-width: 2.4; stroke-linecap: round; }
+.cena-servico .cota { fill: none; stroke: #5b6b2e; stroke-width: 1.5; }
+.cena-servico .cota-texto { font: 600 11px var(--fonte-titulo, sans-serif); fill: #5b6b2e; }
+.cena-servico .escora { fill: #e0a43a; stroke: #a8731c; stroke-width: 1; }
+.cena-servico .reforco { fill: rgba(91,107,46,.18); stroke: #5b6b2e; stroke-width: 3; }
+.cena-servico .fibra { stroke: #1a1d21; stroke-width: 3; opacity: .55; }
+.cena-servico .selo-ok { fill: #157347; } .cena-servico .selo-check { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+/* projeto */
+.cena-servico .prancha { fill: #2d3820; stroke: rgba(255,255,255,.25); }
+.cena-servico .grade-prancha line { stroke: rgba(255,255,255,.06); }
+.cena-servico .traco-planta { fill: none; stroke: #e8ecda; stroke-width: 2.5; }
+.cena-servico .pilar { fill: #c3caa9; stroke: #fff; stroke-width: 1; }
+.cena-servico .viga { stroke: #c3caa9; stroke-width: 2; stroke-dasharray: 6 3; }
+.cena-servico .carga { fill: none; stroke: #e0a43a; stroke-width: 2; }
+.cena-servico .armadura { stroke: #e0a43a; stroke-width: 1.4; }
+.cena-projeto .cota { stroke: #c3caa9; } .cena-projeto .cota-texto { fill: #c3caa9; }
+.cena-servico .carimbo { fill: none; stroke: #e0a43a; stroke-width: 3; }
+.cena-servico .carimbo-texto { font: 800 16px var(--fonte-titulo, sans-serif); fill: #e0a43a; letter-spacing: .1em; }
+.cena-laudo .carimbo { stroke: #157347; } .cena-laudo .carimbo-texto { fill: #157347; }
+/* laudo */
+.cena-servico .marcador { fill: rgba(224,164,58,.25); stroke: #e0a43a; stroke-width: 2; } .cena-servico .marcador-ponto { fill: #e0a43a; }
+.cena-servico .ensaio { fill: #3f6fd8; opacity: .8; }
+.cena-servico .lupa { fill: rgba(207,227,239,.45); stroke: #3b451e; stroke-width: 5; } .cena-servico .lupa-cabo { stroke: #3b451e; stroke-width: 9; stroke-linecap: round; }
+.cena-servico .folha { fill: #fff; stroke: #c9cdb9; stroke-width: 1.5; } .cena-servico .linha-texto { stroke: #b9bfa8; stroke-width: 3; stroke-linecap: round; }
+
+/* Fases */
+.pj-lado { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.pj-fases { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.pj-fase button { all: unset; box-sizing: border-box; cursor: pointer; width: 100%; display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 12px; font-size: .92rem; position: relative; }
+.pj-fase button:hover { background: rgba(var(--cor-rgb), .06); }
+.pj-fase button:focus-visible { outline: 2px solid var(--verde-escuro); outline-offset: 1px; }
+.pj-fase.sel button { background: var(--papel); box-shadow: 0 1px 2px rgba(16,33,26,.06), 0 6px 16px -6px rgba(16,33,26,.18); }
+.pj-bolinha { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: .78rem; font-weight: 700; border: 1.5px dashed var(--verde-claro); color: var(--texto-2); background: #fff; }
+.pj-fase.concluida .pj-bolinha { background: var(--verde); border: 0; color: #fff; }
+.pj-fase.atual .pj-bolinha { background: #e0a43a; border: 0; color: #fff; box-shadow: 0 0 0 5px rgba(224,164,58,.22); animation: pj-halo 2s ease-in-out infinite; }
+@keyframes pj-halo { 50% { box-shadow: 0 0 0 9px rgba(224,164,58,.08); } }
+.pj-fase-nome { font-weight: 600; }
+.pj-fase.futura .pj-fase-nome { color: var(--texto-2); font-weight: 500; }
+.pj-fase-est { font-size: .78rem; color: var(--texto-2); font-variant-numeric: tabular-nums; }
+.pj-fase.atual .pj-fase-est { color: #a8731c; font-weight: 700; }
+.pj-fase:not(:last-child) button::after { content: ''; position: absolute; left: 23px; top: 37px; height: 10px; border-left: 2px solid var(--linha-forte); }
+.pj-fase.concluida:not(:last-child) button::after { border-color: var(--verde); }
+.pj-detalhe { background: var(--papel); border: 1px solid var(--linha); border-radius: 16px; padding: 14px 16px; animation: portal-surgir .35s ease both; display: grid; gap: 6px; }
+.pj-detalhe h3 { font-size: 1.15rem; margin: 0; color: var(--verde-escuro); }
+.pj-detalhe p { margin: 0; color: var(--texto-2); line-height: 1.55; }
+.pj-etapas { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 8px; }
+.pj-etapas li { display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center; font-size: .9rem; }
+.pj-mini { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--verde-claro); }
+.pj-mini.concluida { background: var(--verde); border-color: var(--verde); } .pj-mini.atual { background: #e0a43a; border-color: #e0a43a; }
+.pj-numeros { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 16px 0 0; }
+.pj-numeros div { background: rgba(255,255,255,.7); border: 1px solid var(--linha); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; }
+.pj-numeros dt { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: var(--texto-2); }
+.pj-numeros dd { margin: 0; font-weight: 700; font-size: .98rem; color: var(--grafite); }
+.pj-entregaveis { margin-top: 14px; }
+.pj-entregaveis h3 { font-size: .95rem; margin: 0 0 8px; }
+.pj-entregaveis ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; grid-template-columns: 1fr; }
+.pj-entregaveis li { display: flex; gap: 8px; align-items: center; font-size: .9rem; }
+.pj-entregaveis li span { color: var(--verde-claro); font-weight: 700; width: 16px; }
+.pj-entregaveis li.pronto span { color: var(--favoravel); }
+.portal-aguardando .portal-linha { flex-wrap: nowrap; }
+.portal-aguardando .portal-linha > span { min-width: 0; }
+@media (min-width: 720px) {
+  .portal-jornada { padding: 26px 26px 22px; }
+  .pj-grade { grid-template-columns: 1.15fr 1fr; align-items: start; }
+  .pj-numeros { grid-template-columns: repeat(4, 1fr); }
+  .pj-entregaveis ul { grid-template-columns: 1fr 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .camada.atual .camada-cheia, .pj-fase.atual .pj-bolinha, .cena-servico .comodo.atual .comodo-cheio, .pj-detalhe { animation: none; }
+}
+:root[data-tema='escuro'] .portal-jornada { background: linear-gradient(180deg, var(--papel), var(--fundo)); }
+:root[data-tema='escuro'] .pj-cena:not(.perfil-projeto .pj-cena) { background: #eef1e6; }
+@media (max-width: 520px) {
+  .pj-etapas li { grid-template-columns: 10px 1fr; }
+  .pj-etapas li .selo { grid-column: 2; justify-self: start; }
+}

@@ -9,6 +9,7 @@ import { formatarData, formatarDataHora } from '../core/datas';
 import { comprimirImagem, useUrlsFotos } from './ObraRegistros';
 import { SeloEtapa } from './ObraCronograma';
 import { TIPO_COMENTARIO, cienciaDoItem, type DadosPortal } from '../core/portal';
+import { perfilDaObra, PERFIS } from '../core/jornada';
 import { TIPO_PENDENCIA, TIPO_REGISTRO, type Etapa, type Foto, type Obra, type Pendencia, type Registro } from '../lib/tipos';
 
 type Acesso = {
@@ -102,6 +103,10 @@ export function PortalObra({ obra, aoMudar }: { obra: ObraPortalCampos; aoMudar:
             <h2>Portal do cliente</h2>
             <p className="muted small" style={{ margin: 0 }}>
               O cliente vê só o que estiver publicado: andamento físico, etapas visíveis, fotos, decisões e materiais sem valores. Nunca vê preços, pagamentos, notas ou notas internas.
+            </p>
+            <p className="small" style={{ margin: '6px 0 0' }}>
+              Jornada visual: <b>{PERFIS[perfilDaObra(previa.obra.tipo_servico, previa.obra.perfil)].nome}</b>
+              <span className="muted"> · {PERFIS[perfilDaObra(previa.obra.tipo_servico, previa.obra.perfil)].fases.map((f) => f.nome).join(' → ')}. Segue o tipo de serviço da obra; para mudar, edite a obra. Etapas com nomes como “Fundação” ou “Pintura” entram sozinhas na fase certa.</span>
             </p>
           </div>
           <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>

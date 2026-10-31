@@ -7,6 +7,8 @@ import { supabase, mensagemErro } from '../lib/supabase';
 import { novaChave } from '../lib/consulta';
 import { Carregando } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { CenaServico } from '../components/CenaServico';
+import { calcularJornada, faseAtual, perfilDaObra, PERFIS, type Perfil } from '../core/jornada';
 import { formatarData, formatarDataHora } from '../core/datas';
 import {
   ESTADO_PORTAL, SITUACAO_MATERIAL_PORTAL, STATUS_OBRA_PORTAL, TIPO_COMENTARIO, TIPO_REGISTRO_PORTAL,
@@ -141,7 +143,7 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
   ].length;
   const medicoes = d.medicoes ?? [];
   const abas: [Aba, string, number?][] = [
-    ['inicio', 'Início'], ['cronograma', 'Etapas'], ['ambientes', 'Ambientes'], ['fotos', 'Fotos', d.fotos.length],
+    ['inicio', 'Início'], ['cronograma', 'Etapas'], ...(d.ambientes.length ? [['ambientes', 'Ambientes'] as [Aba, string]] : []), ...(d.fotos.length ? [['fotos', 'Fotos', d.fotos.length] as [Aba, string, number]] : []),
     ...(medicoes.length ? [['medicoes', 'Medições', medicoes.filter((m) => m.estado === 'enviada').length] as [Aba, string, number]] : []),
     ['atualizacoes', 'Atualizações', eu ? semCiencia : undefined], ['mensagens', 'Mensagens', d.comentarios.length],
   ];
@@ -220,32 +222,6 @@ function Capa({ ctx }: { ctx: Ctx }) {
   );
 }
 
-function Anel({ valor, rotulo }: { valor: number; rotulo: string }) {
-  const [v, setV] = useState(0);
-  useEffect(() => {
-    const reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduzir) { setV(valor); return; }
-    let quadro = 0; const inicio = performance.now();
-    const passo = (t: number) => {
-      const p = Math.min(1, (t - inicio) / 900);
-      setV(valor * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) quadro = requestAnimationFrame(passo);
-    };
-    quadro = requestAnimationFrame(passo);
-    return () => cancelAnimationFrame(quadro);
-  }, [valor]);
-  const r = 52, c = 2 * Math.PI * r;
-  return (
-    <div className="portal-anel" role="img" aria-label={`${rotulo}: ${Math.round(valor)}%`}>
-      <svg viewBox="0 0 120 120" aria-hidden="true">
-        <circle cx="60" cy="60" r={r} className="trilho" />
-        <circle cx="60" cy="60" r={r} className="valor" strokeDasharray={c} strokeDashoffset={c * (1 - Math.min(100, v) / 100)} />
-      </svg>
-      <div className="portal-anel-num"><strong>{Math.round(v)}%</strong><span>{rotulo}</span></div>
-    </div>
-  );
-}
-
 function Barra({ valor, rotulo }: { valor: number; rotulo: string }) {
   return (
     <div className="portal-barra" role="progressbar" aria-valuenow={Math.round(valor)} aria-valuemin={0} aria-valuemax={100} aria-label={rotulo}>
@@ -268,73 +244,37 @@ function datasEtapa(e: EtapaPortal): string {
 
 function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
   const { d } = ctx;
-  const atuais = d.etapas.filter((e) => faseEtapa(e) === 'atual');
-  const proxima = proximaEtapa(d.etapas);
   const decisoes = d.pendencias.filter((p) => p.estado === 'aberta' && p.responsavel === 'cliente');
   const medicaoAberta = (d.medicoes ?? []).find((m) => m.estado === 'enviada');
-  const ultimas = d.fotos.slice(0, 6);
+  const ultimas = d.fotos.slice(0, 8);
+  const perfil = perfilDaObra(d.obra.tipo_servico, d.obra.perfil);
   return (
     <div className="portal-stack">
       {d.obra.boas_vindas && <p className="portal-boas-vindas">{d.obra.boas_vindas}</p>}
-      <section className="portal-card portal-resumo">
-        <Anel valor={Number(d.progresso.executado)} rotulo="executado" />
-        <dl className="portal-numeros">
-          <div><dt>Etapas concluídas</dt><dd>{d.progresso.concluidas} de {d.progresso.etapas}</dd></div>
-          <div><dt>Conferido tecnicamente</dt><dd>{Math.round(Number(d.progresso.conferido))}%</dd></div>
-          <div><dt>Previsão de término</dt><dd>{d.obra.data_previsao_fim ? formatarData(d.obra.data_previsao_fim) : 'A definir'}</dd></div>
-          <div><dt>Última atualização</dt><dd>{d.ultima_atualizacao ? formatarDataHora(d.ultima_atualizacao) : '—'}</dd></div>
-        </dl>
-        <p className="portal-nota">
-          O percentual mede o serviço executado, pelo peso técnico de cada etapa. Compras e pagamentos não mudam esse número.
-          “Conferido” é a parte já verificada pela engenharia.
-        </p>
-      </section>
 
-      {medicaoAberta && (
-        <section className="portal-card portal-destaque">
-          <h2><Icone nome="alerta" /> Medição nº {medicaoAberta.numero} aguardando sua aprovação</h2>
-          <p className="muted">Executado até {formatarData(medicaoAberta.data_corte)}: <strong>{fmtPct(medicaoAberta.percentual_atual)}</strong> da obra ({fmtPct(medicaoAberta.percentual_atual - medicaoAberta.percentual_anterior)} neste período).</p>
-          <button className="btn-primario" onClick={() => irPara('medicoes')}>Conferir e responder</button>
-        </section>
-      )}
-
-      {decisoes.length > 0 && (
-        <section className="portal-card portal-destaque">
+      {(medicaoAberta || decisoes.length > 0) && (
+        <section className="portal-card portal-destaque portal-aguardando">
           <h2><Icone nome="alerta" /> Aguardando você</h2>
           <ul className="portal-lista">
-            {decisoes.map((p) => <li key={p.id}><span><strong>{p.titulo}</strong>{p.prazo && <span className="muted"> · até {formatarData(p.prazo)}</span>}</span></li>)}
+            {medicaoAberta && (
+              <li className="portal-linha">
+                <span><strong>Medição nº {medicaoAberta.numero}</strong><span className="muted"> · {fmtPct(medicaoAberta.percentual_atual)} executado até {formatarData(medicaoAberta.data_corte)}</span></span>
+                <button className="btn-primario" onClick={() => irPara('medicoes')}>Conferir</button>
+              </li>
+            )}
+            {decisoes.map((p) => (
+              <li key={p.id} className="portal-linha">
+                <span><strong>{p.titulo}</strong>{p.prazo && <span className="muted"> · até {formatarData(p.prazo)}</span>}</span>
+                <button className="btn-secundario" onClick={() => irPara('atualizacoes')}>Responder</button>
+              </li>
+            ))}
           </ul>
-          <button className="btn-secundario" onClick={() => irPara('atualizacoes')}>Ver detalhes</button>
         </section>
       )}
 
-      <div className="portal-duas">
-        <section className="portal-card">
-          <h2>Agora na obra</h2>
-          {atuais.length === 0 ? <p className="muted">Nenhuma etapa em andamento neste momento.</p> : (
-            <ul className="portal-lista">
-              {atuais.map((e) => (
-                <li key={e.id}>
-                  <div className="portal-linha"><strong>{e.nome}</strong><SeloEstado e={e} /></div>
-                  <span className="muted small">{ctx.nomeServico(e.servico_id)}</span>
-                  <Barra valor={Number(e.percentual)} rotulo={`Andamento de ${e.nome}`} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-        <section className="portal-card">
-          <h2>Próxima atividade</h2>
-          {proxima ? (
-            <>
-              <p className="portal-proxima"><strong>{proxima.nome}</strong></p>
-              <p className="muted small">{ctx.nomeServico(proxima.servico_id)} · {datasEtapa(proxima)}</p>
-            </>
-          ) : <p className="muted">Sem próximas etapas publicadas.</p>}
-        </section>
-      </div>
+      <Jornada ctx={ctx} perfil={perfil} />
 
-      {d.ambientes.length > 0 && (
+      {perfil !== 'reforma' && d.ambientes.length > 0 && (
         <section className="portal-card">
           <div className="portal-linha"><h2>Por ambiente</h2><button className="btn-link" onClick={() => irPara('ambientes')}>Explorar</button></div>
           <div className="portal-ambientes-mini">
@@ -360,6 +300,105 @@ function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
     </div>
   );
 }
+
+/** A jornada do serviço: desenho que cresce com a obra, fases em linguagem simples e o detalhe da fase escolhida. */
+function Jornada({ ctx, perfil }: { ctx: Ctx; perfil: Perfil }) {
+  const { d } = ctx;
+  const def = PERFIS[perfil];
+  const fases = useMemo(() => calcularJornada(perfil, d.etapas, Number(d.progresso.executado), ctx.nomeServico),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [perfil, d.etapas, d.progresso.executado]);
+  const atual = faseAtual(fases);
+  const [sel, setSel] = useState(atual);
+  const fase = fases[sel] ?? fases[atual];
+  const executado = Number(d.progresso.executado);
+  const concluida = fases.every((f) => f.estado === 'concluida');
+  const proxima = proximaEtapa(d.etapas);
+  const idsEtapas = new Set(fase.etapas.map((e) => e.id));
+  const fotosFase = d.fotos.filter((f) => f.etapa_id && idsEtapas.has(f.etapa_id)).slice(0, 6);
+  const entregaveis = d.obra.entregaveis ?? [];
+  const ambientes = d.ambientes.map((a) => ({ nome: a.nome, executado: Number(a.executado) }));
+  return (
+    <section className={`portal-jornada perfil-${perfil}`} aria-label={`Jornada: ${def.nome}`}>
+      <div className="pj-topo">
+        <div>
+          <span className="pj-kicker">{d.obra.tipo_servico || def.nome}</span>
+          <h2>{concluida ? 'Tudo pronto. Obrigado pela confiança!' : def.chamada}</h2>
+        </div>
+        <div className="pj-pct" aria-label={`${Math.round(executado)}% executado`}><strong>{Math.round(executado)}%</strong><span>executado</span></div>
+      </div>
+
+      <div className="pj-grade">
+        <div className="pj-cena">
+          <CenaServico perfil={perfil} fases={fases} ambientes={ambientes} rotulo={`Ilustração do andamento: ${fases.filter((f) => f.estado === 'concluida').length} de ${fases.length} fases concluídas`} />
+          <div className="pj-legenda"><span className="l-feito" /> concluído <span className="l-agora" /> em andamento <span className="l-depois" /> a seguir</div>
+        </div>
+
+        <div className="pj-lado">
+          <ol className="pj-fases">
+            {fases.map((f, k) => (
+              <li key={f.id} className={`pj-fase ${f.estado}${k === sel ? ' sel' : ''}`}>
+                <button onClick={() => setSel(k)} aria-pressed={k === sel}>
+                  <span className="pj-bolinha" aria-hidden="true">{f.estado === 'concluida' ? '✓' : k + 1}</span>
+                  <span className="pj-fase-nome">{f.nome}</span>
+                  <span className="pj-fase-est">{f.estado === 'concluida' ? 'Concluída' : f.estado === 'atual' ? `${Math.round(f.progresso)}%` : k === atual ? 'A seguir' : ''}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
+
+          <div className="pj-detalhe" key={fase.id}>
+            <span className="pj-kicker">{fase.estado === 'concluida' ? 'Fase concluída' : fase.estado === 'atual' ? `Agora ${def.onde}` : 'Próxima fase'}</span>
+            <h3>{fase.nome}</h3>
+            <p>{fase.agora}</p>
+            {fase.estado === 'atual' && <Barra valor={fase.progresso} rotulo={`Andamento da fase ${fase.nome}`} />}
+            {fase.etapas.length > 0 && (
+              <ul className="pj-etapas">
+                {fase.etapas.map((e) => (
+                  <li key={e.id}>
+                    <span className={`pj-mini ${faseEtapa(e)}`} aria-hidden="true" />
+                    <span><strong>{e.nome}</strong><span className="muted small"> · {datasEtapa(e)}</span></span>
+                    <SeloEstado e={e} />
+                  </li>
+                ))}
+              </ul>
+            )}
+            {fotosFase.length > 0 && (
+              <div className="portal-faixa">
+                {fotosFase.map((f) => (
+                  <button key={f.id} className="portal-mini" onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir foto de ${formatarData(f.tirada_em)}`}>
+                    <ImagemPortal token={ctx.token} id={f.id} alt={f.legenda ?? `Foto: ${fase.nome}`} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <dl className="pj-numeros">
+        <div><dt>Etapas concluídas</dt><dd>{d.progresso.concluidas} de {d.progresso.etapas}</dd></div>
+        <div><dt>Conferido pela engenharia</dt><dd>{Math.round(Number(d.progresso.conferido))}%</dd></div>
+        <div><dt>{d.obra.data_conclusao ? 'Concluída em' : 'Previsão de término'}</dt><dd>{d.obra.data_conclusao ? formatarData(d.obra.data_conclusao) : d.obra.data_previsao_fim ? formatarData(d.obra.data_previsao_fim) : 'A definir'}</dd></div>
+        <div><dt>Próxima atividade</dt><dd>{proxima ? proxima.nome : concluida ? '—' : 'A publicar'}</dd></div>
+      </dl>
+
+      {entregaveis.length > 0 && (
+        <div className="pj-entregaveis">
+          <h3>O que você recebe</h3>
+          <ul>
+            {entregaveis.map((x) => <li key={x} className={concluida ? 'pronto' : ''}><span aria-hidden="true">{concluida ? '✓' : '○'}</span>{x}</li>)}
+          </ul>
+        </div>
+      )}
+      <p className="portal-nota">
+        O percentual mede o serviço executado, pelo peso técnico de cada etapa; compras e pagamentos não mudam esse número.
+        “Conferido” é a parte já verificada pela engenharia.
+      </p>
+    </section>
+  );
+}
+
 
 function Etapas({ ctx }: { ctx: Ctx }) {
   const { d } = ctx;

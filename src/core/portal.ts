@@ -43,6 +43,8 @@ export type DadosPortal = {
   obra: {
     id: string; codigo: string; nome: string; endereco: string | null; status: string; data_inicio: string | null;
     data_previsao_fim: string | null; data_conclusao: string | null; boas_vindas: string | null; capa: string | null;
+    // Tipo de serviço (jornada visual do portal) e entregáveis da proposta aprovada.
+    tipo_servico?: string | null; perfil?: string | null; entregaveis?: string[];
   };
   empresa: { nome: string; telefone: string | null; email: string | null; site: string | null; responsavel: string; frase: string | null } | null;
   eu: { id: string; nome: string } | null;
