@@ -1,8 +1,12 @@
 // Proposta em formato de apresentação 16:9. A mesma peça serve para a pré-visualização,
-// a página do cliente e o PDF (impressão). Nunca recebe custos nem margens.
-import { formatar } from '../core/dinheiro';
+// a edição direta na página, a página do cliente e o PDF (impressão). Nunca recebe custos nem margens.
+import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { formatar, lerDigitado } from '../core/dinheiro';
 import { formatarData } from '../core/datas';
-import { paraCentavos, totalAmbiente, totalConteudo, totalItem, UNIDADES, type Conteudo, type Item } from '../core/proposta';
+import {
+  ajustarTotal, alternarPagina, definirTotalItem, mudarItem, paginaOculta, paraCentavos, totalAmbiente, totalConteudo, totalItem,
+  PAGINAS_OPCIONAIS, UNIDADES, type Conteudo, type Item,
+} from '../core/proposta';
 
 export type EmpresaPublica = {
   nome: string | null; razao_social?: string | null; cnpj?: string | null; responsavel: string | null; registro: string | null;
@@ -15,9 +19,129 @@ export type DadosDocumento = {
   rascunho?: boolean;
 };
 
-function Slide({ n, total, titulo, children, d, classe }: { n: number; total: number; titulo?: string; children: React.ReactNode; d: DadosDocumento; classe?: string }) {
+/** Edição direta na página: cada texto vira um campo; preços mexem nas parcelas junto. */
+export type EdicaoDocumento = {
+  /** Mudança de texto. */
+  mudar: (f: (c: Conteudo) => Conteudo) => void;
+};
+/** Escolha do pacote feita pelo cliente na própria folha. */
+export type EscolhaPacote = { atual: string | null; aoEscolher: (nome: string) => void };
+
+const Ed = createContext<EdicaoDocumento | null>(null);
+
+// ---------------------------------------------------------------------
+// Campos editáveis na página
+// ---------------------------------------------------------------------
+type Tag = 'span' | 'p' | 'b' | 'h1' | 'h3' | 'dd' | 'dt' | 'small' | 'div';
+
+/** Texto que, no modo de edição, se edita clicando em cima. Enter confirma; Esc desfaz. */
+function T({ v, set, multi, ph, className, tag = 'span', vazio }: { v: string; set: (s: string) => void; multi?: boolean; ph?: string; className?: string; tag?: Tag; vazio?: string }) {
+  const ed = useContext(Ed);
+  const Tg = tag;
+  if (!ed) return v || vazio ? <Tg className={className}>{v || vazio}</Tg> : null;
   return (
-    <section className={`slide ${classe ?? ''}`} aria-label={titulo ?? `Página ${n}`}>
+    <Tg
+      key={v}
+      className={`${className ?? ''} ed${multi ? ' ed-multi' : ''}`}
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-multiline={multi || undefined}
+      aria-label={ph ?? 'Texto da proposta'}
+      data-ph={ph ?? 'Escreva aqui'}
+      onBlur={(e) => { const t = e.currentTarget.innerText.replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim(); if (t !== v) set(t); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && !(multi && e.shiftKey)) { e.preventDefault(); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { e.currentTarget.innerText = v; e.currentTarget.blur(); }
+      }}
+      onPaste={(e) => { e.preventDefault(); document.execCommand('insertText', false, e.clipboardData.getData('text/plain')); }}
+    >{v}</Tg>
+  );
+}
+
+/** Valor em reais editável. Aceita "1.234,56", "1234" ou "R$ 10". */
+function V({ v, set, className, tag = 'span' }: { v: number; set?: (centavos: number) => void; className?: string; tag?: Tag }) {
+  const ed = useContext(Ed);
+  const Tg = tag;
+  const texto = formatar(paraCentavos(v));
+  if (!ed || !set) return <Tg className={className}>{texto}</Tg>;
+  return (
+    <Tg
+      key={texto}
+      className={`${className ?? ''} ed ed-valor`}
+      contentEditable
+      suppressContentEditableWarning
+      role="textbox"
+      aria-label="Valor"
+      inputMode="decimal"
+      title="Clique para mudar o valor"
+      onBlur={(e) => {
+        const c = lerDigitado(e.currentTarget.innerText);
+        if (c === null || c < 0) { e.currentTarget.innerText = texto; return; }
+        if (c !== paraCentavos(v)) set(c);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+        if (e.key === 'Escape') { e.currentTarget.innerText = texto; e.currentTarget.blur(); }
+      }}
+    >{texto}</Tg>
+  );
+}
+
+/** Lista de frases: no modo de edição cada linha se edita, sai no × e entra no "+ Adicionar". */
+function L({ itens, set, className, ph, ordenada, padrao }: { itens: string[]; set: (v: string[]) => void; className?: string; ph?: string; ordenada?: boolean; padrao?: string[] }) {
+  const ed = useContext(Ed);
+  const Tg = ordenada ? 'ol' : 'ul';
+  const lista = !ed && itens.length === 0 && padrao ? padrao : itens;
+  return (
+    <Tg className={className}>
+      {lista.map((x, k) => (
+        <li key={`${k}-${x}`}>
+          {ed ? (
+            <>
+              <T v={x} ph={ph} set={(s) => set(s ? itens.map((y, j) => (j === k ? s : y)) : itens.filter((_, j) => j !== k))} />
+              <button type="button" className="ed-tirar" aria-label={`Tirar "${x}"`} title="Tirar esta linha" onClick={() => set(itens.filter((_, j) => j !== k))}>×</button>
+            </>
+          ) : x}
+        </li>
+      ))}
+      {ed && <li className="ed-add"><button type="button" onClick={() => set([...itens, ph ? `${ph}` : 'Novo item'])}>+ Adicionar</button></li>}
+    </Tg>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Folha
+// ---------------------------------------------------------------------
+/** Diminui a escala do conteúdo até caber na folha (até 60%). Mantém tudo dentro da página no PDF. */
+function useCaberNaFolha() {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let quadro = 0;
+    const ajustar = () => {
+      el.style.removeProperty('--fator');
+      let f = 1;
+      for (let i = 0; i < 14 && el.scrollHeight > el.clientHeight + 1 && f > 0.6; i++) {
+        f = Math.max(0.6, Math.round((f - 0.03) * 100) / 100);
+        el.style.setProperty('--fator', String(f));
+      }
+      el.classList.toggle('transborda', el.scrollHeight > el.clientHeight + 1);
+    };
+    ajustar();
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(quadro); quadro = requestAnimationFrame(ajustar); });
+    ro.observe(el.parentElement!);
+    document.fonts?.ready.then(() => { quadro = requestAnimationFrame(ajustar); });
+    return () => { ro.disconnect(); cancelAnimationFrame(quadro); };
+  });
+  return ref;
+}
+
+function Slide({ n, total, titulo, children, d, classe }: { n: number; total: number; titulo?: ReactNode; children: ReactNode; d: DadosDocumento; classe?: string }) {
+  const corpo = useCaberNaFolha();
+  return (
+    <section className={`slide ${classe ?? ''}`} aria-label={typeof titulo === 'string' ? titulo : `Página ${n}`}>
       {d.rascunho && <div className="marca-rascunho">RASCUNHO · não enviado ao cliente</div>}
       {titulo && (
         <header className="slide-cab">
@@ -25,7 +149,7 @@ function Slide({ n, total, titulo, children, d, classe }: { n: number; total: nu
           <h2>{titulo}</h2>
         </header>
       )}
-      <div className="slide-corpo">{children}</div>
+      <div className="slide-corpo" ref={corpo}>{children}</div>
       <footer className="slide-rodape">
         <img src="/marca/rosae-simbolo.svg" alt="" />
         <span>{d.empresa?.nome ?? 'ROSAE Engenharia & Estruturas'}</span>
@@ -45,14 +169,21 @@ function partes<T>(lista: T[], tamanho: number): T[][] {
 
 const qtd = (i: Item) => `${Number(i.quantidade).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${UNIDADES[i.unidade] ?? i.unidade}`;
 
-export function PropostaDocumento({ d }: { d: DadosDocumento }) {
+type Pagina = { id: string; titulo?: ReactNode; nome: string; classe?: string; conteudo: ReactNode };
+
+export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; edicao?: EdicaoDocumento; escolha?: EscolhaPacote }) {
   const c = d.conteudo;
+  const ed = edicao ?? null;
+  const mudar = (f: (c: Conteudo) => Conteudo) => ed?.mudar(f);
+  const set = <K extends keyof Conteudo>(k: K) => (v: Conteudo[K]) => mudar((x) => ({ ...x, [k]: v }));
   const total = totalConteudo(c);
-  const linhas = c.ambientes.flatMap((a) => [{ amb: a, item: null as Item | null }, ...a.itens.map((item) => ({ amb: a, item }))]);
-  const itensEscopo = c.ambientes.flatMap((a) => a.itens.map((item) => ({ amb: a.nome, item })));
+  const linhas = c.ambientes.flatMap((a, ai) => [{ amb: a, ai, item: null as Item | null, ii: -1 }, ...a.itens.map((item, ii) => ({ amb: a, ai, item, ii }))]);
+  const itensEscopo = c.ambientes.flatMap((a, ai) => a.itens.map((item, ii) => ({ amb: a.nome, ai, item, ii })));
   const paginasEscopo = partes(itensEscopo, itensEscopo.length <= 5 ? 5 : 4);
-  const paginasValores = partes(linhas, 11);
-  const temResp = c.responsabilidades.some((r) => r.itens.length > 0);
+  const parcelas = c.pagamento.parcelas;
+  // Pagamento ao lado da tabela só quando os dois cabem com folga; senão ganha página própria.
+  const pagamentoJunto = parcelas.length > 0 && parcelas.length <= 4 && linhas.length <= 9 && !c.condicao_especial;
+  const paginasValores = partes(linhas, 12);
   const condicoes = [
     `Esta proposta é válida até ${d.validade ? formatarData(d.validade) : `${c.validade_dias} dias após a emissão`}.`,
     'Serviços ou alterações fora do escopo descrito serão orçados à parte e só executados após aprovação por escrito (aditivo).',
@@ -60,12 +191,13 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
     'Atrasos causados por decisões pendentes, mudanças pedidas pelo cliente, chuvas ou falta de acesso ajustam o prazo na mesma proporção.',
     'A qualidade é conferida por etapa; pendências encontradas são registradas e corrigidas antes da etapa seguinte.',
   ];
+  const mudarValor = (ai: number, ii: number) => (centavos: number) => mudar((x) => mudarItem(x, ai, ii, (i) => definirTotalItem(i, centavos)));
 
-  type P = { titulo?: string; classe?: string; conteudo: React.ReactNode };
-  const paginas: P[] = [];
+  const paginas: Pagina[] = [];
 
   const prazoCapa = c.prazo_total_dias ? `${c.prazo_total_dias} dias` : c.prazo_texto ? c.prazo_texto.split(',')[0] : null;
   paginas.push({
+    id: 'capa', nome: 'Capa',
     classe: 'capa',
     conteudo: (
       <div className="capa-grade">
@@ -76,7 +208,7 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
           <p className="capa-cliente">Preparada exclusivamente para <b>{d.cliente}</b></p>
         </div>
         <dl className="capa-dados">
-          {c.local && <div><dt>Local</dt><dd>{c.local}</dd></div>}
+          {(c.local || ed) && <div><dt>Local</dt><T tag="dd" v={c.local} set={set('local')} ph="Endereço da obra" /></div>}
           {prazoCapa && <div><dt>Prazo</dt><dd>{prazoCapa}</dd></div>}
           <div><dt>Emissão</dt><dd>{d.emitida_em ? formatarData(d.emitida_em.slice(0, 10)) : 'rascunho'}</dd></div>
           <div><dt>Válida até</dt><dd>{d.validade ? formatarData(d.validade) : `${c.validade_dias} dias após a emissão`}</dd></div>
@@ -89,10 +221,11 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
   if (c.resumo) {
     const principal = c.opcoes?.find((o) => o.principal);
     paginas.push({
+      id: 'resumo', nome: 'Em resumo',
       titulo: 'Em resumo',
       conteudo: (
         <div className="resumo-exec">
-          <p className="resumo-frase">{c.resumo}</p>
+          <T tag="p" className="resumo-frase" v={c.resumo ?? ''} set={set('resumo')} multi ph="Em duas ou três frases: o que você vai fazer e o que o cliente ganha" />
           <div className="resumo-cartoes">
             <div><span>Investimento</span><b className="num">{formatar(total)}</b>{principal && <small>pacote {principal.nome}</small>}</div>
             <div><span>Prazo</span><b>{c.prazo_total_dias ? `${c.prazo_total_dias} dias` : '—'}</b><small>{c.etapas.length} etapas</small></div>
@@ -105,38 +238,44 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
   }
 
   const temDados = (c.dados_tecnicos ?? []).length > 0;
+  const temRiscos = (c.riscos ?? []).length > 0;
   paginas.push({
+    id: d.tipo === 'aditivo' ? 'aditivo' : 'entendimento', nome: d.tipo === 'aditivo' ? 'O que muda' : 'O que entendemos',
     titulo: d.tipo === 'aditivo' ? 'O que muda' : temDados ? 'O que entendemos do seu projeto' : 'Quem somos e o que entendemos',
     conteudo: (
       <div className="duas-colunas">
         <div>
           {temDados ? (
             <>
-              {c.necessidade && <><h3>A sua necessidade</h3><p className="citacao" style={{ whiteSpace: 'pre-wrap' }}>{c.necessidade}</p></>}
+              {(c.necessidade || ed) && <><h3>A sua necessidade</h3><T tag="p" className="citacao pre" v={c.necessidade} set={set('necessidade')} multi ph="O que o cliente pediu" /></>}
               <h3>Dados considerados</h3>
-              <dl className="ficha-dados">{c.dados_tecnicos!.map((x) => <div key={x.rotulo}><dt>{x.rotulo}</dt><dd>{x.valor}</dd></div>)}</dl>
+              <dl className="ficha-dados">
+                {c.dados_tecnicos!.map((x, k) => (
+                  <div key={x.rotulo}><dt>{x.rotulo}</dt><T tag="dd" v={x.valor} set={(s) => mudar((y) => ({ ...y, dados_tecnicos: (y.dados_tecnicos ?? []).map((z, j) => (j === k ? { ...z, valor: s } : z)) }))} ph="Valor" /></div>
+                ))}
+              </dl>
             </>
           ) : (
             <>
               <h3>A ROSAE</h3>
-              <p>{c.apresentacao}</p>
+              <T tag="p" v={c.apresentacao} set={set('apresentacao')} multi ph="Apresentação da empresa" />
               {d.empresa?.frase && <p className="destaque">“{d.empresa.frase}”</p>}
             </>
           )}
         </div>
         <div>
-          {(c.riscos ?? []).length > 0 ? (
+          {temRiscos ? (
             <>
               <h3>Por que isso importa</h3>
-              <ul className="lista-riscos">{c.riscos!.map((x) => <li key={x}>{x}</li>)}</ul>
+              <L className="lista-riscos" itens={c.riscos!} set={set('riscos')} ph="Risco que este serviço evita" />
             </>
           ) : (
             <>
               <h3>{d.tipo === 'aditivo' ? 'O que muda' : 'A sua necessidade'}</h3>
-              <p style={{ whiteSpace: 'pre-wrap' }}>{c.necessidade || 'Descrição a completar.'}</p>
+              <T tag="p" className="pre" v={c.necessidade} set={set('necessidade')} multi ph="O que o cliente pediu" vazio="Descrição a completar." />
             </>
           )}
-          {d.tipo === 'aditivo' && c.motivo && <p><b>Motivo:</b> {c.motivo}</p>}
+          {d.tipo === 'aditivo' && (c.motivo || ed) && <p><b>Motivo:</b> <T v={c.motivo ?? ''} set={set('motivo')} ph="Por que o escopo mudou" /></p>}
           {d.tipo === 'aditivo' && c.impacto_prazo_dias != null && <p><b>Impacto no prazo:</b> {c.impacto_prazo_dias === 0 ? 'sem alteração' : `${c.impacto_prazo_dias > 0 ? '+' : ''}${c.impacto_prazo_dias} dia(s)`}</p>}
           {d.tipo === 'aditivo' && <p className="small">Este aditivo complementa o contrato original, que permanece válido nas demais condições.</p>}
         </div>
@@ -146,14 +285,15 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
 
   paginasEscopo.forEach((pg, k) => {
     paginas.push({
+      id: 'escopo', nome: 'Escopo dos serviços',
       titulo: paginasEscopo.length > 1 ? `Escopo dos serviços (${k + 1}/${paginasEscopo.length})` : 'Escopo dos serviços',
       conteudo: pg.length === 0 ? <p>Escopo a definir.</p> : (
         <div className="escopo">
-          {pg.map(({ amb, item }) => (
+          {pg.map(({ amb, item, ai, ii }) => (
             <div key={item.id} className="escopo-item">
               <span className="escopo-amb">{amb}</span>
-              <h3>{item.titulo}</h3>
-              {item.descricao && <p>{item.descricao}</p>}
+              <T tag="h3" v={item.titulo} set={(s) => s && mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, titulo: s })))} ph="Nome do serviço" />
+              <T tag="p" v={item.descricao ?? ''} set={(s) => mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, descricao: s })))} multi ph="O que está incluído neste serviço" />
               <span className="escopo-qtd">{qtd(item)}{item.complexidade ? ` · complexidade ${item.complexidade.toLowerCase()}` : ''}</span>
             </div>
           ))}
@@ -164,8 +304,9 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
 
   if ((c.entregaveis ?? []).length > 0) {
     paginas.push({
+      id: 'entregaveis', nome: 'O que você recebe',
       titulo: 'O que você recebe',
-      conteudo: (
+      conteudo: ed ? <L className="entregaveis-ed" itens={c.entregaveis!} set={set('entregaveis')} ph="Entregável" ordenada /> : (
         <div className="entregaveis">
           {c.entregaveis!.map((x, k) => <div key={x}><span className="entregavel-n">{String(k + 1).padStart(2, '0')}</span><b>{x}</b></div>)}
         </div>
@@ -173,38 +314,42 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
     });
   }
 
-  const inclusos = c.inclusoes.length ? c.inclusoes : ['Conforme escopo descrito.'];
-  const naoInclusos = c.exclusoes.length ? c.exclusoes : ['Tudo o que não estiver descrito no escopo.'];
-  if (inclusos.length + naoInclusos.length > 16) {
-    paginas.push({ titulo: 'O que está incluso', conteudo: <ul className="marcas ok em-colunas">{inclusos.map((x) => <li key={x}>{x}</li>)}</ul> });
-    paginas.push({ titulo: 'O que não está incluso', conteudo: <><ul className="marcas nao em-colunas">{naoInclusos.map((x) => <li key={x}>{x}</li>)}</ul><p className="small muted" style={{ marginTop: '2cqw' }}>Itens não inclusos podem ser contratados à parte, sempre com orçamento aprovado antes.</p></> });
+  const padraoIncl = ['Conforme escopo descrito.'];
+  const padraoExcl = ['Tudo o que não estiver descrito no escopo.'];
+  const nIncl = (c.inclusoes.length || 1) + (c.exclusoes.length || 1);
+  if (nIncl > 16) {
+    paginas.push({ id: 'incluso', nome: 'O que está incluso', titulo: 'O que está incluso', conteudo: <L className="marcas ok em-colunas" itens={c.inclusoes} set={set('inclusoes')} padrao={padraoIncl} ph="Item incluso" /> });
+    paginas.push({ id: 'incluso', nome: 'O que não está incluso', titulo: 'O que não está incluso', conteudo: <><L className="marcas nao em-colunas" itens={c.exclusoes} set={set('exclusoes')} padrao={padraoExcl} ph="Item não incluso" /><p className="small muted nota-folha">Itens não inclusos podem ser contratados à parte, sempre com orçamento aprovado antes.</p></> });
   } else {
     paginas.push({
+      id: 'incluso', nome: 'Incluso e não incluso',
       titulo: 'O que está incluso e o que não está',
       conteudo: (
-        <div className={`duas-colunas${inclusos.length + naoInclusos.length > 11 ? ' compacto' : ''}`}>
+        <div className={`duas-colunas${nIncl > 11 ? ' compacto' : ''}`}>
           <div>
             <h3 className="ok">Incluso</h3>
-            <ul className="marcas ok">{inclusos.map((x) => <li key={x}>{x}</li>)}</ul>
+            <L className="marcas ok" itens={c.inclusoes} set={set('inclusoes')} padrao={padraoIncl} ph="Item incluso" />
           </div>
           <div>
             <h3 className="nao">Não incluso</h3>
-            <ul className="marcas nao">{naoInclusos.map((x) => <li key={x}>{x}</li>)}</ul>
+            <L className="marcas nao" itens={c.exclusoes} set={set('exclusoes')} padrao={padraoExcl} ph="Item não incluso" />
           </div>
         </div>
       ),
     });
   }
 
-  if (temResp) {
+  const resp = c.responsabilidades.filter((r) => r.itens.length || ed);
+  if (resp.length > 0 && c.responsabilidades.some((r) => r.itens.length > 0)) {
     paginas.push({
+      id: 'responsabilidades', nome: 'Responsabilidades',
       titulo: 'Responsabilidades de cada parte',
       conteudo: (
-        <div className="colunas-resp" style={{ gridTemplateColumns: `repeat(${Math.min(3, c.responsabilidades.length)}, 1fr)` }}>
-          {c.responsabilidades.filter((r) => r.itens.length).map((r) => (
+        <div className="colunas-resp" style={{ gridTemplateColumns: `repeat(${Math.min(3, resp.length)}, 1fr)` }}>
+          {resp.map((r) => (
             <div key={r.parte}>
               <h3>{r.parte === 'Parceiro' ? 'Equipes parceiras' : r.parte}</h3>
-              <ul>{r.itens.map((x) => <li key={x}>{x}</li>)}</ul>
+              <L itens={r.itens} set={(v) => mudar((x) => ({ ...x, responsabilidades: x.responsabilidades.map((z) => (z.parte === r.parte ? { ...z, itens: v } : z)) }))} ph="Responsabilidade" />
             </div>
           ))}
         </div>
@@ -213,11 +358,13 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
   }
 
   if ((c.metodologia ?? []).length > 0) {
+    const setM = (k: number, campo: 'titulo' | 'texto') => (s: string) => mudar((x) => ({ ...x, metodologia: (x.metodologia ?? []).map((m, j) => (j === k ? { ...m, [campo]: s } : m)) }));
     paginas.push({
+      id: 'metodologia', nome: 'Como trabalhamos',
       titulo: 'Como trabalhamos',
       conteudo: (
         <ol className="metodo">
-          {c.metodologia!.map((m, k) => <li key={m.titulo}><span className="etapa-n">{k + 1}</span><b>{m.titulo}</b><span>{m.texto}</span></li>)}
+          {c.metodologia!.map((m, k) => <li key={k}><span className="etapa-n">{k + 1}</span><T tag="b" v={m.titulo} set={setM(k, 'titulo')} ph="Passo" /><T v={m.texto} set={setM(k, 'texto')} multi ph="Como é feito" /></li>)}
         </ol>
       ),
     });
@@ -225,8 +372,10 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
 
   const comPrazo = c.etapas.length > 0 && c.etapas.every((e) => (e.prazo_dias ?? 0) > 0);
   const diasTotal = comPrazo ? c.etapas.reduce((t, e) => t + (e.prazo_dias ?? 0), 0) : 0;
+  const setEtapa = (k: number, campo: 'nome' | 'descricao') => (s: string) => mudar((x) => ({ ...x, etapas: x.etapas.map((e, j) => (j === k ? { ...e, [campo]: s } : e)) }));
   let acumulado = 0;
   paginas.push({
+    id: 'cronograma', nome: comPrazo ? 'Cronograma' : 'Etapas e prazo',
     titulo: comPrazo ? 'Cronograma' : 'Etapas e prazo',
     conteudo: (
       <div>
@@ -237,7 +386,7 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
               acumulado += e.prazo_dias ?? 0;
               return (
                 <div key={k} className="gantt-linha">
-                  <div className="gantt-nome"><b>{k + 1}. {e.nome}</b>{e.descricao && <span>{e.descricao}</span>}</div>
+                  <div className="gantt-nome"><b>{k + 1}. <T v={e.nome} set={setEtapa(k, 'nome')} ph="Etapa" /></b><T v={e.descricao ?? ''} set={setEtapa(k, 'descricao')} ph="Descrição" /></div>
                   <div className="gantt-trilho">
                     <div className="gantt-barra" style={{ left: `${(ini / diasTotal) * 100}%`, width: `${((e.prazo_dias ?? 0) / diasTotal) * 100}%` }}><span>{e.prazo_dias} d</span></div>
                   </div>
@@ -251,84 +400,124 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
             {c.etapas.map((e, k) => (
               <li key={k}>
                 <span className="etapa-n">{k + 1}</span>
-                <b>{e.nome}</b>
-                {e.descricao && <span>{e.descricao}</span>}
+                <T tag="b" v={e.nome} set={setEtapa(k, 'nome')} ph="Etapa" />
+                <T v={e.descricao ?? ''} set={setEtapa(k, 'descricao')} ph="Descrição" />
                 {e.prazo_dias ? <span className="etapa-prazo">{e.prazo_dias} dias</span> : null}
               </li>
             ))}
           </ol>
         )}
-        {c.prazo_texto && <p className="destaque">Prazo: {c.prazo_texto}</p>}
+        {(c.prazo_texto || ed) && <p className="destaque">Prazo: <T v={c.prazo_texto} set={set('prazo_texto')} ph="Ex.: 120 dias corridos a partir do aceite" /></p>}
       </div>
     ),
   });
 
   const opcoes = (c.opcoes ?? []).filter((o) => o.valor > 0);
   if (opcoes.length > 1) {
+    const idx = (nome: string) => (c.opcoes ?? []).findIndex((o) => o.nome === nome);
+    const setO = (nome: string, campo: 'nome' | 'subtitulo') => (s: string) => s && mudar((x) => ({ ...x, opcoes: (x.opcoes ?? []).map((o, j) => (j === idx(nome) ? { ...o, [campo]: s } : o)) }));
+    const escolhida = escolha ? (opcoes.find((o) => o.nome === escolha.atual) ?? opcoes.find((o) => o.principal))?.nome : null;
     paginas.push({
+      id: 'pacotes', nome: 'Escolha do pacote',
       titulo: 'Escolha o seu pacote',
       conteudo: (
-        <div className="opcoes-doc" style={{ gridTemplateColumns: `repeat(${opcoes.length}, 1fr)` }}>
-          {opcoes.map((o) => (
-            <div key={o.nome} className={`opcao-doc${o.principal ? ' principal' : ''}${o.recomendado ? ' recomendado' : ''}`}>
-              {o.recomendado && <span className="opcao-selo">Mais escolhido</span>}
-              <h3>{o.nome}</h3>
-              <p className="opcao-sub">{o.subtitulo}</p>
-              <p className="opcao-valor num">{formatar(paraCentavos(o.valor))}</p>
-              <ul>{o.destaques.map((x) => <li key={x}>{x}</li>)}</ul>
-              {o.principal && <p className="opcao-marca">Detalhado nesta proposta</p>}
-            </div>
-          ))}
+        <div className={`opcoes-doc${escolha ? ' escolhivel' : ''}`} style={{ gridTemplateColumns: `repeat(${opcoes.length}, 1fr)` }} role={escolha ? 'radiogroup' : undefined} aria-label={escolha ? 'Escolha o seu pacote' : undefined}>
+          {opcoes.map((o) => {
+            const marcada = escolhida === o.nome;
+            const corpo = (
+              <>
+                {o.recomendado && <span className="opcao-selo">Mais escolhido</span>}
+                <T tag="h3" v={o.nome} set={setO(o.nome, 'nome')} ph="Nome do pacote" />
+                <T tag="p" className="opcao-sub" v={o.subtitulo} set={setO(o.nome, 'subtitulo')} ph="Para quem é" />
+                <V tag="p" className="opcao-valor num" v={o.valor} set={o.principal ? (cent) => mudar((x) => ajustarTotal(x, cent)) : (cent) => mudar((x) => ({ ...x, opcoes: (x.opcoes ?? []).map((z, j) => (j === idx(o.nome) ? { ...z, valor: cent / 100 } : z)) }))} />
+                <L itens={o.destaques} set={(v) => mudar((x) => ({ ...x, opcoes: (x.opcoes ?? []).map((z, j) => (j === idx(o.nome) ? { ...z, destaques: v } : z)) }))} ph="O que tem neste pacote" />
+                {escolha ? <span className="opcao-marca">{marcada ? '✓ Sua escolha' : 'Escolher este pacote'}</span> : o.principal && <p className="opcao-marca">Detalhado nesta proposta</p>}
+              </>
+            );
+            const cls = `opcao-doc${o.principal ? ' principal' : ''}${o.recomendado ? ' recomendado' : ''}${marcada ? ' marcada' : ''}`;
+            return escolha
+              ? <button key={o.nome} type="button" role="radio" aria-checked={marcada} className={cls} onClick={() => escolha.aoEscolher(o.nome)}>{corpo}</button>
+              : <div key={o.nome} className={cls}>{corpo}</div>;
+          })}
         </div>
       ),
     });
   }
 
+  const blocoPagamento = (titulo: boolean) => (
+    <div className="pagamento">
+      {titulo && <h3>Condições de pagamento</h3>}
+      <T tag="p" v={c.pagamento.descricao} set={(s) => mudar((x) => ({ ...x, pagamento: { ...x.pagamento, descricao: s } }))} multi ph="Forma de pagamento (Pix, boleto…)" />
+      {(c.condicao_especial || ed) && <T tag="p" className="condicao-especial" v={c.condicao_especial ?? ''} set={set('condicao_especial')} multi ph="Condição especial (opcional)" />}
+      <ul>
+        {parcelas.map((p, j) => {
+          const setP = (campo: 'descricao' | 'quando') => (s: string) => mudar((x) => ({ ...x, pagamento: { ...x.pagamento, parcelas: x.pagamento.parcelas.map((z, i) => (i === j ? { ...z, [campo]: s } : z)) } }));
+          return (
+            <li key={j}>
+              <span><T v={p.descricao} set={setP('descricao')} ph="Parcela" />{(p.quando || ed) ? <span className="muted"> · <T v={p.quando ?? ''} set={setP('quando')} ph="quando" /></span> : null}</span>
+              <V tag="b" className="num" v={p.valor} set={(cent) => mudar((x) => ({ ...x, pagamento: { ...x.pagamento, parcelas: x.pagamento.parcelas.map((z, i) => (i === j ? { ...z, valor: cent / 100 } : z)) } }))} />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+
   paginasValores.forEach((pg, k) => {
     const ultima = k === paginasValores.length - 1;
+    const junto = ultima && pagamentoJunto;
     paginas.push({
+      id: 'investimento', nome: 'Investimento',
       titulo: paginasValores.length > 1 ? `Investimento (${k + 1}/${paginasValores.length})` : 'Investimento',
       conteudo: (
-        <div className={ultima && c.pagamento.parcelas.length ? 'investimento' : ''}>
+        <div className={junto ? 'investimento' : ''}>
           <table className="tabela-doc">
             <tbody>
-              {pg.map(({ amb, item }, ix) =>
+              {pg.map(({ amb, item, ai, ii }, ix) =>
                 item === null ? (
                   <tr key={`a-${amb.id ?? ix}`} className="amb"><td>{amb.nome}</td><td /><td className="num">{formatar(totalAmbiente(amb))}</td></tr>
                 ) : (
-                  <tr key={item.id ?? `i-${ix}`}><td>{item.titulo}</td><td className="muted">{qtd(item)}</td><td className="num">{formatar(paraCentavos(totalItem(item)))}</td></tr>
+                  <tr key={item.id ?? `i-${ix}`}>
+                    <td><T v={item.titulo} set={(s) => s && mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, titulo: s })))} ph="Serviço" /></td>
+                    <td className="muted">{qtd(item)}</td>
+                    <td className="num"><V v={totalItem(item)} set={mudarValor(ai, ii)} /></td>
+                  </tr>
                 ),
               )}
             </tbody>
-            {ultima && <tfoot><tr><td>Total</td><td /><td className="num">{formatar(total)}</td></tr></tfoot>}
+            {ultima && <tfoot><tr><td>Total</td><td /><td className="num"><V v={total / 100} set={(cent) => mudar((x) => ajustarTotal(x, cent))} /></td></tr></tfoot>}
           </table>
-          {ultima && c.pagamento.parcelas.length > 0 && (
-            <div className="pagamento">
-              <h3>Condições de pagamento</h3>
-              {c.pagamento.descricao && <p>{c.pagamento.descricao}</p>}
-              {c.condicao_especial && <p className="condicao-especial">{c.condicao_especial}</p>}
-              <ul>
-                {c.pagamento.parcelas.map((p, j) => (
-                  <li key={j}><span>{p.descricao}{p.quando ? <span className="muted"> · {p.quando}</span> : null}</span><b className="num">{formatar(paraCentavos(p.valor))}</b></li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {junto && blocoPagamento(true)}
         </div>
       ),
     });
   });
 
-  if ((c.diferenciais ?? []).length > 0) {
+  if (parcelas.length > 0 && !pagamentoJunto) {
     paginas.push({
+      id: 'pagamento', nome: 'Condições de pagamento',
+      titulo: 'Condições de pagamento',
+      conteudo: (
+        <div className="pagamento-pagina">
+          <div className="pagamento-total"><span>Investimento total</span><b className="num">{formatar(total)}</b>{c.opcoes?.find((o) => o.principal) && <small>pacote {c.opcoes.find((o) => o.principal)!.nome}</small>}</div>
+          {blocoPagamento(false)}
+        </div>
+      ),
+    });
+  }
+
+  if ((c.diferenciais ?? []).length > 0) {
+    const setD = (k: number, campo: 'titulo' | 'texto') => (s: string) => mudar((x) => ({ ...x, diferenciais: (x.diferenciais ?? []).map((m, j) => (j === k ? { ...m, [campo]: s } : m)) }));
+    paginas.push({
+      id: 'porque', nome: 'Por que a ROSAE',
       titulo: 'Por que a ROSAE',
       conteudo: (
         <div className="porque">
           <div className="porque-grade">
-            {c.diferenciais!.map((x) => <div key={x.titulo}><b>{x.titulo}</b><span>{x.texto}</span></div>)}
+            {c.diferenciais!.map((x, k) => <div key={k}><T tag="b" v={x.titulo} set={setD(k, 'titulo')} ph="Diferencial" /><T v={x.texto} set={setD(k, 'texto')} multi ph="Explicação" /></div>)}
           </div>
           {(c.normas ?? []).length > 0 && (
-            <div className="normas"><h3>Normas técnicas que seguimos</h3><ul>{c.normas!.map((x) => <li key={x}>{x}</li>)}</ul></div>
+            <div className="normas"><h3>Normas técnicas que seguimos</h3><L itens={c.normas!} set={set('normas')} ph="Norma" /></div>
           )}
         </div>
       ),
@@ -336,35 +525,39 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
   }
 
   if ((c.faq ?? []).length > 0) {
+    const setF = (k: number, campo: 'pergunta' | 'resposta') => (s: string) => mudar((x) => ({ ...x, faq: (x.faq ?? []).map((m, j) => (j === k ? { ...m, [campo]: s } : m)) }));
     paginas.push({
+      id: 'faq', nome: 'Perguntas frequentes',
       titulo: 'Perguntas frequentes',
       conteudo: (
         <div className="faq">
-          {c.faq!.slice(0, 6).map((x) => <div key={x.pergunta}><b>{x.pergunta}</b><p>{x.resposta}</p></div>)}
+          {c.faq!.slice(0, 6).map((x, k) => <div key={k}><T tag="b" v={x.pergunta} set={setF(k, 'pergunta')} ph="Pergunta" /><T tag="p" v={x.resposta} set={setF(k, 'resposta')} multi ph="Resposta" /></div>)}
         </div>
       ),
     });
   }
 
   paginas.push({
+    id: 'premissas', nome: 'Premissas e condições',
     titulo: 'Premissas e condições',
     conteudo: (
       <div className="duas-colunas">
         <div>
           <h3>Premissas desta proposta</h3>
-          <ul>{(c.premissas.length ? c.premissas : ['Informações fornecidas pelo cliente até a data de emissão.']).map((x) => <li key={x}>{x}</li>)}</ul>
-          {c.garantia && <><h3>Garantia</h3><p>{c.garantia}</p></>}
+          <L itens={c.premissas} set={set('premissas')} padrao={['Informações fornecidas pelo cliente até a data de emissão.']} ph="Premissa" />
+          {(c.garantia || ed) && <><h3>Garantia</h3><T tag="p" v={c.garantia} set={set('garantia')} multi ph="Ex.: 12 meses para os serviços executados" /></>}
         </div>
         <div>
           <h3>Condições gerais</h3>
           <ul>{condicoes.map((x) => <li key={x}>{x}</li>)}</ul>
-          {c.observacoes && <p style={{ whiteSpace: 'pre-wrap' }}>{c.observacoes}</p>}
+          {(c.observacoes || ed) && <T tag="p" className="pre" v={c.observacoes} set={set('observacoes')} multi ph="Observações (opcional)" />}
         </div>
       </div>
     ),
   });
 
   paginas.push({
+    id: 'aceite', nome: 'Aceite e próximos passos',
     titulo: 'Aceite e próximos passos',
     conteudo: (
       <div className="duas-colunas">
@@ -389,11 +582,51 @@ export function PropostaDocumento({ d }: { d: DadosDocumento }) {
     ),
   });
 
+  const visiveis = paginas.filter((p) => !paginaOculta(c, p.id));
+  const numero = new Map(visiveis.map((p, k) => [p, k + 1]));
+
+  if (!ed) {
+    return (
+      <div className="documento-proposta">
+        {visiveis.map((p, k) => <Slide key={k} n={k + 1} total={visiveis.length} titulo={p.titulo} d={d} classe={p.classe}>{p.conteudo}</Slide>)}
+      </div>
+    );
+  }
+
+  // Modo de edição: barra sobre cada folha (fora da folha) para tirar ou devolver a página.
+  let anterior = '';
   return (
-    <div className="documento-proposta">
-      {paginas.map((p, k) => (
-        <Slide key={k} n={k + 1} total={paginas.length} titulo={p.titulo} d={d} classe={p.classe}>{p.conteudo}</Slide>
-      ))}
-    </div>
+    <Ed.Provider value={ed}>
+      <div className="documento-proposta editando">
+        {paginas.map((p, k) => {
+          const oculta = paginaOculta(c, p.id);
+          const opcional = p.id in PAGINAS_OPCIONAIS;
+          const primeiraDoGrupo = p.id !== anterior;
+          anterior = p.id;
+          if (oculta) {
+            if (!primeiraDoGrupo) return null;
+            return (
+              <div key={k} className="pagina-oculta">
+                <span><b>{PAGINAS_OPCIONAIS[p.id]}</b> · página tirada da proposta. O cliente não vê.</span>
+                <button type="button" className="btn-secundario" onClick={() => mudar((x) => alternarPagina(x, p.id))}>Mostrar de novo</button>
+              </div>
+            );
+          }
+          return (
+            <div key={k} className="folha-editavel">
+              <div className="folha-barra">
+                <span className="folha-n">{numero.get(p)}</span>
+                <span className="folha-nome">{p.nome}</span>
+                <span className="spacer" />
+                {opcional && primeiraDoGrupo
+                  ? <button type="button" className="btn-link" onClick={() => mudar((x) => alternarPagina(x, p.id))}>Tirar esta página</button>
+                  : primeiraDoGrupo && <span className="muted small">Página obrigatória</span>}
+              </div>
+              <Slide n={numero.get(p) ?? 0} total={visiveis.length} titulo={p.titulo} d={d} classe={p.classe}>{p.conteudo}</Slide>
+            </div>
+          );
+        })}
+      </div>
+    </Ed.Provider>
   );
 }

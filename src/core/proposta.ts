@@ -61,6 +61,8 @@ export type Conteudo = {
   condicao_especial?: string;
   prazo_total_dias?: number | null;
   // valores: preço que você definiu para um pacote, no lugar do calculado pela tabela (reais, por número do pacote).
+  // Páginas da apresentação que você tirou (ids de PAGINAS_OPCIONAIS). As obrigatórias não saem.
+  paginas_ocultas?: string[];
   gerador?: { tipo: string; respostas: Record<string, string | number | boolean | null>; pacote: number; valores?: ValoresManuais; em: string };
 };
 
@@ -427,4 +429,50 @@ export function parcelasAoTotal(c: Conteudo): Conteudo {
   const pesos = ps.map((p) => Math.max(0, paraCentavos(p.valor)));
   const novos = ratear(total, pesos.some((p) => p > 0) ? pesos : ps.map(() => 1));
   return { ...c, pagamento: { ...c.pagamento, parcelas: ps.map((p, k) => ({ ...p, valor: reais(novos[k]) })) } };
+}
+
+// ---------------------------------------------------------------------
+// Edição direta na página da apresentação
+// ---------------------------------------------------------------------
+/** Páginas que podem sair da apresentação. Capa, escopo, incluso, investimento, condições e aceite ficam sempre. */
+export const PAGINAS_OPCIONAIS: Record<string, string> = {
+  resumo: 'Em resumo', entendimento: 'O que entendemos', entregaveis: 'O que você recebe', responsabilidades: 'Responsabilidades',
+  metodologia: 'Como trabalhamos', cronograma: 'Cronograma', pacotes: 'Escolha do pacote', porque: 'Por que a ROSAE', faq: 'Perguntas frequentes',
+};
+
+/** Tira ou devolve uma página opcional. */
+export function alternarPagina(c: Conteudo, id: string): Conteudo {
+  if (!(id in PAGINAS_OPCIONAIS)) return c;
+  const atuais = c.paginas_ocultas ?? [];
+  const novas = atuais.includes(id) ? atuais.filter((x) => x !== id) : [...atuais, id];
+  return { ...c, paginas_ocultas: novas };
+}
+
+export function paginaOculta(c: Pick<Conteudo, 'paginas_ocultas'>, id: string): boolean {
+  return id in PAGINAS_OPCIONAIS && (c.paginas_ocultas ?? []).includes(id);
+}
+
+/**
+ * Valor de uma linha digitado direto na página. Mantém quantidade e fator quando o preço
+ * unitário fecha o total ao centavo; senão a linha passa a ser cobrada como verba.
+ */
+export function definirTotalItem(i: Item, total: Centavos): Item {
+  const alvo = Math.max(0, total);
+  const mult = (Number(i.quantidade) || 0) * (i.fator && i.fator > 0 ? i.fator : 1);
+  if (mult > 0) {
+    const pu = Math.round(alvo / mult);
+    const n = { ...i, preco_unitario: reais(pu) };
+    if (paraCentavos(totalItem(n)) === alvo) return { ...n, total: totalItem(n) };
+  }
+  const n = { ...i, quantidade: 1, unidade: 'vb', fator: 1, complexidade: null, preco_unitario: reais(alvo) };
+  return { ...n, total: totalItem(n) };
+}
+
+/** Troca um item (por posição) e devolve o conteúdo com as parcelas e o pacote acompanhando o novo total. */
+export function mudarItem(c: Conteudo, ai: number, ii: number, f: (i: Item) => Item): Conteudo {
+  const depois: Conteudo = {
+    ...c,
+    ambientes: c.ambientes.map((a, x) => (x !== ai ? a : { ...a, itens: a.itens.map((i, y) => { if (y !== ii) return i; const n = f(i); return { ...n, total: totalItem(n) }; }) })),
+  };
+  return acompanharTotal(c, depois);
 }
