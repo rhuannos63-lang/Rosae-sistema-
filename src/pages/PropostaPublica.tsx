@@ -6,7 +6,7 @@ import { PropostaDocumento, type EmpresaPublica } from '../components/PropostaDo
 import { Carregando, Erro } from '../components/ui';
 import { formatar } from '../core/dinheiro';
 import { formatarData, formatarDataHora } from '../core/datas';
-import { normalizar, totalConteudo, type Conteudo } from '../core/proposta';
+import { normalizar, paginaOculta, totalConteudo, type Conteudo } from '../core/proposta';
 
 type Publica = {
   erro?: string; codigo: string; tipo: 'proposta' | 'aditivo'; titulo: string; versao: number; valor_total: string; conteudo: Partial<Conteudo>;
@@ -64,7 +64,8 @@ export function PropostaPublica() {
   }
   const c = normalizar(d.conteudo);
   const podeAceitar = d.atual && !d.vencida && d.estado !== 'aprovada';
-  const opcoes = (c.opcoes ?? []).filter((o) => o.valor > 0);
+  const opcoes = paginaOculta(c, 'pacotes') ? [] : (c.opcoes ?? []).filter((o) => o.valor > 0);
+  const escolhe = opcoes.length > 1 && d.estado !== 'aprovada' && d.atual;
   const principal = opcoes.find((o) => o.principal);
   const escolhida = opcoes.find((o) => o.nome === opcao) ?? principal;
   const outraOpcao = !!(escolhida && principal && escolhida.nome !== principal.nome);
@@ -92,25 +93,21 @@ export function PropostaPublica() {
       )}
       {resposta && <div className="aviso ok" style={{ margin: '0 0 12px' }}><span>{resposta}</span></div>}
 
-      <PropostaDocumento d={{ codigo: d.codigo, tipo: d.tipo, titulo: d.titulo, versao: d.versao, cliente: d.cliente, emitida_em: d.emitida_em, validade: d.validade, hash: d.hash, conteudo: c, empresa: d.empresa }} />
+      <PropostaDocumento
+        d={{ codigo: d.codigo, tipo: d.tipo, titulo: d.titulo, versao: d.versao, cliente: d.cliente, emitida_em: d.emitida_em, validade: d.validade, hash: d.hash, conteudo: c, empresa: d.empresa }}
+        escolha={escolhe ? { atual: escolhida?.nome ?? null, aoEscolher: setOpcao } : undefined}
+      />
 
       <div className="card resposta-cliente" id="resposta">
         <h2>Sua resposta</h2>
         <p className="muted" style={{ marginTop: 4 }}>Total desta versão: <b>{formatar(totalConteudo(c))}</b></p>
-        {opcoes.length > 1 && d.estado !== 'aprovada' && d.atual && (
-          <>
-            <p style={{ margin: '10px 0 0' }}><b>Qual pacote faz mais sentido para você?</b></p>
-            <div className="escolha-cliente" role="radiogroup" aria-label="Pacote">
-              {opcoes.map((o) => (
-                <button key={o.nome} type="button" role="radio" aria-checked={escolhida?.nome === o.nome} className={escolhida?.nome === o.nome ? 'ativo' : ''} onClick={() => setOpcao(o.nome)}>
-                  <b>{o.nome}{o.recomendado ? ' · mais escolhido' : ''}</b>
-                  <span className="num">{formatar(Math.round(o.valor * 100))}</span>
-                  <span className="muted small">{o.subtitulo}</span>
-                </button>
-              ))}
-            </div>
-            {outraOpcao && <p className="muted small" style={{ marginTop: -6 }}>Vamos preparar a versão com o pacote {escolhida!.nome} para você aprovar. É só confirmar abaixo.</p>}
-          </>
+        {escolhe && escolhida && (
+          <div className="pacote-escolhido">
+            <span className="muted small">Pacote escolhido</span>
+            <b>{escolhida.nome} · <span className="num">{formatar(Math.round(escolhida.valor * 100))}</span></b>
+            <button type="button" className="btn-link small" onClick={() => document.querySelector('.opcoes-doc')?.closest('.slide')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>Trocar de pacote</button>
+            {outraOpcao && <p className="muted small" style={{ margin: '4px 0 0', flexBasis: '100%' }}>Vamos preparar a versão com o pacote {escolhida.nome} para você aprovar. É só confirmar abaixo.</p>}
+          </div>
         )}
         {!acao ? (
           <div className="row">

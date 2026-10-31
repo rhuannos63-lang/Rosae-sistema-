@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
@@ -120,8 +120,8 @@ type Carga = {
 };
 
 const ABAS = [
-  ['auto', 'Orçamento automático'], ['geral', 'Apresentação'], ['escopo', 'Escopo e valores'], ['incluso', 'Incluso / não incluso'], ['resp', 'Responsabilidades'],
-  ['prazo', 'Etapas e prazo'], ['pagamento', 'Pagamento'], ['condicoes', 'Premissas'], ['custos', 'Custos internos'], ['revisao', 'Revisar e emitir'],
+  ['auto', 'Orçamento automático'], ['revisao', 'Editar na página e emitir'], ['geral', 'Apresentação'], ['escopo', 'Escopo e valores'], ['incluso', 'Incluso / não incluso'], ['resp', 'Responsabilidades'],
+  ['prazo', 'Etapas e prazo'], ['pagamento', 'Pagamento'], ['condicoes', 'Premissas'], ['custos', 'Custos internos'],
 ] as const;
 type Aba = (typeof ABAS)[number][0];
 
@@ -229,8 +229,9 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
   const [aba, setAba] = useState<Aba>(() => {
     const pedida = params.get('aba');
     if (pedida && ABAS.some(([k]) => k === pedida)) return pedida as Aba;
-    return c.ambientes.length ? 'escopo' : 'auto';
+    return c.ambientes.length ? 'revisao' : 'auto';
   });
+  const [modoPagina, setModoPagina] = useState<'editar' | 'cliente'>('editar');
   const [estadoSalvo, setEstadoSalvo] = useState<'salvo' | 'pendente' | 'salvando' | 'erro'>('salvo');
   const [erro, setErro] = useState<string | null>(null);
   const [custos, setCustos] = useState<Custo[]>([]);
@@ -300,7 +301,10 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
     <div className="editor-proposta">
       <nav className="abas" aria-label="Partes da proposta">
         {ABAS.filter(([k]) => k !== 'custos' || podeFinanceiro).map(([k, r], i) => (
-          <button key={k} className={aba === k ? 'ativo' : ''} onClick={() => setAba(k)}><span className="n">{i + 1}</span>{r}</button>
+          <Fragment key={k}>
+            {i === 2 && <span className="abas-grupo">Ajustes por formulário</span>}
+            <button className={`${aba === k ? 'ativo' : ''}${k === 'revisao' ? ' aba-principal' : ''}`} onClick={() => setAba(k)}><span className="n">{i + 1}</span>{r}</button>
+          </Fragment>
         ))}
         <div className="resumo-lateral">
           <div className="muted small">Total</div>
@@ -352,19 +356,26 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
             {pend.length ? (
               <div className="aviso"><Icone nome="alerta" /><div><b>Antes de emitir:</b><ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>{pend.map((x) => <li key={x}>{x}</li>)}</ul></div></div>
             ) : (
-              <div className="aviso ok"><Icone nome="check" /><span>Tudo certo para emitir. Confira a apresentação abaixo como o cliente vai ver.</span></div>
+              <div className="aviso ok"><Icone nome="check" /><span>Tudo certo para emitir.</span></div>
             )}
             {carga.empresa && !carga.empresa.registro && (
               <div className="aviso info"><span>O registro no CREA não aparece na proposta até ser conferido em Configurações → Empresa.</span></div>
             )}
-            <div className="row">
+            <div className="barra-pagina">
+              <div className="segmentado" role="group" aria-label="Modo da página">
+                <button className={modoPagina === 'editar' ? 'ativo' : ''} aria-pressed={modoPagina === 'editar'} onClick={() => setModoPagina('editar')}><Icone nome="editar" /> Editar na página</button>
+                <button className={modoPagina === 'cliente' ? 'ativo' : ''} aria-pressed={modoPagina === 'cliente'} onClick={() => setModoPagina('cliente')}><Icone nome="olho" /> Como o cliente vê</button>
+              </div>
+              <span className="spacer" />
+              <span className="muted small">{{ salvo: 'Tudo salvo', pendente: 'Salvando em instantes…', salvando: 'Salvando…', erro: 'Erro ao salvar' }[estadoSalvo]}</span>
               <button className="btn-primario" onClick={emitir} disabled={pend.length > 0}>Emitir versão {versao.numero}</button>
-              <span className="muted small">Quer mudar algo antes?</span>
-              <button className="btn-secundario" onClick={() => setAba('escopo')}><Icone nome="editar" /> Valores e itens</button>
-              <button className="btn-link" onClick={() => setAba('pagamento')}>Pagamento</button>
-              <button className="btn-link" onClick={() => setAba('prazo')}>Prazo</button>
             </div>
-            <PropostaDocumento d={doc} />
+            {modoPagina === 'editar' && (
+              <p className="dica-pagina"><Icone nome="ajuda" /> Clique em qualquer texto ou valor da folha para mudar. Enter confirma, Esc desfaz. Mudou um preço? As parcelas e o total acompanham. Para tirar uma página, use “Tirar esta página” em cima dela.</p>
+            )}
+            {modoPagina === 'editar'
+              ? <PropostaDocumento d={doc} edicao={{ mudar: (f) => setC((x) => f(x)) }} />
+              : <PropostaDocumento d={doc} />}
           </div>
         )}
       </div>
