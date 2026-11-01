@@ -54,7 +54,8 @@ export const MANUAL: Capitulo[] = [
     id: 'orcamento', titulo: 'Novo orçamento automático', icone: 'varinha', link: { para: '/orcamento', rotulo: 'Fazer um orçamento' },
     resumo: 'Responder poucas perguntas e receber o orçamento calculado, com três pacotes e a apresentação pronta.',
     passos: [
-      { titulo: 'Escolha o tipo de serviço', texto: 'Projeto estrutural, reforço, reforma, construção, gestão de obra ou perícia. Cada tipo tem perguntas próprias.' },
+      { titulo: 'Escolha um ou mais serviços', texto: 'Projeto estrutural, projeto arquitetônico, reforço, reforma, construção, regularização de imóveis, laudo ou perícia. Cada tipo tem perguntas próprias. Para juntar serviços na mesma proposta (por exemplo arquitetônico + estrutural + regularização), toque em todos eles: o primeiro marcado é o principal e um toque no marcado tira da proposta.' },
+      { titulo: 'Proposta com vários serviços', texto: 'Cada serviço vira um grupo do escopo, com as suas perguntas. Os pacotes somam o mesmo pacote de cada serviço (Essencial com Essencial, e assim por diante), as etapas seguem em sequência e o pagamento é calculado sobre o total. Prazo, deslocamento e pagamento são respondidos uma vez só, para a proposta inteira.' },
       { titulo: 'Informe o cliente', texto: 'Escolha “Já cadastrado” ou “Novo cliente”. Se vier de uma oportunidade do Comercial, o cliente já vem preenchido.' },
       { titulo: 'Responda as perguntas', texto: 'Área, complexidade, número de pavimentos, prazo desejado e o que o cliente pediu. O valor é recalculado na hora a cada resposta.' },
       { titulo: 'Compare os pacotes', texto: 'O sistema monta três opções (por exemplo Essencial, Completo e Premium) com o que cada uma inclui e não inclui. Confira a margem estimada antes de seguir.' },

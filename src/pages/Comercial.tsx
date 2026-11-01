@@ -434,7 +434,7 @@ function FormularioSite({ aoFechar }: { aoFechar: () => void }) {
   <input name="telefone" placeholder="WhatsApp">
   <input name="email" type="email" placeholder="E-mail">
   <select name="tipo_servico">
-    <option>Projeto estrutural</option><option>Reforço estrutural</option><option>Laudo / vistoria</option>
+    <option>Projeto estrutural</option><option>Projeto arquitetônico</option><option>Regularização de imóvel</option><option>Reforço estrutural</option><option>Laudo / vistoria</option>
     <option>Reforma</option><option>Construção</option><option>Gestão de obra</option>
   </select>
   <input name="local" placeholder="Bairro / cidade da obra">

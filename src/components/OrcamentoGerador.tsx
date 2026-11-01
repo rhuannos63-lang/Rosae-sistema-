@@ -1,4 +1,4 @@
-// Gerador do orçamento automático: tipo de serviço → perguntas → pacotes com preço ao vivo.
+// Gerador do orçamento automático: um ou mais serviços → perguntas → pacotes com preço ao vivo.
 // Usado na tela "Novo orçamento" e na aba "Orçamento automático" do editor de proposta.
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -7,23 +7,49 @@ import { formatar } from '../core/dinheiro';
 import { CampoValor } from './ui';
 import type { ValoresManuais } from '../core/proposta';
 import {
-  camposDe, DEFINICOES, gerarOrcamento, respostasPadrao, TIPOS,
-  type Campo, type Contexto, type Orcamento, type Pacote, type Respostas, type TipoServico,
+  CAMPOS_GERAIS, DEFINICOES, gerarOrcamentoServicos, respostasPadrao, TIPOS,
+  type Campo, type Contexto, type Orcamento, type Pacote, type Respostas, type Servico, type TipoServico,
 } from '../core/orcamento';
 import type { TabelaPrecos } from '../lib/orcamentoParametros';
 
 const reais = (v: number) => formatar(Math.round(v * 100));
-const SIGLA: Record<TipoServico, string> = { projeto_estrutural: 'PE', reforco: 'RE', reforma: 'RF', construcao: 'CO', laudo: 'LT', pericia: 'PT' };
+const SIGLA: Record<TipoServico, string> = { projeto_estrutural: 'PE', projeto_arquitetonico: 'PA', reforco: 'RE', reforma: 'RF', construcao: 'CO', regularizacao: 'RI', laudo: 'LT', pericia: 'PT' };
+const ehTipo = (t: string): t is TipoServico => (TIPOS as string[]).includes(t);
+const IDS_GERAIS = CAMPOS_GERAIS.map((c) => c.id);
 
-/** valores: o preço que você definiu para cada pacote, no lugar do calculado. */
-export type EstadoGerador = { tipo: TipoServico | null; respostas: Respostas; pacote: 1 | 2 | 3; valores?: ValoresManuais };
+/**
+ * tipo/respostas: o serviço principal (as respostas dele guardam também prazo, deslocamento e pagamento).
+ * extras: os outros serviços da mesma proposta. valores: o preço que você definiu para cada pacote.
+ */
+export type EstadoGerador = { tipo: TipoServico | null; respostas: Respostas; pacote: 1 | 2 | 3; valores?: ValoresManuais; extras?: Servico[] };
 
-export function estadoInicial(g?: { tipo: string; respostas: Respostas; pacote: number; valores?: ValoresManuais } | null): EstadoGerador {
-  if (g && (TIPOS as string[]).includes(g.tipo)) {
-    const tipo = g.tipo as TipoServico;
-    return { tipo, respostas: { ...respostasPadrao(tipo), ...g.respostas }, pacote: (Math.min(3, Math.max(1, g.pacote)) as 1 | 2 | 3), valores: g.valores ?? {} };
+type GeradorSalvo = { tipo: string; respostas: Respostas; pacote: number; valores?: ValoresManuais; extras?: { tipo: string; respostas: Respostas }[] };
+export function estadoInicial(g?: GeradorSalvo | null): EstadoGerador {
+  if (g && ehTipo(g.tipo)) {
+    const tipo = g.tipo;
+    const extras = (g.extras ?? []).filter((x) => ehTipo(x.tipo) && x.tipo !== tipo).map((x) => ({ tipo: x.tipo as TipoServico, respostas: { ...respostasPadrao(x.tipo as TipoServico), ...x.respostas } }));
+    return { tipo, respostas: { ...respostasPadrao(tipo), ...g.respostas }, pacote: (Math.min(3, Math.max(1, g.pacote)) as 1 | 2 | 3), valores: g.valores ?? {}, extras };
   }
   return { tipo: null, respostas: {}, pacote: 2 };
+}
+
+/** Todos os serviços do estado, o principal primeiro. */
+export function servicosDo(e: EstadoGerador): Servico[] {
+  return e.tipo ? [{ tipo: e.tipo, respostas: e.respostas }, ...(e.extras ?? [])] : [];
+}
+
+/** Liga ou desliga um serviço. O primeiro escolhido é o principal; tirar o principal promove o seguinte. */
+export function alternarServico(e: EstadoGerador, t: TipoServico): EstadoGerador {
+  const extras = e.extras ?? [];
+  const gerais = Object.fromEntries(IDS_GERAIS.filter((id) => id in e.respostas).map((id) => [id, e.respostas[id]]));
+  if (!e.tipo) return { tipo: t, respostas: respostasPadrao(t), pacote: 2, valores: {}, extras: [] };
+  if (t === e.tipo) {
+    if (!extras.length) return { tipo: null, respostas: {}, pacote: 2, valores: {}, extras: [] };
+    const [novo, ...resto] = extras;
+    return { ...e, tipo: novo.tipo, respostas: { ...novo.respostas, ...gerais }, extras: resto, valores: {} };
+  }
+  if (extras.some((x) => x.tipo === t)) return { ...e, extras: extras.filter((x) => x.tipo !== t), valores: {} };
+  return { ...e, extras: [...extras, { tipo: t, respostas: respostasPadrao(t) }], valores: {} };
 }
 
 export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFinanceiro, acao }: {
@@ -31,13 +57,16 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
   acao: (o: Orcamento) => React.ReactNode;
 }) {
   const { tipo, respostas, pacote, valores } = estado;
-  const orc = useMemo(() => (tipo ? gerarOrcamento(tipo, respostas, precos[tipo], pacote, { ...contexto, valores }) : null), [tipo, respostas, pacote, precos, contexto, valores]);
+  const servicos = useMemo(() => servicosDo(estado), [estado]);
+  const orc = useMemo(() => (servicos.length ? gerarOrcamentoServicos(servicos, precos, pacote, { ...contexto, valores }) : null), [servicos, pacote, precos, contexto, valores]);
   const [verLinhas, setVerLinhas] = useState(false);
+  const varios = servicos.length > 1;
 
-  function escolherTipo(t: TipoServico) {
-    setEstado({ tipo: t, respostas: respostasPadrao(t), pacote: 2, valores: {} });
-  }
-  const set = (id: string, v: Respostas[string]) => setEstado({ ...estado, respostas: { ...respostas, [id]: v } });
+  /** Muda uma resposta: do principal (k = 0, onde ficam também as condições gerais) ou de um serviço extra. */
+  const set = (k: number, id: string, v: Respostas[string]) => {
+    if (k === 0) return setEstado({ ...estado, respostas: { ...respostas, [id]: v } });
+    setEstado({ ...estado, extras: (estado.extras ?? []).map((x, i) => (i === k - 1 ? { ...x, respostas: { ...x.respostas, [id]: v } } : x)) });
+  };
   const definirValor = (k: 1 | 2 | 3, v: number | null) => {
     const n = { ...valores };
     if (v && v > 0) n[k] = v; else delete n[k];
@@ -46,31 +75,57 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
 
   return (
     <div className="gerador">
-      <div className="tipos-servico" role="radiogroup" aria-label="Tipo de serviço">
-        {TIPOS.map((t) => (
-          <button key={t} type="button" role="radio" aria-checked={tipo === t} className={`tipo-card${tipo === t ? ' ativo' : ''}`} onClick={() => escolherTipo(t)}>
-            <span className="tipo-sigla">{SIGLA[t]}</span>
-            <b>{DEFINICOES[t].nome}</b>
-            <span>{DEFINICOES[t].chamada}</span>
-          </button>
-        ))}
+      <p className="muted small gerador-dica">
+        {servicos.length ? 'Toque em outro serviço para incluir na mesma proposta, ou no marcado para tirar.' : 'Escolha o serviço. Pode marcar mais de um: todos entram na mesma proposta.'}
+      </p>
+      <div className="tipos-servico" role="group" aria-label="Serviços da proposta">
+        {TIPOS.map((t) => {
+          const pos = servicos.findIndex((x) => x.tipo === t);
+          return (
+            <button key={t} type="button" role="checkbox" aria-checked={pos >= 0} className={`tipo-card${pos >= 0 ? ' ativo' : ''}`} onClick={() => setEstado(alternarServico(estado, t))}>
+              <span className="tipo-sigla">{SIGLA[t]}</span>
+              {pos >= 0 && varios && <span className="tipo-ordem" aria-hidden="true">{pos + 1}</span>}
+              <b>{DEFINICOES[t].nome}</b>
+              <span>{DEFINICOES[t].chamada}</span>
+            </button>
+          );
+        })}
       </div>
 
       {tipo && orc && (
         <div className="gerador-corpo">
-          <div className="card gerador-perguntas">
-            <div className="card-titulo">
-              <div><h2>Dados do serviço</h2><div className="sub">O preço, o prazo e os textos se ajustam enquanto você preenche.</div></div>
-              <Link className="btn-link small" to={`/orcamento/precos?tipo=${tipo}`}>Ajustar tabela de preços</Link>
-            </div>
-            <div className="grid grid-2">
-              {camposDe(tipo).filter((c) => !c.se || c.se(respostas)).map((c) => <CampoGerador key={c.id} c={c} valor={respostas[c.id]} aoMudar={(v) => set(c.id, v)} />)}
+          <div className="stack gerador-perguntas-lista">
+            {servicos.map((sv, k) => (
+              <div className="card gerador-perguntas" key={sv.tipo}>
+                <div className="card-titulo">
+                  <div>
+                    <h2>{varios ? `${k + 1}. ${DEFINICOES[sv.tipo].nome}` : 'Dados do serviço'}</h2>
+                    <div className="sub">{k === 0 ? 'O preço, o prazo e os textos se ajustam enquanto você preenche.' : 'Entra na mesma proposta, como um grupo próprio do escopo.'}</div>
+                  </div>
+                  <div className="row" style={{ gap: 12 }}>
+                    <Link className="btn-link small" to={`/orcamento/precos?tipo=${sv.tipo}`}>Ajustar tabela de preços</Link>
+                    {varios && <button type="button" className="btn-link small" onClick={() => setEstado(alternarServico(estado, sv.tipo))}>Tirar da proposta</button>}
+                  </div>
+                </div>
+                <div className="grid grid-2">
+                  {DEFINICOES[sv.tipo].campos.filter((c) => !c.se || c.se(sv.respostas)).map((c) => <CampoGerador key={c.id} c={c} valor={sv.respostas[c.id]} aoMudar={(v) => set(k, c.id, v)} />)}
+                </div>
+              </div>
+            ))}
+            <div className="card gerador-perguntas">
+              <div className="card-titulo">
+                <div><h2>Prazo, deslocamento e pagamento</h2><div className="sub">{varios ? 'Valem para a proposta inteira.' : 'Condições da proposta.'}</div></div>
+              </div>
+              <div className="grid grid-2">
+                {CAMPOS_GERAIS.filter((c) => !c.se || c.se(respostas)).map((c) => <CampoGerador key={c.id} c={c} valor={respostas[c.id]} aoMudar={(v) => set(0, c.id, v)} />)}
+              </div>
             </div>
           </div>
 
           <aside className="gerador-lateral">
             <div className="card">
               <h2 style={{ marginBottom: 10 }}>{orc.pacotes.length > 1 ? 'Escolha o pacote da proposta' : 'Honorários'}</h2>
+              {varios && <p className="muted small" style={{ margin: '-4px 0 10px' }}>{servicos.length} serviços somados: cada pacote junta o mesmo pacote de cada serviço.</p>}
               <div className="pacotes-escolha">
                 {orc.pacotes.map((p) => (
                   <button key={p.numero} type="button" className={`pacote-card${orc.principal.numero === p.numero ? ' ativo' : ''}`} onClick={() => setEstado({ ...estado, pacote: p.numero })}>
@@ -103,7 +158,7 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
               {verLinhas && (
                 <table className="tabela" style={{ marginTop: 6 }}>
                   <tbody>
-                    {orc.principal.linhas.map((l, k) => <tr key={k}><td className="small">{l.titulo}</td><td className="right num small">{reais(l.valor)}</td></tr>)}
+                    {orc.principal.linhas.map((l, k) => <tr key={k}><td className="small">{varios ? <span className="muted">{DEFINICOES[orc.tipos[l.servico ?? 0]].nome} · </span> : null}{l.titulo}</td><td className="right num small">{reais(l.valor)}</td></tr>)}
                     <tr className="total"><td>Total</td><td className="right num">{reais(orc.principal.valor)}</td></tr>
                   </tbody>
                 </table>
