@@ -7,6 +7,7 @@ import { useConsulta, ok } from '../lib/consulta';
 import { Topo } from '../components/Layout';
 import { Ajuda, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import { doBanco, formatar, paraBanco, somar } from '../core/dinheiro';
 import { formatarData, hoje } from '../core/datas';
 import { lerNfe, notaDaLeitura, type LeituraIa, type NotaLida } from '../core/nfe';
@@ -325,6 +326,7 @@ export function NotaDetalhe() {
     <>
       <Topo titulo={`${nota.emitente_nome ?? 'Nota'} · nº ${nota.numero ?? 's/n'}`} sub={<span className={`selo ${ESTADO[nota.estado][1]}`}>{ESTADO[nota.estado][0]}</span>}>
         <Link className="btn-secundario" to="/notas"><Icone nome="voltar" /> Notas</Link>
+        <BotaoExcluir tabela="nota_fiscal" id={nota.id} nome={`Nota ${nota.numero ?? 's/n'} de ${nota.emitente_nome ?? 'fornecedor'}`} aoExcluir={() => { window.location.href = '/notas'; }} />
       </Topo>
       <div className="grid grid-2">
         <div className="card">

@@ -21,7 +21,8 @@ export const MANUAL: Capitulo[] = [
       { titulo: 'Conheça os departamentos', texto: 'O sistema é organizado como uma empresa, em quatro departamentos: Comercial e Orçamentos, Gestão de Obras, Financeiro e Empresa e Sistema. Cada um é uma pasta: ao entrar, você vê os números do setor, as subpastas, o que precisa de atenção e como ele se liga aos outros. No computador, toque na setinha ao lado da pasta no menu para abrir as subpastas. No celular, os departamentos ficam na barra de baixo e tudo aparece em “Mais”.' },
       { titulo: 'Siga a trilha no topo', texto: 'Em cada tela, a linha no alto mostra onde você está (por exemplo, Financeiro › Notas fiscais) e as outras subpastas do mesmo departamento, para trocar com um toque.' },
       { titulo: 'Use a busca rápida', texto: 'Aperte Ctrl + K (no Mac, ⌘ + K) ou toque na lupa para ir direto a qualquer tela, obra, cliente ou proposta digitando o nome.' },
-      { titulo: 'Deixe com a sua cara', texto: 'Em Empresa e Sistema → Aparência você escolhe a cor principal, o estilo do menu, o fundo, os cantos e o tamanho do texto. A escolha vale no celular e no computador.' },
+      { titulo: 'Deixe com a sua cara', texto: 'Em Empresa e Sistema → Aparência você escolhe uma das 14 paletas (Verdes, Azuis, Neutros e Quentes). O sistema inteiro muda em harmonia: botões, menu, cartões de destaque e as cores dos gráficos. Também dá para escolher o estilo do menu, o fundo, os cantos e o tamanho do texto.' },
+      { titulo: 'Toque em “Como funciona”', texto: 'Toda página e todo departamento têm o botão “Como funciona”, no alto. Ele explica para que serve a tela, mostra o passo a passo e, em “Mostrar na tela”, acende cada botão explicado, um de cada vez.' },
     ],
     dicas: ['Os pontos de interrogação ao lado dos campos explicam cada número e cada regra.', 'Cada número do Início é clicável e abre os registros que o explicam.'],
   },
@@ -69,6 +70,8 @@ export const MANUAL: Capitulo[] = [
     passos: [
       { titulo: 'Edite direto na página', texto: 'Abra “Editar na página e emitir”: a proposta aparece como o cliente vai receber, folha por folha. Clique em qualquer texto ou valor para mudar; Enter confirma e Esc desfaz. Nas listas (incluso, não incluso, premissas, destaques dos pacotes), passe o mouse para tirar uma linha no × ou use “+ Adicionar”. Mudou o valor de uma linha ou o total? As parcelas e o pacote acompanham. Tudo salva sozinho.' },
       { titulo: 'Tire as páginas que não quer', texto: 'Em cima de cada folha aparece “Tirar esta página”. Dá para tirar resumo, entendimento, entregáveis, responsabilidades, método, cronograma, escolha do pacote, “Por que a ROSAE” e perguntas frequentes. Capa, escopo, incluso, investimento, pagamento, condições e aceite são obrigatórias. “Mostrar de novo” devolve a página.' },
+      { titulo: 'Confira a força da proposta', texto: 'Acima da folha, “Força da proposta” dá uma nota de 0 a 10 e lista os gatilhos de decisão que faltam: resumo do resultado, três pacotes com um recomendado, parcelamento junto do preço, compromissos (preço fechado, ART, prazo), depoimentos de clientes, perguntas frequentes e validade curta. Cada item tem a dica do que fazer.' },
+      { titulo: 'Use os gatilhos que já vêm prontos', texto: 'Os pacotes mostram o valor por m² e “em até N parcelas”. A página “Nossos compromissos” vem sugerida pelo tipo de serviço (edite à vontade). Na página “Quem já confiou”, adicione depoimentos no formato “texto” — Nome, cidade; sem depoimento, ela não aparece para o cliente. O aceite mostra a validade e, no link do cliente, quantos dias faltam.' },
       { titulo: 'Tudo dentro da folha', texto: 'Se uma folha tiver muito texto, a letra diminui um pouco sozinha para caber, inclusive no PDF. Se mesmo assim não couber, a folha mostra o aviso “Texto demais para esta folha”: encurte o texto. Quando há muitas parcelas, o pagamento ganha uma página própria.' },
       { titulo: 'Use os formulários quando preferir', texto: 'As abas em “Ajustes por formulário” continuam: apresentação, escopo por ambiente e serviço, incluso, responsabilidades, prazo, pagamento, premissas e custos internos (que nunca aparecem para o cliente).' },
       { titulo: 'Mude valores e insira itens', texto: 'Na aba “Escopo e valores”, mude quantidade e preço de cada item, insira um serviço da biblioteca ou um item livre, ou toque em “Mudar o valor total” para digitar o novo total: a diferença é repartida entre os itens. As parcelas, o pacote na comparação e o valor à vista acompanham sozinhos.' },
@@ -162,6 +165,16 @@ export const MANUAL: Capitulo[] = [
       { titulo: 'Faça backup', texto: 'Na aba Exportar e backup, baixe todos os dados em planilha (CSV) ou JSON. Há também backup automático.' },
       { titulo: 'Consulte o histórico', texto: 'A aba Histórico mostra quem alterou o quê e quando.' },
     ],
+  },
+  {
+    id: 'lixeira', titulo: 'Excluir e restaurar (lixeira)', icone: 'lixeira', link: { para: '/lixeira', rotulo: 'Abrir a lixeira' },
+    resumo: 'O administrador pode excluir qualquer cadastro. Antes, o sistema mostra tudo o que vai junto; depois, dá para restaurar.',
+    passos: [
+      { titulo: 'Abra o que quer excluir', texto: 'Obra, proposta, oportunidade, cliente, lançamento, nota fiscal, conta bancária, material, foto ou serviço da biblioteca: o botão Excluir fica no alto da tela ou no rodapé da janela de edição.' },
+      { titulo: 'Confira o que sai junto', texto: 'O sistema lista os registros ligados (por exemplo: 12 etapas, 40 fotos, 3 parcelas). Quando sai mais de um registro, marque a confirmação.' },
+      { titulo: 'Restaure se precisar', texto: 'Tudo vai para Empresa e Sistema → Lixeira, com os dados completos. Restaurar devolve o registro e tudo o que saiu junto, com as ligações.' },
+    ],
+    atencao: ['Excluir um cliente leva junto as propostas, obras e contas dele. Para só esconder, use Arquivar.', 'Pedido de exclusão de dados pessoais (LGPD) é pela anonimização, no cadastro da pessoa.'],
   },
   {
     id: 'privacidade', titulo: 'Privacidade e guarda dos dados', icone: 'cadeado',

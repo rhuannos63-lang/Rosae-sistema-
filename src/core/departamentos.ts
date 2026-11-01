@@ -66,6 +66,7 @@ export const DEPARTAMENTOS: Departamento[] = [
       { para: '/assistente', rotulo: 'Assistente IA', icone: 'varinha', descricao: 'Converse para consultar e lançar dados, aqui ou pelo WhatsApp.' },
       { para: '/pessoas', rotulo: 'Cadastros', icone: 'pessoas', descricao: 'Clientes, parceiros, prestadores e fornecedores.' },
       { para: '/configuracoes', rotulo: 'Configurações', icone: 'config', descricao: 'Dados da ROSAE, usuários e permissões.', acesso: 'admin' },
+      { para: '/lixeira', rotulo: 'Lixeira', icone: 'lixeira', descricao: 'O que foi excluído, para restaurar com um toque.', acesso: 'admin' },
       { para: '/aparencia', rotulo: 'Aparência', icone: 'paleta', descricao: 'Cores, menu, modo escuro e tamanho do texto.' },
       { para: '/manual', rotulo: 'Manual', icone: 'livro', descricao: 'Passo a passo de cada parte do sistema.' },
       { para: '/ajuda', rotulo: 'Ajuda rápida', icone: 'ajuda', descricao: 'Respostas curtas por tarefa.' },

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
-import { useConsulta, ok } from '../lib/consulta';
+import { useConsulta, ok, todas } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import { doBanco, formatar, paraBanco, type Centavos } from '../core/dinheiro';
 import { formatarData } from '../core/datas';
 import { MODELO_CONTRATACAO, SITUACAO, STATUS_OBRA, TIPOS_SERVICO, type Obra, type ObraFinanceiro, type Pessoa, type StatusObra, type VParcela } from '../lib/tipos';
@@ -35,7 +36,7 @@ export function Obras() {
   const [nova, setNova] = useState(false);
   const navegar = useNavigate();
   const { dados, erro, carregando } = useConsulta(async () => {
-    const obras = ok(await supabase.from('obra').select('*, cliente:pessoa(nome)').order('criado_em', { ascending: false })) as Obra[];
+    const obras = await todas<Obra>((de, ate) => supabase.from('obra').select('*, cliente:pessoa(nome)').order('criado_em', { ascending: false }).order('id').range(de, ate));
     const fin = podeFinanceiro ? (ok(await supabase.from('obra_financeiro').select('*')) as ObraFinanceiro[]) : [];
     return { obras, fin: new Map(fin.map((f) => [f.obra_id, f])) };
   }, [podeFinanceiro]);
@@ -305,6 +306,7 @@ export function ObraDetalhe() {
         <button className="btn-secundario" onClick={() => navegar('/obras')}><Icone nome="voltar" /> Obras</button>
         {ehAdm && <a className="btn-secundario" href={`/obras/${obra.id}/relatorio`} target="_blank" rel="noreferrer"><Icone nome="imprimir" /> Relatório</a>}
         {ehAdm && <button className="btn-secundario" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar</button>}
+        <BotaoExcluir tabela="obra" id={obra.id} nome={obra.nome} aoExcluir={() => navegar('/obras')} />
       </Topo>
 
       <nav className="abas-obra" aria-label="Seções da obra">

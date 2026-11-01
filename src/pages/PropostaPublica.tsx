@@ -5,8 +5,8 @@ import { supabase, mensagemErro } from '../lib/supabase';
 import { PropostaDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
 import { Carregando, Erro } from '../components/ui';
 import { formatar } from '../core/dinheiro';
-import { formatarData, formatarDataHora } from '../core/datas';
-import { normalizar, paginaOculta, totalConteudo, type Conteudo } from '../core/proposta';
+import { formatarData, formatarDataHora, hoje } from '../core/datas';
+import { normalizar, paginaOculta, textoParcelamento, totalConteudo, type Conteudo } from '../core/proposta';
 
 type Publica = {
   erro?: string; codigo: string; tipo: 'proposta' | 'aditivo'; titulo: string; versao: number; valor_total: string; conteudo: Partial<Conteudo>;
@@ -69,6 +69,11 @@ export function PropostaPublica() {
   const principal = opcoes.find((o) => o.principal);
   const escolhida = opcoes.find((o) => o.nome === opcao) ?? principal;
   const outraOpcao = !!(escolhida && principal && escolhida.nome !== principal.nome);
+  const faltam = d.validade ? Math.round((Date.parse(d.validade.slice(0, 10)) - Date.parse(hoje())) / 86400000) : null;
+  const validadeTxt = d.validade && faltam !== null && faltam >= 0
+    ? `Válida até ${formatarData(d.validade)} · ${faltam === 0 ? 'último dia' : faltam === 1 ? 'falta 1 dia' : `faltam ${faltam} dias`}`
+    : null;
+  const parcelamento = textoParcelamento(c);
   const tel = (d.empresa?.telefone ?? '').replace(/\D/g, '');
   const whats = tel ? `https://wa.me/${tel.length <= 11 ? `55${tel}` : tel}?text=${encodeURIComponent(`Olá! Vi a proposta ${d.codigo} (${d.titulo}) e tenho uma dúvida.`)}` : null;
   function abrir(a: 'aceitar' | 'ajuste' | 'recusar') {
@@ -100,7 +105,8 @@ export function PropostaPublica() {
 
       <div className="card resposta-cliente" id="resposta">
         <h2>Sua resposta</h2>
-        <p className="muted" style={{ marginTop: 4 }}>Total desta versão: <b>{formatar(totalConteudo(c))}</b></p>
+        <p className="muted" style={{ marginTop: 4 }}>Total desta versão: <b>{formatar(totalConteudo(c))}</b>{parcelamento && ` · ${parcelamento}`}</p>
+        {podeAceitar && validadeTxt && <p className="validade-chip"><span aria-hidden="true">◷</span> {validadeTxt}. Com o aceite dentro da validade, os valores e a data de início ficam garantidos.</p>}
         {escolhe && escolhida && (
           <div className="pacote-escolhido">
             <span className="muted small">Pacote escolhido</span>
@@ -148,7 +154,7 @@ export function PropostaPublica() {
       </div>
       {podeAceitar && !acao && (
         <div className="cta-fixa">
-          <span className="cta-total"><span className="muted small">{escolhida ? `Pacote ${escolhida.nome}` : 'Total'}</span><b className="num">{formatar(escolhida ? Math.round(escolhida.valor * 100) : totalConteudo(c))}</b></span>
+          <span className="cta-total"><span className="muted small">{escolhida ? `Pacote ${escolhida.nome}` : 'Total'}{validadeTxt ? ` · ${validadeTxt.replace('Válida até', 'válida até')}` : ''}</span><b className="num">{formatar(escolhida ? Math.round(escolhida.valor * 100) : totalConteudo(c))}</b></span>
           {whats && <a className="btn-secundario" href={whats} target="_blank" rel="noopener noreferrer">Tirar dúvida</a>}
           <button className="btn-primario" onClick={() => abrir('aceitar')}>{outraOpcao ? 'Quero este pacote' : 'Aceitar proposta'}</button>
         </div>

@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { useDepartamentos } from '../components/Layout';
 import { Icone } from '../components/Icone';
+import { ComoFunciona } from '../components/ComoFunciona';
 import { doBanco, formatar } from '../core/dinheiro';
 import { formatarData, hoje } from '../core/datas';
 import { DEPARTAMENTO_POR_ID, type Departamento as Dep } from '../core/departamentos';
@@ -90,6 +91,7 @@ export function Departamento() {
           <h1>{dep.nome}</h1>
           <p className="dep-resumo">{dep.resumo}</p>
         </div>
+        <div className="dep-como"><ComoFunciona /></div>
       </header>
 
       <section className="dep-numeros" aria-busy={carregando && !resumo}>

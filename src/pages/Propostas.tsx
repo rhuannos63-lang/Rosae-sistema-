@@ -1,11 +1,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
-import { useConsulta, ok } from '../lib/consulta';
+import { useConsulta, ok, todas } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import { PropostaDocumento, type DadosDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
 import { doBanco, formatar, paraBanco, somar, type Centavos } from '../core/dinheiro';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
@@ -13,6 +14,7 @@ import {
   acompanharTotal, ajustarTotal, aplicarModelos, compararVersoes, parcelasAoTotal, itemDoModelo, normalizar, novoId, paraCentavos, pendencias, prepararParaSalvar, rascunhoDoTexto,
   somaParcelas, sugerirPagamento, totalAmbiente, totalConteudo, totalItem, UNIDADES,
   type Ambiente, type Conteudo, type Item, type ModeloServico,
+  forcaDaProposta,
 } from '../core/proposta';
 import { ESTADO_PROPOSTA, EVENTO_PROPOSTA, type EstadoProposta, type Proposta, type PropostaEvento, type PropostaVersao } from '../lib/tipos';
 import { linkWhatsApp } from './Comercial';
@@ -29,7 +31,7 @@ export function Propostas() {
   const [filtro, setFiltro] = useState<'ativas' | EstadoProposta | 'todas'>(params.get('estado') === 'aprovada' ? 'aprovada' : 'ativas');
   const { dados, erro, carregando } = useConsulta(async () => {
     const [p, ev] = await Promise.all([
-      supabase.from('proposta').select('*, pessoa:pessoa(nome, telefone, email), versoes:proposta_versao!proposta_versao_proposta_id_fkey(id, numero, valor_total, emitida, validade)').order('atualizado_em', { ascending: false }),
+      todas((de, ate) => supabase.from('proposta').select('*, pessoa:pessoa(nome, telefone, email), versoes:proposta_versao!proposta_versao_proposta_id_fkey(id, numero, valor_total, emitida, validade)').order('atualizado_em', { ascending: false }).order('id').range(de, ate)).then((data) => ({ data, error: null })),
       supabase.from('proposta_evento').select('proposta_id, em').eq('tipo', 'visualizada').order('em', { ascending: false }).limit(2000),
     ]);
     const vistas = new Map<string, { n: number; ultima: string }>();
@@ -178,6 +180,7 @@ export function PropostaEditor() {
       <Topo titulo={p.titulo} sub={<>{p.codigo} · {p.pessoa?.nome} · <span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span></>}>
         <button className="btn-secundario" onClick={() => (p.oportunidade_id ? navegar(`/comercial/${p.oportunidade_id}`) : navegar('/propostas'))}><Icone nome="voltar" /> Voltar</button>
         <button className="btn-secundario" onClick={duplicar}>Duplicar</button>
+        <BotaoExcluir tabela="proposta" id={p.id} nome={p.titulo} aoExcluir={() => navegar('/propostas')} />
       </Topo>
       <div className="row versoes" style={{ marginBottom: 14 }}>
         <span className="muted small">Versões:</span>
@@ -373,6 +376,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
             {modoPagina === 'editar' && (
               <p className="dica-pagina"><Icone nome="ajuda" /> Clique em qualquer texto ou valor da folha para mudar. Enter confirma, Esc desfaz. Mudou um preço? As parcelas e o total acompanham. Para tirar uma página, use “Tirar esta página” em cima dela.</p>
             )}
+            {modoPagina === 'editar' && <ForcaProposta c={c} />}
             {modoPagina === 'editar'
               ? <PropostaDocumento d={doc} edicao={{ mudar: (f) => setC((x) => f(x)) }} />
               : <PropostaDocumento d={doc} />}
@@ -899,5 +903,28 @@ export function PropostaImprimir() {
         validade: v.validade, hash: v.hash, conteudo: normalizar(v.conteudo as Partial<Conteudo>), empresa: dados.empresa, rascunho: !v.emitida,
       }} />
     </div>
+  );
+}
+
+/** Confere os elementos que mais convencem o cliente e mostra o que falta, com a dica de cada um. */
+function ForcaProposta({ c }: { c: Conteudo }) {
+  const { nota, itens } = useMemo(() => forcaDaProposta(c), [c]);
+  const faltam = itens.filter((i) => !i.ok);
+  return (
+    <details className="forca-proposta card">
+      <summary>
+        <span className={`forca-nota${nota >= 8 ? ' alta' : nota >= 5 ? ' media' : ''}`}><b>{nota}</b>/10</span>
+        <span><b>Força da proposta</b><span className="muted small"> · {faltam.length ? `${faltam.length} ${faltam.length === 1 ? 'ponto' : 'pontos'} para convencer ainda mais` : 'todos os gatilhos de decisão presentes'}</span></span>
+        <Icone nome="chevron" />
+      </summary>
+      <ul>
+        {itens.map((i) => (
+          <li key={i.titulo} className={i.ok ? 'ok' : ''}>
+            <span className="forca-marca" aria-hidden="true">{i.ok ? '✓' : '○'}</span>
+            <span><b>{i.titulo}</b>{!i.ok && <span className="muted small"> {i.dica}</span>}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

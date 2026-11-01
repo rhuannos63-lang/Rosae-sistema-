@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { supabase, supabaseUrl, supabaseChave, mensagemErro } from '../lib/supabase';
-import { useConsulta, ok } from '../lib/consulta';
+import { useConsulta, ok, todas } from '../lib/consulta';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import { doBanco, paraBanco, type Centavos } from '../core/dinheiro';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
 import {
@@ -48,7 +49,7 @@ export function Comercial() {
   const { dados, erro, carregando, recarregar } = useConsulta(async () => {
     const [e, o] = await Promise.all([
       supabase.from('estado_funil').select('*').eq('ativo', true).order('ordem'),
-      supabase.from('oportunidade').select(SELECT_OP).eq('arquivado', false).order('atualizado_em', { ascending: false }),
+      todas((de, ate) => supabase.from('oportunidade').select(SELECT_OP).eq('arquivado', false).order('atualizado_em', { ascending: false }).order('id').range(de, ate)).then((data) => ({ data, error: null })),
     ]);
     return { estados: ok(e) as EstadoFunil[], ops: ok(o) as Oportunidade[] };
   }, []);
@@ -170,7 +171,7 @@ export function OportunidadeForm({ estados, op, aoFechar, aoSalvar }: { estados:
   const [novaPessoa, setNovaPessoa] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
-  const pessoas = useConsulta(async () => ok(await supabase.from('pessoa').select('id, nome, telefone, codigo').eq('arquivado', false).order('nome')) as Pessoa[], []);
+  const pessoas = useConsulta(async () => (await todas((de, ate) => supabase.from('pessoa').select('id, nome, telefone, codigo').eq('arquivado', false).order('nome').order('id').range(de, ate))) as Pessoa[], []);
   const set = <K extends keyof typeof opVazia>(k: K, v: (typeof opVazia)[K]) => setF((x) => ({ ...x, [k]: v }));
 
   async function salvar(e: React.FormEvent) {
@@ -334,6 +335,7 @@ export function OportunidadeDetalhe() {
         <button className="btn-secundario" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar</button>
         <Link className="btn-primario" to={`/orcamento?oportunidade=${op.id}`}><Icone nome="varinha" /> Orçamento automático</Link>
         <button className="btn-secundario" onClick={novaProposta}><Icone nome="mais" /> Proposta em branco</button>
+        <BotaoExcluir tabela="oportunidade" id={op.id} nome={op.titulo} aoExcluir={() => navegar('/comercial')} />
       </Topo>
       <Erro mensagem={erro} />
       <div className="grid grid-2">

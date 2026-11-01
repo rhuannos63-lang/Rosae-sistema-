@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
-import { useConsulta, ok } from '../lib/consulta';
+import { useConsulta, ok, todas, useAosPoucos } from '../lib/consulta';
 import { Topo } from '../components/Layout';
 import { Carregando, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import type { Pessoa } from '../lib/tipos';
 import { useAuth } from '../auth/AuthProvider';
 import { HistoricoParceiro } from './ObraFinanceiro';
@@ -24,7 +25,7 @@ export function Pessoas() {
   const [mesclar, setMesclar] = useState<{ a?: string; b?: string } | null>(null);
   const { ehAdmin } = useAuth();
   const { dados, erro, carregando, recarregar } = useConsulta(
-    async () => ok(await supabase.from('pessoa').select('*').order('nome')) as Pessoa[],
+    async () => todas<Pessoa>((de, ate) => supabase.from('pessoa').select('*').order('nome').order('id').range(de, ate)),
     [],
   );
   const duplicados = useConsulta(async () => (ehAdmin ? ok(await supabase.rpc('pessoas_duplicadas')) as Duplicado[] : []), [ehAdmin, dados]);
@@ -40,6 +41,7 @@ export function Pessoas() {
       return [p.nome, p.email, p.telefone, p.documento, p.codigo, p.especialidade].some((v) => v?.toLowerCase().includes(b));
     });
   }, [dados, filtro, busca]);
+  const { visiveis, resta, mais } = useAosPoucos(lista);
 
   return (
     <>
@@ -90,7 +92,7 @@ export function Pessoas() {
                   <tr><th>Nome</th><th>Papéis</th><th>Telefone</th><th>E-mail</th><th>Código</th></tr>
                 </thead>
                 <tbody>
-                  {lista.map((p) => (
+                  {visiveis.map((p) => (
                     <tr key={p.id} className="clicavel" onClick={() => setEditando(p)}>
                       <td><b>{p.nome}</b>{p.especialidade && <div className="muted small">{p.especialidade}</div>}</td>
                       <td>{papeis(p).map((r) => <span key={r} className="selo" style={{ marginRight: 4 }}>{r}</span>)}</td>
@@ -101,9 +103,10 @@ export function Pessoas() {
                   ))}
                 </tbody>
               </table>
+              {resta > 0 && <button type="button" className="btn-secundario mostrar-mais" onClick={mais}>Mostrar mais {Math.min(resta, 240)} de {resta}</button>}
             </div>
             <div className="lista-cartoes">
-              {lista.map((p) => (
+              {visiveis.map((p) => (
                 <button key={p.id} className="item-cartao" style={{ textAlign: 'left', fontWeight: 400 }} onClick={() => setEditando(p)}>
                   <div>
                     <div className="titulo">{p.nome}</div>
@@ -111,6 +114,7 @@ export function Pessoas() {
                   </div>
                 </button>
               ))}
+              {resta > 0 && <button type="button" className="btn-secundario mostrar-mais" onClick={mais}>Mostrar mais {Math.min(resta, 240)} de {resta}</button>}
             </div>
           </>
         )}
@@ -120,6 +124,7 @@ export function Pessoas() {
           pessoa={editando === 'nova' ? null : editando}
           aoFechar={() => setEditando(null)}
           aoSalvar={() => { setEditando(null); recarregar(); }}
+          aoExcluir={() => { setEditando(null); recarregar(); }}
         />
       )}
       {mesclar && dados && <MesclarPessoas pessoas={dados} inicial={mesclar} aoFechar={() => setMesclar(null)} aoMesclar={() => { setMesclar(null); recarregar(); }} />}
@@ -189,7 +194,7 @@ const vazia = {
   eh_prestador: false, especialidade: '', chave_pix: '', endereco: '', observacoes: '', arquivado: false,
 };
 
-export function PessoaForm({ pessoa, aoFechar, aoSalvar, padrao }: { pessoa: Pessoa | null; aoFechar: () => void; aoSalvar: (p: Pessoa) => void; padrao?: Partial<typeof vazia> }) {
+export function PessoaForm({ pessoa, aoFechar, aoSalvar, aoExcluir, padrao }: { pessoa: Pessoa | null; aoFechar: () => void; aoSalvar: (p: Pessoa) => void; aoExcluir?: () => void; padrao?: Partial<typeof vazia> }) {
   const toast = useToast();
   const { podeFinanceiro, ehAdmin } = useAuth();
   const [f, setF] = useState(() => (pessoa ? { ...vazia, ...Object.fromEntries(Object.entries(pessoa).map(([k, v]) => [k, v ?? ''])) } : { ...vazia, ...padrao }) as typeof vazia);
@@ -280,6 +285,9 @@ export function PessoaForm({ pessoa, aoFechar, aoSalvar, padrao }: { pessoa: Pes
               aoSalvar({ ...pessoa, nome: 'Cadastro anonimizado' });
             }}>Anonimizar cadastro</button>
           </details>
+        )}
+        {pessoa && aoExcluir && (
+          <div className="zona-excluir"><span className="muted small">Cadastro criado por engano ou repetido? Excluir tira o cadastro e tudo ligado a ele (fica na lixeira para restaurar).</span><BotaoExcluir tabela="pessoa" id={pessoa.id} nome={pessoa.nome} aoExcluir={aoExcluir} /></div>
         )}
         {f.eh_prestador && (
           <label className="campo">

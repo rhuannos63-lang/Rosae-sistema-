@@ -4,8 +4,8 @@ import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } fr
 import { formatar, lerDigitado } from '../core/dinheiro';
 import { formatarData } from '../core/datas';
 import {
-  ajustarTotal, alternarPagina, definirTotalItem, mudarItem, paginaOculta, paraCentavos, totalAmbiente, totalConteudo, totalItem,
-  PAGINAS_OPCIONAIS, UNIDADES, type Conteudo, type Item,
+  ajustarTotal, alternarPagina, areaDaProposta, compromissosPadrao, definirTotalItem, mudarItem, paginaOculta, paraCentavos, textoParcelamento,
+  totalAmbiente, totalConteudo, totalItem, valorPorMetro, PAGINAS_OPCIONAIS, UNIDADES, type Conteudo, type Item,
 } from '../core/proposta';
 
 export type EmpresaPublica = {
@@ -227,7 +227,7 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
         <div className="resumo-exec">
           <T tag="p" className="resumo-frase" v={c.resumo ?? ''} set={set('resumo')} multi ph="Em duas ou três frases: o que você vai fazer e o que o cliente ganha" />
           <div className="resumo-cartoes">
-            <div><span>Investimento</span><b className="num">{formatar(total)}</b>{principal && <small>pacote {principal.nome}</small>}</div>
+            <div><span>Investimento</span><b className="num">{formatar(total)}</b><small>{[principal && `pacote ${principal.nome}`, textoParcelamento(c)].filter(Boolean).join(' · ')}</small></div>
             <div><span>Prazo</span><b>{c.prazo_total_dias ? `${c.prazo_total_dias} dias` : '—'}</b><small>{c.etapas.length} etapas</small></div>
             <div><span>Você recebe</span><b>{(c.entregaveis ?? []).length || c.inclusoes.length}</b><small>{(c.entregaveis ?? []).length ? 'entregáveis' : 'itens inclusos'}</small></div>
             <div><span>Responsável técnico</span><b className="resumo-nome">{d.empresa?.responsavel ?? 'Engenheiro ROSAE'}</b><small>com ART</small></div>
@@ -412,6 +412,8 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
     ),
   });
 
+  const area = areaDaProposta(c);
+  const parcelamento = textoParcelamento(c);
   const opcoes = (c.opcoes ?? []).filter((o) => o.valor > 0);
   if (opcoes.length > 1) {
     const idx = (nome: string) => (c.opcoes ?? []).findIndex((o) => o.nome === nome);
@@ -430,6 +432,7 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
                 <T tag="h3" v={o.nome} set={setO(o.nome, 'nome')} ph="Nome do pacote" />
                 <T tag="p" className="opcao-sub" v={o.subtitulo} set={setO(o.nome, 'subtitulo')} ph="Para quem é" />
                 <V tag="p" className="opcao-valor num" v={o.valor} set={o.principal ? (cent) => mudar((x) => ajustarTotal(x, cent)) : (cent) => mudar((x) => ({ ...x, opcoes: (x.opcoes ?? []).map((z, j) => (j === idx(o.nome) ? { ...z, valor: cent / 100 } : z)) }))} />
+                {(valorPorMetro(Math.round(o.valor * 100), area) || parcelamento) && <p className="opcao-ref">{[valorPorMetro(Math.round(o.valor * 100), area), parcelamento].filter(Boolean).join(' · ')}</p>}
                 <L itens={o.destaques} set={(v) => mudar((x) => ({ ...x, opcoes: (x.opcoes ?? []).map((z, j) => (j === idx(o.nome) ? { ...z, destaques: v } : z)) }))} ph="O que tem neste pacote" />
                 {escolha ? <span className="opcao-marca">{marcada ? '✓ Sua escolha' : 'Escolher este pacote'}</span> : o.principal && <p className="opcao-marca">Detalhado nesta proposta</p>}
               </>
@@ -506,6 +509,19 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
     });
   }
 
+  if (d.tipo !== 'aditivo') {
+    paginas.push({
+      id: 'compromissos', nome: 'Nossos compromissos',
+      titulo: 'Nossos compromissos com você',
+      conteudo: (
+        <div className="compromissos">
+          <L ordenada className="compromissos-lista" itens={c.compromissos ?? compromissosPadrao(c)} set={set('compromissos')} ph="Compromisso" />
+          {(c.garantia || ed) && <p className="compromissos-garantia"><b>Garantia</b> <T v={c.garantia} set={set('garantia')} multi ph="Ex.: 12 meses para os serviços executados" /></p>}
+        </div>
+      ),
+    });
+  }
+
   if ((c.diferenciais ?? []).length > 0) {
     const setD = (k: number, campo: 'titulo' | 'texto') => (s: string) => mudar((x) => ({ ...x, diferenciais: (x.diferenciais ?? []).map((m, j) => (j === k ? { ...m, [campo]: s } : m)) }));
     paginas.push({
@@ -519,6 +535,27 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
           {(c.normas ?? []).length > 0 && (
             <div className="normas"><h3>Normas técnicas que seguimos</h3><L itens={c.normas!} set={set('normas')} ph="Norma" /></div>
           )}
+        </div>
+      ),
+    });
+  }
+
+  const depoimentos = (c.depoimentos ?? []).filter((x) => x.trim());
+  if (depoimentos.length > 0 || ed) {
+    paginas.push({
+      id: 'depoimentos', nome: 'Quem já confiou',
+      titulo: 'Quem já confiou na ROSAE',
+      conteudo: ed ? (
+        <div className="depoimentos editando-dep">
+          {depoimentos.length === 0 && <p className="muted nota-folha">Depoimentos são o gatilho de confiança mais forte. Adicione um ou dois, no formato “texto” — Nome, cidade. Sem nenhum, esta página não aparece para o cliente.</p>}
+          <L className="depoimentos-lista" itens={c.depoimentos ?? []} set={set('depoimentos')} ph="“O que o cliente disse” — Nome, cidade" />
+        </div>
+      ) : (
+        <div className="depoimentos">
+          {depoimentos.slice(0, 4).map((x, k) => {
+            const [texto, autor] = x.split(/\s+[—–-]\s+(?=[^—–-]*$)/);
+            return <figure key={k}><blockquote>{texto.replace(/^[“"]|[”"]$/g, '')}</blockquote>{autor && <figcaption>{autor}</figcaption>}</figure>;
+          })}
         </div>
       ),
     });
@@ -563,12 +600,13 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
       <div className="duas-colunas">
         <div>
           <h3>Como aprovar</h3>
-          <ol>
-            <li>Abra o link desta proposta e clique em <b>Aceitar esta proposta</b>, ou responda pedindo ajustes.</li>
-            <li>Combinamos a data de início e, quando houver, o pagamento da entrada.</li>
-            <li>Você recebe o acompanhamento de cada etapa com registros e fotos.</li>
+          <ol className="passos-aceite">
+            <li><b>Hoje, em 2 minutos.</b> Abra o link desta proposta e toque em <b>Aceitar esta proposta</b>. Se quiser mudar algo, peça o ajuste por lá.</li>
+            <li><b>Em até 1 dia útil.</b> Enviamos o contrato para assinatura pelo celular e combinamos a data de início.</li>
+            <li><b>Durante todo o serviço.</b> Você acompanha cada etapa pelo portal do cliente, com fotos e registros.</li>
           </ol>
-          <p className="total-final">Total: <b>{formatar(total)}</b></p>
+          <p className="total-final">Total: <b>{formatar(total)}</b>{parcelamento && <span className="muted"> · {parcelamento}</span>}</p>
+          <p className="validade-aviso">{d.validade ? <>Proposta válida até <b>{formatarData(d.validade)}</b>.</> : <>Proposta válida por <b>{c.validade_dias || 15} dias</b> após o envio.</>} Com o aceite dentro da validade, os valores ficam garantidos e reservamos a sua data de início na agenda.</p>
         </div>
         <div className="assinatura">
           <p><b>{d.empresa?.responsavel ?? 'Responsável técnico'}</b></p>

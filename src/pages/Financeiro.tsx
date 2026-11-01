@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
-import { useConsulta, ok, novaChave } from '../lib/consulta';
+import { useConsulta, ok, novaChave, todas, useAosPoucos } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import { doBanco, formatar, paraBanco, somar, type Centavos } from '../core/dinheiro';
 import { formatarData, formatarDataHora, hoje, somarDias, somarMeses } from '../core/datas';
 import { gerarComEntrada, gerarParcelas, validarPlano, type Frequencia, type ParcelaPlano } from '../core/parcelas';
@@ -24,18 +25,22 @@ export function Financeiro() {
   const mudar = (k: string, v: string) => { const p = new URLSearchParams(params); p.set(k, v); setParams(p, { replace: true }); };
 
   const { dados, erro, carregando, recarregar } = useConsulta(async () => {
-    let q = supabase.from('v_parcela').select('*').eq('tipo', tipo).order('vencimento');
-    if (situacao === 'abertas') q = q.in('situacao', ['aberta', 'parcial', 'vencida']);
-    else if (situacao === 'vencida') q = q.eq('situacao', 'vencida');
-    else if (situacao === 'proximos') q = q.in('situacao', ['aberta', 'parcial', 'vencida']).lte('vencimento', somarDias(hoje(), 7));
-    else if (situacao === 'liquidada') q = q.eq('situacao', 'liquidada');
-    return ok(await q.limit(1000)) as VParcela[];
+    const montar = () => {
+      let q = supabase.from('v_parcela').select('*').eq('tipo', tipo).order('vencimento').order('id');
+      if (situacao === 'abertas') q = q.in('situacao', ['aberta', 'parcial', 'vencida']);
+      else if (situacao === 'vencida') q = q.eq('situacao', 'vencida');
+      else if (situacao === 'proximos') q = q.in('situacao', ['aberta', 'parcial', 'vencida']).lte('vencimento', somarDias(hoje(), 7));
+      else if (situacao === 'liquidada') q = q.eq('situacao', 'liquidada');
+      return q;
+    };
+    return (await todas<VParcela>((de, ate) => montar().range(de, ate)));
   }, [tipo, situacao]);
 
   const lista = useMemo(() => {
     const b = busca.trim().toLowerCase();
     return (dados ?? []).filter((p) => (!escopo || p.escopo === escopo) && (!b || [p.descricao, p.pessoa_nome, p.obra_nome, p.codigo, p.categoria_nome, p.documento_ref].some((v) => v?.toLowerCase().includes(b))));
   }, [dados, busca, escopo]);
+  const { visiveis, resta, mais } = useAosPoucos(lista);
   const totalValor = somar(lista.map((p) => doBanco(p.valor)));
   const totalSaldo = somar(lista.map((p) => doBanco(p.saldo)));
   const rotuloTipo = tipo === 'receber' ? 'a receber' : 'a pagar';
@@ -81,7 +86,7 @@ export function Financeiro() {
                   <tr><th>Vencimento</th><th>Descrição</th><th>{tipo === 'receber' ? 'Cliente' : 'Favorecido'}</th><th>Obra / empresa</th><th className="right">Valor</th><th className="right">Saldo</th><th>Situação</th></tr>
                 </thead>
                 <tbody>
-                  {lista.map((p) => (
+                  {visiveis.map((p) => (
                     <tr key={p.id} className="clicavel" onClick={() => navegar(`/financeiro/${p.lancamento_id}`)}>
                       <td className="num">{formatarData(p.vencimento)}</td>
                       <td>
@@ -103,9 +108,10 @@ export function Financeiro() {
                   </tr>
                 </tbody>
               </table>
+              {resta > 0 && <button type="button" className="btn-secundario mostrar-mais" onClick={mais}>Mostrar mais {Math.min(resta, 240)} de {resta}</button>}
             </div>
             <div className="lista-cartoes">
-              {lista.map((p) => (
+              {visiveis.map((p) => (
                 <Link key={p.id} to={`/financeiro/${p.lancamento_id}`} className="item-cartao">
                   <div>
                     <div className="titulo">{p.descricao}{p.total_parcelas > 1 && ` · ${p.numero}/${p.total_parcelas}`}</div>
@@ -117,6 +123,7 @@ export function Financeiro() {
                   </div>
                 </Link>
               ))}
+              {resta > 0 && <button type="button" className="btn-secundario mostrar-mais" onClick={mais}>Mostrar mais {Math.min(resta, 240)} de {resta}</button>}
               <div className="muted small right">Saldo total: {formatar(totalSaldo)}</div>
             </div>
           </>
@@ -143,7 +150,7 @@ export function LancamentoForm({ tipo, lancamento, parcelasAtuais, temMovimento,
   const apoio = useConsulta(async () => {
     const [cat, pes, obr] = await Promise.all([
       supabase.from('categoria').select('*').eq('tipo', tipo).eq('ativo', true).order('ordem'),
-      supabase.from('pessoa').select('id, nome, eh_cliente, eh_prestador, eh_fornecedor').eq('arquivado', false).order('nome'),
+      todas((de, ate) => supabase.from('pessoa').select('id, nome, eh_cliente, eh_prestador, eh_fornecedor').eq('arquivado', false).order('nome').order('id').range(de, ate)).then((data) => ({ data, error: null })),
       supabase.from('obra').select('id, codigo, nome, status').eq('arquivado', false).order('criado_em', { ascending: false }),
     ]);
     return {
@@ -452,6 +459,7 @@ export function LancamentoDetalhe() {
       <Topo titulo={lanc.descricao} sub={<>{lanc.codigo} · {lanc.tipo === 'receber' ? 'Conta a receber' : 'Conta a pagar'} {lanc.cancelado && <span className="selo neutro">Cancelado</span>}</>}>
         <button className="btn-secundario" onClick={() => navegar(`/financeiro?tipo=${lanc.tipo}`)}><Icone nome="voltar" /> Lista</button>
         {!lanc.cancelado && <button className="btn-secundario" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar</button>}
+        <BotaoExcluir tabela="lancamento" id={lanc.id} nome={lanc.descricao} aoExcluir={() => navegar(`/financeiro?tipo=${lanc.tipo}`)} />
       </Topo>
       <div className="grid grid-2">
         <div className="card">

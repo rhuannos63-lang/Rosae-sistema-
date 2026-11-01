@@ -6,6 +6,7 @@ import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { Ajuda, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import { doBanco } from '../core/dinheiro';
 import { formatarData, hoje } from '../core/datas';
 import { RESPONSAVEL_COMPRA, SITUACAO_MATERIAL, type Etapa, type Material, type MaterialEvento, type Pessoa } from '../lib/tipos';
@@ -126,7 +127,7 @@ function MaterialForm({ obraId, m, servicos, ambientes, etapas, aoFechar, aoSalv
   const etapasServ = etapas.filter((e) => !f.servico_id || e.servico_id === f.servico_id);
   return (
     <Modal titulo={m ? m.descricao : 'Novo material'} aoFechar={aoFechar} largo
-      rodape={<><button type="button" className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" form="form-mat">Salvar</button></>}>
+      rodape={<>{m && <BotaoExcluir tabela="material" id={m.id} nome={m.descricao} aoExcluir={aoSalvar} classe="btn-link perigo" />}<span style={{ flex: 1 }} /><button type="button" className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" form="form-mat">Salvar</button></>}>
       <form id="form-mat" className="stack" onSubmit={salvar}>
         <div className="grid grid-2">
           <label className="campo">Material<input value={f.descricao} onChange={(e) => set('descricao', e.target.value)} required placeholder="Ex.: Porcelanato 60×60" /></label>

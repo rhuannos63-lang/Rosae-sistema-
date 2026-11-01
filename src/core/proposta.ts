@@ -1,7 +1,7 @@
 // Modelo do conteúdo de uma versão de proposta e cálculos puros.
 // Valores guardados em reais no JSON (o banco confere as somas em numeric);
 // todas as contas aqui são feitas em centavos inteiros.
-import { paraBanco, doBanco, ratear, somar, type Centavos } from './dinheiro';
+import { formatar, paraBanco, doBanco, ratear, somar, type Centavos } from './dinheiro';
 
 const reais = (c: Centavos): number => Number(paraBanco(c));
 
@@ -63,6 +63,9 @@ export type Conteudo = {
   // valores: preço que você definiu para um pacote, no lugar do calculado pela tabela (reais, por número do pacote).
   // Páginas da apresentação que você tirou (ids de PAGINAS_OPCIONAIS). As obrigatórias não saem.
   paginas_ocultas?: string[];
+  // Gatilhos de confiança: compromissos (reduzem o risco percebido) e depoimentos (prova social).
+  compromissos?: string[];
+  depoimentos?: string[];
   gerador?: { tipo: string; respostas: Record<string, string | number | boolean | null>; pacote: number; valores?: ValoresManuais; em: string };
 };
 
@@ -437,7 +440,8 @@ export function parcelasAoTotal(c: Conteudo): Conteudo {
 /** Páginas que podem sair da apresentação. Capa, escopo, incluso, investimento, condições e aceite ficam sempre. */
 export const PAGINAS_OPCIONAIS: Record<string, string> = {
   resumo: 'Em resumo', entendimento: 'O que entendemos', entregaveis: 'O que você recebe', responsabilidades: 'Responsabilidades',
-  metodologia: 'Como trabalhamos', cronograma: 'Cronograma', pacotes: 'Escolha do pacote', porque: 'Por que a ROSAE', faq: 'Perguntas frequentes',
+  metodologia: 'Como trabalhamos', cronograma: 'Cronograma', pacotes: 'Escolha do pacote', compromissos: 'Nossos compromissos',
+  porque: 'Por que a ROSAE', depoimentos: 'Quem já confiou', faq: 'Perguntas frequentes',
 };
 
 /** Tira ou devolve uma página opcional. */
@@ -475,4 +479,68 @@ export function mudarItem(c: Conteudo, ai: number, ii: number, f: (i: Item) => I
     ambientes: c.ambientes.map((a, x) => (x !== ai ? a : { ...a, itens: a.itens.map((i, y) => { if (y !== ii) return i; const n = f(i); return { ...n, total: totalItem(n) }; }) })),
   };
   return acompanharTotal(c, depois);
+}
+
+// ---------------------------------------------------------------------
+// Conversão: o que ajuda o cliente a decidir com segurança
+// ---------------------------------------------------------------------
+/** Área informada no orçamento automático (m²), quando houver. */
+export function areaDaProposta(c: Pick<Conteudo, 'gerador'>): number {
+  const a = Number(c.gerador?.respostas?.area);
+  return Number.isFinite(a) && a > 0 ? a : 0;
+}
+
+/** "R$ 38,61 por m²": o valor traduzido numa unidade que o cliente compara. */
+export function valorPorMetro(totalCentavos: Centavos, area: number): string | null {
+  if (!(area > 0) || !(totalCentavos > 0)) return null;
+  return `${formatar(Math.round(totalCentavos / area))} por m²`;
+}
+
+/** Facilita a decisão mostrando o parcelamento junto do preço. */
+export function textoParcelamento(c: Pick<Conteudo, 'pagamento'>): string | null {
+  const n = (c.pagamento?.parcelas ?? []).filter((p) => Number(p.valor) > 0).length;
+  return n >= 2 ? `em até ${n} parcelas` : null;
+}
+
+const SERVICOS_DE_OBRA = ['reforma', 'construcao', 'reforco', 'gestao'];
+/** Compromissos sugeridos para o tipo de serviço (o engenheiro edita na página). */
+export function compromissosPadrao(c: Pick<Conteudo, 'tipo_servico' | 'gerador'>): string[] {
+  const tipo = c.gerador?.tipo ?? c.tipo_servico ?? '';
+  const obra = SERVICOS_DE_OBRA.some((t) => tipo.toLowerCase().includes(t));
+  return [
+    'Preço fechado: nada fora do escopo é cobrado sem o seu aceite por escrito.',
+    obra
+      ? 'Cronograma com acompanhamento semanal, fotos e relatório de cada etapa.'
+      : 'Ajustes de projeto incluídos até a aprovação, dentro do escopo desta proposta.',
+    'Responsabilidade técnica com ART registrada no CREA.',
+    obra
+      ? 'Obra limpa e organizada, com proteção dos ambientes e descarte correto.'
+      : 'Entrega no prazo combinado; qualquer imprevisto é avisado com antecedência e um novo plano.',
+  ];
+}
+
+export type ItemForca = { ok: boolean; titulo: string; dica: string };
+/**
+ * Força da proposta: confere os elementos que mais pesam na decisão do cliente
+ * (clareza, ancoragem em pacotes, facilidade de pagamento, redução de risco, prova social,
+ * autoridade, respostas às objeções e validade curta).
+ */
+export function forcaDaProposta(c: Conteudo): { nota: number; itens: ItemForca[] } {
+  const vis = (id: string) => !paginaOculta(c, id);
+  const opcoes = (c.opcoes ?? []).filter((o) => o.valor > 0);
+  const itens: ItemForca[] = [
+    { ok: !!c.resumo?.trim() && vis('resumo'), titulo: 'Abre com o resultado', dica: 'Uma página “Em resumo” com o que o cliente ganha, o valor e o prazo. Quem decide lê primeiro (e às vezes só) isso.' },
+    { ok: !!c.necessidade?.trim(), titulo: 'Mostra que você entendeu o pedido', dica: 'Escreva a necessidade com as palavras do cliente. Proposta personalizada converte mais que proposta genérica.' },
+    { ok: c.inclusoes.length >= 3 && c.exclusoes.length >= 2, titulo: 'Deixa claro o que está e o que não está incluso', dica: 'Pelo menos 3 inclusões e 2 exclusões. Clareza evita objeção e discussão depois.' },
+    { ok: opcoes.length >= 3 && opcoes.some((o) => o.recomendado) && vis('pacotes'), titulo: 'Três pacotes, com um recomendado', dica: 'Três opções ancoram o preço: o cliente compara entre elas, e não entre você e o concorrente.' },
+    { ok: !!textoParcelamento(c), titulo: 'Facilita o pagamento', dica: 'Divida em parcelas ou por etapa. O parcelamento aparece junto do preço.' },
+    { ok: !!(c.prazo_total_dias || c.etapas.length), titulo: 'Tem prazo e etapas definidos', dica: 'Um cronograma visível passa controle e profissionalismo.' },
+    { ok: vis('compromissos') || !!c.garantia?.trim(), titulo: 'Reduz o risco de quem compra', dica: 'Mostre os compromissos: preço fechado, ART, prazo e garantia. Tira o medo de errar na escolha.' },
+    { ok: (c.depoimentos ?? []).some((x) => x.trim()) && vis('depoimentos'), titulo: 'Tem prova social', dica: 'Um ou dois depoimentos de clientes (nome e cidade). É o gatilho de confiança mais forte em serviços.' },
+    { ok: ((c.diferenciais ?? []).length >= 2 || (c.normas ?? []).length > 0) && vis('porque'), titulo: 'Mostra autoridade técnica', dica: 'Diferenciais e normas técnicas seguidas na página “Por que a ROSAE”.' },
+    { ok: (c.faq ?? []).length >= 3 && vis('faq'), titulo: 'Responde às objeções antes', dica: 'Três ou mais perguntas frequentes respondidas.' },
+    { ok: (c.validade_dias || 0) > 0 && c.validade_dias <= 15, titulo: 'Validade curta', dica: 'Até 15 dias. Dá um motivo legítimo para decidir agora (valores e agenda garantidos).' },
+  ];
+  const ok = itens.filter((i) => i.ok).length;
+  return { nota: Math.round((ok / itens.length) * 10), itens };
 }
