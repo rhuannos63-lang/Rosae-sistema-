@@ -7,12 +7,12 @@ import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Carregando, Erro, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
-import { CampoNumero, estadoInicial, OrcamentoGerador, type EstadoGerador } from '../components/OrcamentoGerador';
+import { CampoNumero, estadoInicial, OrcamentoGerador, servicosDo, type EstadoGerador } from '../components/OrcamentoGerador';
 import { carregarPrecos, salvarPrecos, type TabelaPrecos } from '../lib/orcamentoParametros';
 import { paraBanco } from '../core/dinheiro';
 import { prepararParaSalvar, type ModeloServico } from '../core/proposta';
 import {
-  DEFINICOES, gerarOrcamento, NOME_TIPO, parametrosDe, parametrosPadrao, respostasPadrao, TIPOS,
+  DEFINICOES, gerarOrcamento, gerarOrcamentoServicos, nomeDosServicos, parametrosDe, parametrosPadrao, respostasPadrao, TIPOS,
   type Orcamento, type Parametros, type TipoServico,
 } from '../core/orcamento';
 
@@ -29,7 +29,7 @@ export async function gravarOrcamento(o: Orcamento, versaoId: string, podeFinanc
   if (podeFinanceiro) {
     ok(await supabase.from('proposta_custo').upsert({
       versao_id: versaoId, custos: { linhas: o.custos }, custo_total: paraBanco(Math.round(o.analise.custo * 100)),
-      notas_internas: `Gerado pelo orçamento automático (${NOME_TIPO[o.tipo]}, pacote ${o.principal.nome}).${manual ? ` Preço definido por você; pela tabela seria ${reaisTexto(o.principal.calculado)}.` : ''} Margem estimada ${o.analise.margem_pct.toFixed(0)}%.`,
+      notas_internas: `Gerado pelo orçamento automático (${nomeDosServicos(o)}, pacote ${o.principal.nome}).${manual ? ` Preço definido por você; pela tabela seria ${reaisTexto(o.principal.calculado)}.` : ''} Margem estimada ${o.analise.margem_pct.toFixed(0)}%.`,
     }));
   }
 }
@@ -84,7 +84,7 @@ export function NovoOrcamento() {
       let oportunidadeId = op?.id;
       if (!oportunidadeId) {
         oportunidadeId = (ok(await supabase.from('oportunidade').insert({
-          pessoa_id: pessoaId, titulo: nomeProposta, tipo_servico: NOME_TIPO[o.tipo], local_obra: contexto.local || null, resumo: contexto.necessidade || null,
+          pessoa_id: pessoaId, titulo: nomeProposta, tipo_servico: nomeDosServicos(o), local_obra: contexto.local || null, resumo: contexto.necessidade || null,
           estado_id: prep?.id ?? estados.sort((a, b) => a.ordem - b.ordem)[0].id, valor_estimado: paraBanco(Math.round(o.principal.valor * 100)),
         }).select('id').single()) as { id: string }).id;
       } else {
@@ -139,7 +139,7 @@ export function NovoOrcamento() {
               </>
             )}
             <label className="campo">Título da proposta <span className="dica">Deixe em branco para usar o sugerido</span>
-              <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={estado.tipo ? gerarOrcamento(estado.tipo, estado.respostas, dados.precos[estado.tipo], estado.pacote).titulo : 'Ex.: Projeto estrutural · Casa Itaipava'} />
+              <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder={estado.tipo ? gerarOrcamentoServicos(servicosDo(estado), dados.precos, estado.pacote).titulo : 'Ex.: Projeto estrutural · Casa Itaipava'} />
             </label>
           </div>
           <div className="stack" style={{ gap: 10 }}>

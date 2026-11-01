@@ -7,7 +7,7 @@ import {
   type Conteudo, type Etapa, type Item, type ModeloServico, type OpcaoProposta, type ParcelaProposta, type Pergunta as PerguntaFaq, type Responsabilidade, type Topico, type ValoresManuais,
 } from './proposta';
 
-export type TipoServico = 'projeto_estrutural' | 'reforco' | 'reforma' | 'construcao' | 'laudo' | 'pericia';
+export type TipoServico = 'projeto_estrutural' | 'projeto_arquitetonico' | 'reforco' | 'reforma' | 'construcao' | 'regularizacao' | 'laudo' | 'pericia';
 export type Valor = string | number | boolean | null;
 export type Respostas = Record<string, Valor>;
 export type Parametros = Record<string, number>;
@@ -25,6 +25,8 @@ export type Parametro = { id: string; rotulo: string; unidade: string; padrao: n
 export type Linha = {
   titulo: string; descricao: string; valor: number; custo: number; pacote: 1 | 2 | 3;
   modelo?: string; quantidade?: number; unidade?: string; principal?: boolean;
+  /** Em proposta com vários serviços: a qual serviço a linha pertence (posição na lista). */
+  servico?: number;
 };
 
 type Base = {
@@ -891,10 +893,273 @@ const pericia: Definicao = {
   },
 };
 
-export const DEFINICOES: Record<TipoServico, Definicao> = {
-  projeto_estrutural: projeto, reforco, reforma, construcao, laudo, pericia,
+// ---------------------------------------------------------------------
+// 7. Projeto arquitetônico
+// ---------------------------------------------------------------------
+const TIPOLOGIA: Record<string, string> = { casa: 'casa', multifamiliar: 'edificação residencial', comercial: 'edificação comercial', interiores: 'reforma de interiores' };
+const arquitetonico: Definicao = {
+  tipo: 'projeto_arquitetonico',
+  nome: 'Projeto arquitetônico',
+  chamada: 'Do estudo preliminar ao executivo, com aprovação na prefeitura se precisar.',
+  campos: [
+    { id: 'area', rotulo: 'Área a projetar', tipo: 'numero', unidade: 'm²', obrigatorio: true },
+    {
+      id: 'tipologia', rotulo: 'O que será projetado', tipo: 'escolha', opcoes: [
+        { valor: 'casa', rotulo: 'Casa (residencial unifamiliar)' }, { valor: 'multifamiliar', rotulo: 'Residencial multifamiliar' },
+        { valor: 'comercial', rotulo: 'Comercial / loja / escritório' }, { valor: 'interiores', rotulo: 'Reforma de interiores' },
+      ],
+    },
+    {
+      id: 'padrao', rotulo: 'Padrão de acabamento', tipo: 'escolha', opcoes: [
+        { valor: 'simples', rotulo: 'Simples', descricao: 'Soluções econômicas e diretas' },
+        { valor: 'medio', rotulo: 'Médio', descricao: 'Bom acabamento, alguns detalhes especiais' },
+        { valor: 'alto', rotulo: 'Alto', descricao: 'Muitos detalhes, materiais nobres' },
+      ],
+    },
+    {
+      id: 'situacao', rotulo: 'Situação do imóvel', tipo: 'escolha', opcoes: [
+        { valor: 'novo', rotulo: 'Construção nova' }, { valor: 'existente', rotulo: 'Reforma ou ampliação' },
+      ],
+    },
+    { id: 'aprovacao', rotulo: 'Precisa aprovar na prefeitura?', tipo: 'sim_nao', ajuda: 'Inclui o projeto legal e o protocolo.' },
+    { id: 'interiores', rotulo: 'Inclui projeto de interiores?', tipo: 'sim_nao', ajuda: 'Marcenaria, iluminação, revestimentos e layout de móveis.' },
+  ],
+  parametros: [
+    { id: 'preco_m2', rotulo: 'Preço base por m² (estudo, anteprojeto e executivo)', unidade: 'R$/m²', padrao: 45 },
+    { id: 'minimo', rotulo: 'Valor mínimo do projeto', unidade: 'R$', padrao: 4500 },
+    { id: 'fator_simples', rotulo: 'Fator padrão simples', unidade: 'x', padrao: 0.85 },
+    { id: 'fator_medio', rotulo: 'Fator padrão médio', unidade: 'x', padrao: 1 },
+    { id: 'fator_alto', rotulo: 'Fator padrão alto', unidade: 'x', padrao: 1.35 },
+    { id: 'fator_comercial', rotulo: 'Fator comercial', unidade: 'x', padrao: 1.1 },
+    { id: 'fator_interiores', rotulo: 'Fator reforma de interiores', unidade: 'x', padrao: 1.2 },
+    { id: 'legal_pct', rotulo: 'Projeto legal e aprovação na prefeitura', unidade: '%', padrao: 15 },
+    { id: 'levantamento_m2', rotulo: 'Levantamento do existente (medição)', unidade: 'R$/m²', padrao: 6 },
+    { id: 'levantamento_min', rotulo: 'Levantamento do existente: mínimo', unidade: 'R$', padrao: 600 },
+    { id: 'interiores_m2', rotulo: 'Projeto de interiores', unidade: 'R$/m²', padrao: 35 },
+    { id: 'imagens', rotulo: 'Imagens 3D realistas (pacote Completo)', unidade: 'R$', padrao: 1500 },
+    { id: 'compat_pct', rotulo: 'Compatibilização com estrutura e instalações (pacote Completo)', unidade: '%', padrao: 10 },
+    { id: 'caderno_pct', rotulo: 'Caderno de especificações e acabamentos (pacote Premium)', unidade: '%', padrao: 8 },
+    { id: 'visita', rotulo: 'Visita de acompanhamento de obra', unidade: 'R$', padrao: 450 },
+    { id: 'dias_base', rotulo: 'Prazo base', unidade: 'dias', padrao: 20 },
+    { id: 'dias_100m2', rotulo: 'Prazo adicional a cada 100 m²', unidade: 'dias', padrao: 7 },
+    { id: 'horas_m2', rotulo: 'Horas de trabalho por m²', unidade: 'h', padrao: 0.25, custo: true },
+    { id: 'custo_hora', rotulo: 'Custo da sua hora (referência interna)', unidade: 'R$/h', padrao: 90, custo: true },
+    { id: 'art', rotulo: 'Taxa da ART (conferir tabela CREA-RJ)', unidade: 'R$', padrao: 110, custo: true },
+  ],
+  padrao: { area: null, tipologia: 'casa', padrao: 'medio', situacao: 'novo', aprovacao: true, interiores: false, pagamento: 'etapas', parcelas: 3, distancia_km: 0, urgencia: false },
+  calcular(r, p) {
+    const area = n(r, 'area');
+    const tip = s(r, 'tipologia', 'casa');
+    const pad = s(r, 'padrao', 'medio');
+    const existente = s(r, 'situacao', 'novo') === 'existente' || tip === 'interiores';
+    const aprov = b(r, 'aprovacao');
+    const inter = b(r, 'interiores');
+    const fPad = q(p, `fator_${pad}`) || 1;
+    const fTip = tip === 'comercial' ? q(p, 'fator_comercial') || 1 : tip === 'interiores' ? q(p, 'fator_interiores') || 1 : 1;
+    const bruto = area * q(p, 'preco_m2') * fPad * fTip;
+    const base = arred10(Math.max(q(p, 'minimo'), bruto));
+    const horas = Math.round(area * q(p, 'horas_m2') * fPad * fTip + 8);
+    const ch = q(p, 'custo_hora');
+    const oQue = TIPOLOGIA[tip] ?? 'edificação';
+    const linhas: Linha[] = [];
+    if (existente) linhas.push({ titulo: 'Levantamento do imóvel existente', descricao: `Medição completa do imóvel (${fmtN(area)} m²) e desenho do estado atual, base segura para o novo projeto.`, valor: arred10(Math.max(q(p, 'levantamento_min'), area * q(p, 'levantamento_m2'))), custo: Math.round((4 + area / 40) * ch), pacote: 1 });
+    linhas.push({
+      titulo: 'Projeto arquitetônico (estudo, anteprojeto e executivo)',
+      descricao: `Projeto de arquitetura da ${oQue} com ${fmtN(area, 2)} m²: estudo preliminar com opções de layout, anteprojeto com volumetria em 3D e projeto executivo com plantas, cortes, fachadas, cobertura, esquadrias e detalhes para a obra.`,
+      valor: base, custo: Math.round(horas * ch + q(p, 'art')), pacote: 1, principal: true, quantidade: area, unidade: 'm2',
+    });
+    if (aprov) linhas.push({ titulo: 'Projeto legal e aprovação na prefeitura', descricao: 'Pranchas no padrão exigido pelo município, quadro de áreas, memorial, protocolo do processo e atendimento às exigências até a aprovação.', valor: arred10(base * q(p, 'legal_pct') / 100), custo: Math.round(14 * ch), pacote: 1 });
+    if (inter) linhas.push({ titulo: 'Projeto de interiores', descricao: 'Layout de móveis, marcenaria detalhada, iluminação, revestimentos e paginação de pisos, com lista de materiais.', valor: arred10(area * q(p, 'interiores_m2') * fPad), custo: Math.round(area * 0.12 * ch), pacote: 1 });
+    linhas.push(
+      { titulo: 'Imagens 3D realistas', descricao: 'Imagens de alta qualidade dos principais ambientes e da fachada, para você ver o resultado antes de construir.', valor: arred10(q(p, 'imagens')), custo: Math.round(10 * ch), pacote: 2 },
+      { titulo: 'Compatibilização com estrutura e instalações', descricao: 'Sobreposição da arquitetura com os projetos estrutural, elétrico e hidráulico, resolvendo interferências antes da obra.', valor: arred10(base * q(p, 'compat_pct') / 100), custo: Math.round(horas * 0.12 * ch), pacote: 2 },
+      { titulo: 'Caderno de especificações e acabamentos', descricao: 'Lista de cada material e acabamento por ambiente, com referência, quantidade e local de aplicação, pronta para cotar.', valor: arred10(base * q(p, 'caderno_pct') / 100), custo: Math.round(horas * 0.1 * ch), pacote: 3 },
+      { titulo: 'Acompanhamento arquitetônico da obra (4 visitas)', descricao: 'Visitas nas etapas de marcação, vedações, revestimentos e acabamentos, para garantir que a obra siga o projeto.', valor: arred10(4 * q(p, 'visita')), custo: Math.round(4 * 3 * ch), pacote: 3, quantidade: 4, unidade: 'visita' },
+    );
+    const dias = q(p, 'dias_base') + (area / 100) * q(p, 'dias_100m2') * fPad;
+    const pesos = aprov ? [20, 25, 15, 40] : [25, 30, 45];
+    const ds = dividirDias(dias, pesos);
+    const etapas = [
+      { nome: 'Estudo preliminar', descricao: 'Programa de necessidades, implantação e opções de layout para você escolher', dias: ds[0], percentual: pesos[0] },
+      { nome: 'Anteprojeto', descricao: 'Solução escolhida desenvolvida, com volumetria em 3D e materiais principais', dias: ds[1], percentual: pesos[1] },
+      ...(aprov ? [{ nome: 'Projeto legal', descricao: 'Pranchas no padrão da prefeitura, protocolo e atendimento às exigências', dias: ds[2], percentual: pesos[2] }] : []),
+      { nome: 'Projeto executivo e entrega', descricao: 'Plantas, cortes, fachadas, detalhes e quantitativos para a obra, com ART', dias: ds[ds.length - 1], percentual: pesos[pesos.length - 1] },
+    ];
+    const avisos: string[] = ['Confira se as suas atribuições no CREA cobrem projeto arquitetônico deste porte; se não, faça em parceria com arquiteto (RRT).'];
+    if (!area) avisos.push('Informe a área para calcular o preço.');
+    if (bruto && bruto < q(p, 'minimo')) avisos.push(`O cálculo por m² ficou abaixo do mínimo; foi aplicado o valor mínimo de R$ ${fmtN(q(p, 'minimo'))}.`);
+    return {
+      linhas, visitas: [aprov ? 1 : 0, aprov ? 2 : 1, (aprov ? 2 : 1) + 4], horas, avisos,
+      titulo: `Projeto arquitetônico · ${fmtN(area)} m²`,
+      etapas,
+      dados: [
+        { rotulo: 'Área', valor: `${fmtN(area, 2)} m²` }, { rotulo: 'O que será projetado', valor: rotuloDe(arquitetonico.campos, 'tipologia', tip) },
+        { rotulo: 'Padrão', valor: rotuloDe(arquitetonico.campos, 'padrao', pad) }, { rotulo: 'Situação', valor: existente ? 'Reforma ou ampliação' : 'Construção nova' },
+        { rotulo: 'Aprovação na prefeitura', valor: sn(aprov) }, { rotulo: 'Projeto de interiores', valor: sn(inter) },
+      ],
+      resumo: `Você vai receber o projeto de arquitetura da sua ${oQue} de ${fmtN(area)} m², do primeiro estudo ao executivo pronto para orçar e construir: ambientes pensados para o seu jeito de viver, bom aproveitamento do espaço, luz e ventilação naturais e todas as pranchas que a obra precisa.${aprov ? ' Inclui o projeto legal e o acompanhamento da aprovação na prefeitura.' : ''}`,
+      inclusoes: [...(existente ? ['Levantamento e desenho do imóvel existente'] : []), 'Reunião de briefing e programa de necessidades', 'Estudo preliminar com opções de layout', 'Anteprojeto com volumetria em 3D', 'Projeto executivo: plantas, cortes, fachadas, cobertura e esquadrias', 'Detalhes construtivos de áreas molhadas e escadas', 'Quadro de áreas e memorial descritivo', ...(aprov ? ['Projeto legal, protocolo e atendimento às exigências da prefeitura'] : []), ...(inter ? ['Projeto de interiores com marcenaria e iluminação'] : []), 'Duas rodadas de ajustes no estudo preliminar e uma no anteprojeto', 'ART do projeto'],
+      exclusoes: ['Projetos estrutural e de instalações (salvo se incluídos nesta proposta)', 'Levantamento topográfico e sondagem', ...(aprov ? ['Taxas e emolumentos da prefeitura'] : ['Projeto legal e aprovação na prefeitura']), 'Mudanças de programa depois do anteprojeto aprovado (orçadas como aditivo)', 'Execução da obra e compra de materiais'],
+      responsabilidades: [
+        { parte: 'ROSAE', itens: ['Desenvolver o projeto conforme as normas e a legislação do município', 'Apresentar cada etapa para a sua aprovação', 'Emitir a ART do projeto', ...(aprov ? ['Protocolar e acompanhar o processo na prefeitura'] : [])] },
+        { parte: 'Cliente', itens: ['Informar o programa de necessidades e o orçamento previsto para a obra', 'Fornecer documentos do terreno (escritura, IPTU, topografia, se houver)', 'Aprovar cada etapa antes de seguir para a próxima', ...RESP_CLIENTE_COMUM] },
+      ],
+      entregaveis: ['Estudo preliminar e anteprojeto em PDF com imagens 3D', 'Pranchas do projeto executivo em PDF e DWG', ...(aprov ? ['Projeto legal aprovado na prefeitura'] : []), 'Memorial descritivo e quadro de áreas', 'ART do projeto'],
+      metodologia: [
+        { titulo: 'Briefing', texto: 'Entendemos como você vive ou trabalha, o terreno e o orçamento da obra.' },
+        { titulo: 'Estudo preliminar', texto: 'Opções de layout para escolher, com o melhor aproveitamento do espaço.' },
+        { titulo: 'Anteprojeto', texto: 'A solução escolhida em 3D, com materiais e fachadas.' },
+        ...(aprov ? [{ titulo: 'Aprovação', texto: 'Projeto legal protocolado e acompanhado até a aprovação.' }] : []),
+        { titulo: 'Executivo', texto: 'Pranchas completas e detalhadas para a obra executar sem dúvidas.' },
+      ],
+      riscos: ['Obra sem projeto de arquitetura costuma gerar mudanças no meio do caminho, que custam caro.', 'Sem projeto aprovado, a obra pode ser embargada e o imóvel fica sem habite-se e sem averbação.', 'Ambientes mal dimensionados não se corrigem depois de construídos.'],
+      normas: ['ABNT NBR 16636-2 · Projeto arquitetônico', 'ABNT NBR 9050 · Acessibilidade', 'ABNT NBR 15575 · Desempenho de edificações', 'Código de Obras e legislação urbanística do município'],
+      faq: [
+        { pergunta: 'Posso pedir mudanças no projeto?', resposta: 'Sim. Estão incluídas duas rodadas de ajustes no estudo preliminar e uma no anteprojeto. Mudanças de programa depois do anteprojeto aprovado são orçadas antes, como aditivo.' },
+        { pergunta: 'Quanto tempo a prefeitura leva para aprovar?', resposta: 'Depende do município e das exigências. Acompanhamos o processo e respondemos às exigências; o prazo da prefeitura não está no nosso cronograma.' },
+        { pergunta: 'O projeto serve para orçar a obra?', resposta: 'Sim. O executivo tem as medidas e os detalhes que os fornecedores e a mão de obra precisam para cotar com precisão.' },
+        ...FAQ_COMUM,
+      ],
+      premissas: ['Documentos do terreno ou do imóvel fornecidos pelo cliente', 'Programa de necessidades definido na reunião de briefing', ...(aprov ? ['Prazo de análise da prefeitura não incluído no cronograma'] : [])],
+      garantia: 'A ROSAE responde tecnicamente pelo projeto (ART) e corrige, sem custo, qualquer inconsistência de projeto identificada durante a obra.',
+      diferencial: { titulo: 'Projeto pensado por quem entende de estrutura', texto: 'A arquitetura já nasce viável de construir, sem surpresas de pilar no meio da sala.' },
+      pacotes: [
+        { nome: 'Essencial', subtitulo: 'Projeto completo, do estudo ao executivo', extras: [] },
+        { nome: 'Completo', subtitulo: 'Com imagens 3D e projeto compatibilizado', extras: ['Uma rodada extra de ajustes no anteprojeto'] },
+        { nome: 'Premium', subtitulo: 'Com caderno de acabamentos e acompanhamento da obra', extras: ['Prioridade de atendimento durante a obra'] },
+      ],
+      pagamento_padrao: 'etapas',
+    };
+  },
 };
-export const TIPOS: TipoServico[] = ['projeto_estrutural', 'reforco', 'reforma', 'construcao', 'laudo', 'pericia'];
+
+// ---------------------------------------------------------------------
+// 8. Regularização de imóveis
+// ---------------------------------------------------------------------
+const OBJETIVOS: Record<string, { rotulo: string; texto: string }> = {
+  habite_se: { rotulo: 'Habite-se / aceite de obra', texto: 'obtenção do habite-se (aceite da obra) na prefeitura' },
+  averbacao: { rotulo: 'Averbação da construção', texto: 'averbação da construção na matrícula do imóvel' },
+  legalizacao: { rotulo: 'Legalização de obra ou acréscimo', texto: 'legalização da obra ou do acréscimo feito sem licença' },
+  usucapiao: { rotulo: 'Planta e memorial para usucapião', texto: 'planta, memorial descritivo e ART para o processo de usucapião' },
+  desmembramento: { rotulo: 'Desmembramento ou remembramento', texto: 'desmembramento ou remembramento do lote' },
+  retificacao: { rotulo: 'Retificação de área', texto: 'retificação da área do imóvel na matrícula' },
+};
+const COM_OBRA = ['habite_se', 'averbacao', 'legalizacao'];
+const COM_TERRENO = ['usucapiao', 'desmembramento', 'retificacao'];
+const regularizacao: Definicao = {
+  tipo: 'regularizacao',
+  nome: 'Regularização de imóveis',
+  chamada: 'Habite-se, averbação, legalização de obra, usucapião e retificação de área.',
+  campos: [
+    { id: 'objetivo', rotulo: 'O que precisa regularizar', tipo: 'escolha', opcoes: Object.entries(OBJETIVOS).map(([valor, o]) => ({ valor, rotulo: o.rotulo })) },
+    { id: 'area', rotulo: 'Área construída', tipo: 'numero', unidade: 'm²', obrigatorio: true },
+    { id: 'terreno', rotulo: 'Área do terreno', tipo: 'numero', unidade: 'm²', se: (r) => COM_TERRENO.includes(String(r.objetivo)) },
+    { id: 'planta', rotulo: 'Já existe planta ou projeto do imóvel?', tipo: 'sim_nao', ajuda: 'Sem planta, o imóvel é medido e desenhado.' },
+    { id: 'topografia', rotulo: 'Precisa de levantamento topográfico?', tipo: 'sim_nao', ajuda: 'Comum em usucapião, desmembramento e retificação.' },
+    { id: 'notificacao', rotulo: 'Tem notificação ou multa da prefeitura?', tipo: 'sim_nao' },
+  ],
+  parametros: [
+    { id: 'base_habite_se', rotulo: 'Honorário base: habite-se', unidade: 'R$', padrao: 2500 },
+    { id: 'base_averbacao', rotulo: 'Honorário base: averbação', unidade: 'R$', padrao: 2200 },
+    { id: 'base_legalizacao', rotulo: 'Honorário base: legalização de obra', unidade: 'R$', padrao: 3500 },
+    { id: 'base_usucapiao', rotulo: 'Honorário base: usucapião', unidade: 'R$', padrao: 3800 },
+    { id: 'base_desmembramento', rotulo: 'Honorário base: desmembramento', unidade: 'R$', padrao: 3200 },
+    { id: 'base_retificacao', rotulo: 'Honorário base: retificação de área', unidade: 'R$', padrao: 3000 },
+    { id: 'por_m2', rotulo: 'Acréscimo por m² construído', unidade: 'R$/m²', padrao: 12 },
+    { id: 'levantamento_m2', rotulo: 'Levantamento e desenho do imóvel (sem planta)', unidade: 'R$/m²', padrao: 6 },
+    { id: 'levantamento_min', rotulo: 'Levantamento do imóvel: mínimo', unidade: 'R$', padrao: 700 },
+    { id: 'topografia', rotulo: 'Levantamento topográfico (com parceiro)', unidade: 'R$', padrao: 2200 },
+    { id: 'notificacao_pct', rotulo: 'Acréscimo com notificação ou multa', unidade: '%', padrao: 20 },
+    { id: 'acompanhamento', rotulo: 'Acompanhamento até a aprovação (pacote Completo)', unidade: 'R$', padrao: 1800 },
+    { id: 'cartorio', rotulo: 'Acompanhamento no cartório até o registro (pacote Premium)', unidade: 'R$', padrao: 1500 },
+    { id: 'cnd', rotulo: 'Regularização da obra no INSS (pacote Premium)', unidade: 'R$', padrao: 1200 },
+    { id: 'visita', rotulo: 'Visita técnica', unidade: 'R$', padrao: 450 },
+    { id: 'custo_hora', rotulo: 'Custo da sua hora (referência interna)', unidade: 'R$/h', padrao: 90, custo: true },
+    { id: 'art', rotulo: 'Taxa da ART (conferir tabela CREA-RJ)', unidade: 'R$', padrao: 110, custo: true },
+  ],
+  padrao: { objetivo: 'averbacao', area: null, terreno: null, planta: false, topografia: false, notificacao: false, pagamento: 'metade', parcelas: 3, distancia_km: 0, urgencia: false },
+  calcular(r, p) {
+    const obj = s(r, 'objetivo', 'averbacao');
+    const o = OBJETIVOS[obj] ?? OBJETIVOS.averbacao;
+    const area = n(r, 'area');
+    const terreno = n(r, 'terreno');
+    const planta = b(r, 'planta');
+    const topo = b(r, 'topografia');
+    const notif = b(r, 'notificacao');
+    const ch = q(p, 'custo_hora');
+    const fNot = notif ? 1 + q(p, 'notificacao_pct') / 100 : 1;
+    const honor = arred10((q(p, `base_${obj}`) + area * q(p, 'por_m2')) * fNot);
+    const horas = Math.round(16 + area / 15 + (notif ? 6 : 0));
+    const linhas: Linha[] = [];
+    if (!planta) linhas.push({ titulo: 'Levantamento e desenho do imóvel', descricao: `Medição completa do imóvel (${fmtN(area)} m²) e desenho do que existe hoje, base para as plantas da regularização.`, valor: arred10(Math.max(q(p, 'levantamento_min'), area * q(p, 'levantamento_m2'))), custo: Math.round((4 + area / 40) * ch), pacote: 1 });
+    if (topo) linhas.push({ titulo: 'Levantamento topográfico', descricao: `Levantamento planialtimétrico do terreno${terreno ? ` (${fmtN(terreno)} m²)` : ''} com georreferência das divisas, feito com parceiro de topografia.`, valor: arred10(q(p, 'topografia')), custo: Math.round(q(p, 'topografia') * 0.75), pacote: 1 });
+    linhas.push({
+      titulo: `Regularização: ${o.rotulo.toLowerCase()}`,
+      descricao: `Documentação técnica para ${o.texto}: análise da documentação, plantas e memorial no padrão exigido, quadro de áreas, ART e protocolo${notif ? ', incluindo a resposta à notificação em andamento' : ''}.`,
+      valor: honor, custo: Math.round(horas * ch + q(p, 'art')), pacote: 1, principal: true,
+    });
+    linhas.push({ titulo: 'Acompanhamento até a aprovação', descricao: 'Acompanhamento do processo, atendimento a todas as exigências e comparecimento ao órgão até a aprovação final.', valor: arred10(q(p, 'acompanhamento')), custo: Math.round(12 * ch), pacote: 2 });
+    linhas.push({ titulo: 'Acompanhamento no cartório até o registro', descricao: 'Preparação dos requerimentos e acompanhamento no Registro de Imóveis até a matrícula atualizada.', valor: arred10(q(p, 'cartorio')), custo: Math.round(8 * ch), pacote: 3 });
+    if (COM_OBRA.includes(obj)) linhas.push({ titulo: 'Regularização da obra no INSS', descricao: 'Cadastro da obra (CNO), cálculo da contribuição pelo SERO e obtenção da certidão negativa de débitos da obra.', valor: arred10(q(p, 'cnd')), custo: Math.round(8 * ch), pacote: 3 });
+    const dias = 20 + Math.round(area / 100) * 3 + (topo ? 10 : 0) + (planta ? 0 : 5);
+    const [d1, d2, d3] = dividirDias(dias, [30, 40, 30]);
+    const avisos: string[] = [];
+    if (!area) avisos.push('Informe a área construída para calcular o preço.');
+    if (obj === 'usucapiao') avisos.push('Usucapião precisa de advogado: a ROSAE faz a planta, o memorial e a ART.');
+    if (notif) avisos.push('Com notificação ou multa em andamento, confira os prazos da prefeitura antes de prometer datas.');
+    if (COM_TERRENO.includes(obj) && !topo) avisos.push('Usucapião, desmembramento e retificação costumam exigir levantamento topográfico georreferenciado.');
+    return {
+      linhas, visitas: [planta ? 1 : 2, planta ? 2 : 3, planta ? 3 : 4], horas, avisos,
+      titulo: `Regularização · ${o.rotulo}`,
+      etapas: [
+        { nome: 'Levantamento e análise', descricao: 'Vistoria, medições e análise da documentação do imóvel', dias: d1, percentual: 30 },
+        { nome: 'Plantas e memoriais', descricao: 'Plantas, memorial, quadro de áreas e ART no padrão exigido', dias: d2, percentual: 40 },
+        { nome: 'Protocolo e exigências', descricao: 'Protocolo do processo e resposta às exigências do órgão', dias: d3, percentual: 30 },
+      ],
+      dados: [
+        { rotulo: 'Regularização', valor: o.rotulo }, { rotulo: 'Área construída', valor: `${fmtN(area, 2)} m²` },
+        ...(terreno ? [{ rotulo: 'Área do terreno', valor: `${fmtN(terreno, 2)} m²` }] : []),
+        { rotulo: 'Planta existente', valor: sn(planta) }, { rotulo: 'Topografia', valor: sn(topo) }, { rotulo: 'Notificação ou multa', valor: sn(notif) },
+      ],
+      resumo: `Você vai ter o seu imóvel em dia com a prefeitura e o cartório: cuidamos da ${o.texto}, com medição, plantas, memorial, ART e o protocolo do processo. Imóvel regularizado vale mais, pode ser financiado, vendido e herdado sem dor de cabeça.`,
+      inclusoes: ['Análise da documentação do imóvel', ...(planta ? [] : ['Medição e desenho do imóvel']), ...(topo ? ['Levantamento topográfico'] : []), 'Plantas e memorial descritivo no padrão exigido', 'Quadro de áreas', 'ART do responsável técnico', 'Montagem e protocolo do processo', ...(notif ? ['Resposta técnica à notificação em andamento'] : [])],
+      exclusoes: ['Taxas, emolumentos, impostos (ITBI, ISS, INSS) e multas', 'Obras de adequação exigidas pela prefeitura (orçadas à parte)', ...(obj === 'usucapiao' ? ['Honorários de advogado'] : []), ...(topo ? [] : ['Levantamento topográfico, se o órgão exigir']), 'Certidões pessoais e do imóvel (o cliente providencia, com nossa orientação)'],
+      responsabilidades: [
+        { parte: 'ROSAE', itens: ['Levantar e desenhar o imóvel com precisão', 'Preparar toda a documentação técnica com ART', 'Protocolar o processo e orientar o cliente sobre cada exigência'] },
+        { parte: 'Cliente', itens: ['Fornecer escritura, matrícula, IPTU e documentos pessoais', 'Garantir acesso ao imóvel para as medições', 'Pagar as taxas e emolumentos dos órgãos', ...RESP_CLIENTE_COMUM] },
+      ],
+      entregaveis: ['Plantas e memorial descritivo assinados', 'Quadro de áreas', 'ART', 'Processo protocolado no órgão'],
+      metodologia: [
+        { titulo: 'Análise', texto: 'Conferimos a documentação e a situação do imóvel na prefeitura e no cartório.' },
+        { titulo: 'Medição', texto: 'Medimos e desenhamos o imóvel como ele é hoje.' },
+        { titulo: 'Documentação', texto: 'Plantas, memorial e ART no padrão exigido pelo órgão.' },
+        { titulo: 'Protocolo', texto: 'Damos entrada no processo e respondemos às exigências.' },
+      ],
+      riscos: ['Imóvel irregular não pode ser financiado e perde valor na venda.', 'Obras sem licença podem gerar multas que crescem com o tempo.', 'Herança e partilha de imóvel irregular ficam mais lentas e caras.'],
+      normas: ['ABNT NBR 12721 · Cálculo de áreas de construção', ...(topo ? ['ABNT NBR 13133 · Levantamento topográfico'] : []), 'Código de Obras e legislação urbanística do município', 'Lei 6.015/1973 · Registros Públicos'],
+      faq: [
+        { pergunta: 'Quanto tempo leva para ficar tudo regularizado?', resposta: 'A nossa parte técnica tem o prazo desta proposta. Depois do protocolo, o tempo depende da análise da prefeitura ou do cartório; acompanhamos e respondemos às exigências.' },
+        { pergunta: 'As taxas da prefeitura estão incluídas?', resposta: 'Não. Taxas, emolumentos e impostos são pagos direto ao órgão. Informamos os valores assim que o processo é calculado.' },
+        { pergunta: 'E se a prefeitura pedir alguma obra?', resposta: 'Explicamos a exigência e, se for preciso adequar algo no imóvel, apresentamos o orçamento antes. Nada é feito sem a sua aprovação.' },
+        ...FAQ_COMUM,
+      ],
+      premissas: ['Documentação do imóvel e dos proprietários fornecida pelo cliente', 'Prazo de análise dos órgãos não incluído no cronograma', 'Exigências que dependam de obra no imóvel orçadas à parte'],
+      garantia: 'A ROSAE responde tecnicamente pelas medições e plantas (ART) e corrige, sem custo, qualquer erro técnico apontado pelo órgão.',
+      diferencial: { titulo: 'Regularização sem idas e vindas', texto: 'Documentação montada já no padrão do órgão, para reduzir exigências e acelerar a aprovação.' },
+      pacotes: [
+        { nome: 'Essencial', subtitulo: 'Documentação técnica pronta e protocolada', extras: [] },
+        { nome: 'Completo', subtitulo: 'Acompanhado até a aprovação', extras: [] },
+        { nome: 'Premium', subtitulo: 'Do protocolo à matrícula atualizada', extras: ['Prioridade de atendimento'] },
+      ],
+      pagamento_padrao: 'metade',
+    };
+  },
+};
+
+export const DEFINICOES: Record<TipoServico, Definicao> = {
+  projeto_estrutural: projeto, projeto_arquitetonico: arquitetonico, reforco, reforma, construcao, regularizacao, laudo, pericia,
+};
+export const TIPOS: TipoServico[] = ['projeto_estrutural', 'projeto_arquitetonico', 'reforco', 'reforma', 'construcao', 'regularizacao', 'laudo', 'pericia'];
 
 /** Perguntas do tipo + as comuns (deslocamento, urgência, pagamento). */
 export function camposDe(tipo: TipoServico): Campo[] {
@@ -922,6 +1187,8 @@ export function faltando(tipo: TipoServico, r: Respostas): string[] {
 export type Pacote = { numero: 1 | 2 | 3; nome: string; subtitulo: string; valor: number; calculado: number; custo: number; linhas: Linha[]; destaques: string[] };
 export type Orcamento = {
   tipo: TipoServico;
+  /** Todos os serviços da proposta, na ordem (o primeiro é o principal). */
+  tipos: TipoServico[];
   titulo: string;
   pacotes: Pacote[];
   principal: Pacote;
@@ -992,6 +1259,24 @@ function aplicarValor(ls: Linha[], valor: number | undefined): Linha[] {
   return ls.map((l, k) => ({ ...l, valor: partes[k] / 100 }));
 }
 
+/** Linhas de preço viram itens da proposta; a linha principal leva as etapas (viram o cronograma da obra na conversão). */
+function itensDasLinhas(linhas: Linha[], etapas: Etapa[], biblioteca: ModeloServico[] = []): Item[] {
+  const porNome = new Map(biblioteca.map((m) => [m.nome, m.id]));
+  return linhas.map((l) => {
+    const qtd = l.quantidade && l.unidade && l.unidade !== 'vb' ? l.quantidade : 1;
+    const unid = qtd === 1 ? 'vb' : l.unidade ?? 'vb';
+    const it: Item = {
+      id: novoId(), modelo_id: (l.modelo && porNome.get(l.modelo)) || null, titulo: l.titulo, descricao: l.descricao,
+      unidade: unid, quantidade: qtd, preco_unitario: qtd === 1 ? l.valor : Math.round((l.valor / qtd) * 100) / 100, complexidade: null, fator: 1, total: 0,
+    };
+    // Preço unitário arredondado pode não fechar o total: nesse caso vai como verba.
+    if (Math.round(it.quantidade * it.preco_unitario * 100) !== Math.round(l.valor * 100)) { it.quantidade = 1; it.unidade = 'vb'; it.preco_unitario = l.valor; }
+    it.total = Math.round(it.quantidade * it.preco_unitario * 100) / 100;
+    if (l.principal) it.etapas = etapas.map((e) => ({ nome: e.nome, descricao: e.descricao, percentual: e.percentual, duracao_dias: e.prazo_dias }));
+    return it;
+  });
+}
+
 /** Gera o orçamento completo. pacote = qual opção vai como valor da proposta (as outras aparecem para comparação). */
 export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, pacoteEscolhido: 1 | 2 | 3 = 2, ctx: Contexto = {}): Orcamento {
   const def = DEFINICOES[tipo];
@@ -1016,20 +1301,7 @@ export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, p
   const prazoTotal = etapas.reduce((t, e) => t + (e.prazo_dias ?? 0), 0);
 
   // Itens da proposta: a linha principal leva as etapas (viram o cronograma da obra na conversão).
-  const porNome = new Map((ctx.biblioteca ?? []).map((m) => [m.nome, m.id]));
-  const itens: Item[] = principal.linhas.map((l) => {
-    const qtd = l.quantidade && l.unidade && l.unidade !== 'vb' ? l.quantidade : 1;
-    const unid = qtd === 1 ? 'vb' : l.unidade ?? 'vb';
-    const it: Item = {
-      id: novoId(), modelo_id: (l.modelo && porNome.get(l.modelo)) || null, titulo: l.titulo, descricao: l.descricao,
-      unidade: unid, quantidade: qtd, preco_unitario: qtd === 1 ? l.valor : Math.round((l.valor / qtd) * 100) / 100, complexidade: null, fator: 1, total: 0,
-    };
-    // Preço unitário arredondado pode não fechar o total: nesse caso vai como verba.
-    if (Math.round(it.quantidade * it.preco_unitario * 100) !== Math.round(l.valor * 100)) { it.quantidade = 1; it.unidade = 'vb'; it.preco_unitario = l.valor; }
-    it.total = Math.round(it.quantidade * it.preco_unitario * 100) / 100;
-    if (l.principal) it.etapas = etapas.map((e) => ({ nome: e.nome, descricao: e.descricao, percentual: e.percentual, duracao_dias: e.prazo_dias }));
-    return it;
-  });
+  const itens = itensDasLinhas(principal.linhas, etapas, ctx.biblioteca);
   const total = Math.round(principal.valor * 100);
   const forma = (s(r, 'pagamento') || base.pagamento_padrao) as FormaPagamento;
   const parcelas = pagamento(forma, total, n(r, 'parcelas', 3), etapas, q(pp, 'entrada_pct'));
@@ -1084,10 +1356,155 @@ export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, p
   const avisos = [...base.avisos, ...faltando(tipo, r).map((x) => `Preencha: ${x}.`)];
   if (principal.valor > 0 && margem / principal.valor < 0.15) avisos.push('Margem estimada abaixo de 15%: revise preço ou custos antes de enviar.');
   return {
-    tipo, titulo: base.titulo, pacotes, principal, base, conteudo, custos,
+    tipo, tipos: [tipo], titulo: base.titulo, pacotes, principal, base, conteudo, custos,
     analise: { preco: principal.valor, custo, margem, margem_pct: principal.valor ? (margem / principal.valor) * 100 : 0, horas: base.horas, valor_hora: base.horas ? principal.valor / base.horas : undefined },
     avisos: Array.from(new Set(avisos)),
   };
 }
 
 export const NOME_TIPO: Record<TipoServico, string> = Object.fromEntries(TIPOS.map((t) => [t, DEFINICOES[t].nome])) as Record<TipoServico, string>;
+
+// ---------------------------------------------------------------------
+// Vários serviços na mesma proposta
+// ---------------------------------------------------------------------
+export type Servico = { tipo: TipoServico; respostas: Respostas };
+/** Perguntas que valem para a proposta inteira (deslocamento, urgência, pagamento). */
+export const CAMPOS_GERAIS: Campo[] = CAMPOS_COMUNS;
+const IDS_GERAIS = CAMPOS_COMUNS.map((c) => c.id);
+
+const unicos = <T,>(xs: T[], chave: (x: T) => string = (x) => String(x)): T[] => {
+  const vistos = new Set<string>();
+  return xs.filter((x) => { const k = chave(x).trim().toLowerCase(); if (!k || vistos.has(k)) return false; vistos.add(k); return true; });
+};
+const listaHumana = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} e ${xs[xs.length - 1]}`);
+
+/** Uma exclusão que outro serviço da mesma proposta cobre deixa de ser exclusão (ou perde a parte coberta). */
+function ajustarExclusao(texto: string, tipos: TipoServico[]): string | null {
+  const t = texto.toLowerCase();
+  if (tipos.includes('projeto_arquitetonico') && /^projetos? de arquitetura/.test(t)) {
+    return /instala|complementar/.test(t) ? 'Projetos de instalações (elétrica, hidráulica e outros)' : null;
+  }
+  if (tipos.includes('projeto_estrutural') && /^projetos? estrutura/.test(t)) {
+    return /instala/.test(t) ? 'Projetos de instalações (elétrica, hidráulica e outros)' : null;
+  }
+  if (tipos.includes('regularizacao') && /habite-se|averba/.test(t) && !/taxa/.test(t)) return null;
+  return texto;
+}
+
+const NOMES_PACOTE = ['Essencial', 'Completo', 'Premium'];
+const SUB_PACOTE = ['O essencial de cada serviço', 'Cada serviço no pacote Completo', 'Cada serviço no pacote Premium'];
+
+/**
+ * Proposta com um ou mais serviços. Com um só, é o orçamento de sempre. Com vários, cada serviço
+ * vira um grupo do escopo, os pacotes somam o mesmo pacote de cada serviço, as etapas seguem em
+ * sequência e o pagamento é calculado sobre o total.
+ */
+export function gerarOrcamentoServicos(servicos: Servico[], precos: Partial<Record<TipoServico, Parametros>>, pacoteEscolhido: 1 | 2 | 3 = 2, ctx: Contexto = {}): Orcamento {
+  const lista = servicos.filter((sv) => DEFINICOES[sv.tipo]);
+  if (!lista.length) throw new Error('Escolha pelo menos um serviço.');
+  const [primeiro] = lista;
+  if (lista.length === 1) return gerarOrcamento(primeiro.tipo, primeiro.respostas, precos[primeiro.tipo] ?? {}, pacoteEscolhido, ctx);
+
+  const tipos = lista.map((sv) => sv.tipo);
+  const gerais: Respostas = Object.fromEntries(IDS_GERAIS.filter((id) => id in primeiro.respostas).map((id) => [id, primeiro.respostas[id]]));
+  const partes = lista.map((sv) => gerarOrcamento(sv.tipo, { ...sv.respostas, ...gerais }, precos[sv.tipo] ?? {}, pacoteEscolhido, { ...ctx, valores: undefined }));
+  const nomes = tipos.map((t) => DEFINICOES[t].nome);
+  const tres = partes.some((o) => o.pacotes.length > 1);
+  const numeros: (1 | 2 | 3)[] = tres ? [1, 2, 3] : [1];
+  const pacoteDe = (o: Orcamento, k: 1 | 2 | 3) => (o.pacotes.length > 1 ? o.pacotes[k - 1] : o.pacotes[0]);
+
+  const pacotes: Pacote[] = numeros.map((k) => {
+    const calc = partes.flatMap((o, i) => pacoteDe(o, k).linhas.map((l) => ({ ...l, servico: i })));
+    const ls = aplicarValor(calc, ctx.valores?.[k]);
+    const destaques = k === 1
+      ? partes.map((o, i) => `${nomes[i]}: ${pacoteDe(o, 1).subtitulo.charAt(0).toLowerCase()}${pacoteDe(o, 1).subtitulo.slice(1)}`)
+      : [`Tudo do ${NOMES_PACOTE[k - 2]}`, ...partes.flatMap((o) => (o.pacotes.length > 1 ? o.base.linhas.filter((l) => l.pacote === k && l.valor > 0).map((l) => l.titulo) : []))];
+    return {
+      numero: k, nome: tres ? NOMES_PACOTE[k - 1] : 'Honorários', subtitulo: tres ? SUB_PACOTE[k - 1] : 'Todos os serviços', linhas: ls,
+      valor: Math.round(ls.reduce((t, l) => t + l.valor, 0) * 100) / 100, calculado: calc.reduce((t, l) => t + l.valor, 0), custo: ls.reduce((t, l) => t + l.custo, 0),
+      destaques: destaques.slice(0, 7),
+    };
+  });
+  const principal = pacotes[Math.min(pacotes.length, pacoteEscolhido) - 1] ?? pacotes[0];
+  const total = Math.round(principal.valor * 100);
+  const valorDo = (i: number) => principal.linhas.filter((l) => l.servico === i).reduce((t, l) => t + l.valor, 0);
+
+  // Etapas em sequência; o peso de cada uma no pagamento segue a parte do serviço no total.
+  const etapas: Etapa[] = partes.flatMap((o, i) => {
+    const fatia = principal.valor > 0 ? valorDo(i) / principal.valor : 1 / partes.length;
+    const somaPct = o.conteudo.etapas.reduce((t, e) => t + (e.percentual ?? 0), 0) || 100;
+    return o.conteudo.etapas.map((e) => ({ ...e, nome: `${nomes[i]} · ${e.nome}`, percentual: Math.round(((e.percentual ?? 0) / somaPct) * fatia * 1000) / 10 }));
+  });
+  const prazoTotal = etapas.reduce((t, e) => t + (e.prazo_dias ?? 0), 0);
+
+  const ambientes = partes.map((o, i) => ({
+    id: novoId(), nome: nomes[i],
+    itens: itensDasLinhas(principal.linhas.filter((l) => l.servico === i).map(({ servico: _s, ...l }) => l), o.conteudo.etapas, ctx.biblioteca),
+  }));
+
+  const pp0 = { ...parametrosPadrao(primeiro.tipo), ...(precos[primeiro.tipo] ?? {}) };
+  const forma = (s(gerais, 'pagamento') || partes[0].base.pagamento_padrao) as FormaPagamento;
+  // Por etapa, com vários serviços: uma parcela na conclusão de cada serviço (e não uma por etapa de cada um).
+  const parcelas = forma === 'etapas' && total > 0
+    ? parcelasPorPercentual(total, [
+      { descricao: 'Sinal para mobilização', percentual: 20, quando: 'No aceite da proposta' },
+      ...partes.map((_, i) => ({ descricao: nomes[i], percentual: 80 * (principal.valor > 0 ? valorDo(i) / principal.valor : 1 / partes.length), quando: 'Ao concluir o serviço' })),
+    ])
+    : pagamento(forma, total, n(gerais, 'parcelas', 3), etapas, q(pp0, 'entrada_pct'));
+  const desc = q(pp0, 'desconto_avista_pct');
+  const avista = desc > 0 ? arred10(principal.valor * (1 - desc / 100)) : 0;
+
+  const partesResp = new Map<string, string[]>();
+  for (const o of partes) for (const r of o.conteudo.responsabilidades) partesResp.set(r.parte, [...(partesResp.get(r.parte) ?? []), ...r.itens]);
+  const area = n(primeiro.respostas, 'area');
+  const titulo = `${nomes.join(' + ')}${area ? ` · ${fmtN(area)} m²` : ''}`;
+  const c0 = partes[0].conteudo;
+
+  const conteudo: Conteudo = {
+    ...c0,
+    ambientes,
+    inclusoes: unicos(partes.flatMap((o) => o.conteudo.inclusoes)),
+    exclusoes: unicos(partes.flatMap((o) => o.conteudo.exclusoes).map((x) => ajustarExclusao(x, tipos)).filter((x): x is string => !!x)),
+    responsabilidades: Array.from(partesResp, ([parte, itens]) => ({ parte, itens: unicos(itens) })),
+    etapas,
+    prazo_texto: `${textoPrazo(prazoTotal)}, a contar do aceite, do pagamento do sinal e do recebimento das informações necessárias. Os serviços seguem em sequência, na ordem desta proposta.`,
+    pagamento: {
+      descricao: `${rotuloDe(CAMPOS_COMUNS, 'pagamento', forma)}. Pix, transferência ou boleto.${avista ? ` À vista: ${reaisFmt(avista)} (${fmtN(desc, 1)}% de desconto).` : ''}`,
+      parcelas,
+    },
+    premissas: unicos(partes.flatMap((o) => o.conteudo.premissas)),
+    garantia: unicos(partes.map((o) => o.conteudo.garantia ?? '')).join(' '),
+    resumo: `Esta proposta reúne ${listaHumana(nomes.map((x) => x.toLowerCase()))} num só contrato, com um único responsável técnico do começo ao fim. ${partes.map((o) => (o.conteudo.resumo ?? '').split(/(?<=\.)\s/)[0]).join(' ')}`,
+    dados_tecnicos: unicos(partes.flatMap((o) => o.conteudo.dados_tecnicos ?? []), (d) => d.rotulo).slice(0, 10),
+    entregaveis: unicos(partes.flatMap((o) => o.conteudo.entregaveis ?? [])),
+    metodologia: partes.map((o, i) => ({ titulo: nomes[i], texto: (o.conteudo.metodologia ?? []).map((m) => m.titulo).join(' → ') })),
+    riscos: unicos(partes.flatMap((o) => o.conteudo.riscos ?? [])).slice(0, 5),
+    normas: unicos(partes.flatMap((o) => o.conteudo.normas ?? [])),
+    diferenciais: [...DIFERENCIAIS, { titulo: 'Tudo integrado, um só responsável', texto: 'Os serviços conversam entre si desde o início: sem retrabalho e sem jogo de empurra entre profissionais.' }],
+    faq: unicos(partes.flatMap((o) => o.conteudo.faq ?? []), (f) => f.pergunta).slice(0, 7),
+    opcoes: pacotes.length > 1 ? pacotes.map((pc) => ({ nome: pc.nome, subtitulo: pc.subtitulo, valor: pc.valor, destaques: pc.destaques, recomendado: pc.numero === 2, principal: pc.numero === principal.numero })) : [],
+    condicao_especial: avista ? `Pagamento à vista com ${fmtN(desc, 1)}% de desconto: ${reaisFmt(avista)}, para aceite dentro da validade.` : '',
+    prazo_total_dias: prazoTotal,
+    tipo_servico: primeiro.tipo,
+    gerador: {
+      tipo: primeiro.tipo, respostas: primeiro.respostas, pacote: principal.numero,
+      ...(ctx.valores && Object.keys(ctx.valores).length ? { valores: ctx.valores } : {}),
+      extras: lista.slice(1).map((sv) => ({ tipo: sv.tipo, respostas: sv.respostas })), em: new Date().toISOString(),
+    },
+  };
+
+  const custos = principal.linhas.filter((l) => l.custo > 0).map((l) => ({ descricao: `${nomes[l.servico ?? 0]} · ${l.titulo}`, valor: Math.round(l.custo) }));
+  const custo = custos.reduce((t, c) => t + c.valor, 0);
+  const margem = principal.valor - custo;
+  const horas = partes.reduce((t, o) => t + (o.base.horas ?? 0), 0);
+  const avisos = partes.flatMap((o, i) => o.avisos.filter((a) => !a.startsWith('Margem estimada')).map((a) => `${nomes[i]}: ${a}`));
+  if (principal.valor > 0 && margem / principal.valor < 0.15) avisos.push('Margem estimada abaixo de 15%: revise preço ou custos antes de enviar.');
+  return {
+    tipo: primeiro.tipo, tipos, titulo, pacotes, principal, base: partes[0].base, conteudo, custos,
+    analise: { preco: principal.valor, custo, margem, margem_pct: principal.valor ? (margem / principal.valor) * 100 : 0, horas: horas || undefined, valor_hora: horas ? principal.valor / horas : undefined },
+    avisos: Array.from(new Set(avisos)),
+  };
+}
+
+/** Nome dos serviços de um orçamento: "Projeto arquitetônico + Projeto estrutural". */
+export const nomeDosServicos = (o: Pick<Orcamento, 'tipos'>): string => o.tipos.map((t) => DEFINICOES[t].nome).join(' + ');

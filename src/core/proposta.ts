@@ -68,7 +68,11 @@ export type Conteudo = {
   depoimentos?: string[];
   // Cor da apresentação (uma das paletas de Aparência). Vazio = musgo da marca.
   cor?: string;
-  gerador?: { tipo: string; respostas: Record<string, string | number | boolean | null>; pacote: number; valores?: ValoresManuais; em: string };
+  gerador?: {
+    tipo: string; respostas: Record<string, string | number | boolean | null>; pacote: number; valores?: ValoresManuais; em: string;
+    /** Outros serviços da mesma proposta (o primeiro é tipo/respostas). */
+    extras?: { tipo: string; respostas: Record<string, string | number | boolean | null> }[];
+  };
 };
 
 export type ModeloServico = {

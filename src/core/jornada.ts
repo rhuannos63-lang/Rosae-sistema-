@@ -2,7 +2,7 @@
 // em linguagem simples, e como as etapas publicadas da obra se distribuem nelas.
 import { faseEtapa, type EtapaPortal, type Fase } from './portal';
 
-export type Perfil = 'projeto' | 'reforco' | 'reforma' | 'construcao' | 'laudo' | 'gestao';
+export type Perfil = 'projeto' | 'arquitetura' | 'reforco' | 'reforma' | 'construcao' | 'laudo' | 'regularizacao' | 'gestao';
 
 export type FaseJornada = {
   id: string;
@@ -33,6 +33,18 @@ export const PERFIS: Record<Perfil, DefinicaoPerfil> = {
       { id: 'calculo', nome: 'Cálculo', agora: 'Calculamos cargas, esforços e dimensões de cada peça pelas normas técnicas.', palavras: ['cálcul', 'calcul', 'dimension', 'anális', 'verific'] },
       { id: 'detalhamento', nome: 'Detalhamento', agora: 'Desenhamos as pranchas de formas e armações que a obra vai seguir.', palavras: ['detalh', 'prancha', 'desenho', 'armaç', 'forma'] },
       { id: 'entrega', nome: 'Entrega', agora: 'Revisamos tudo, emitimos a ART e entregamos o projeto pronto para executar.', palavras: ['revis', 'entreg', 'art', 'compatib', 'aprova'] },
+    ],
+  },
+  arquitetura: {
+    nome: 'Projeto arquitetônico',
+    chamada: 'Da primeira conversa ao projeto pronto para construir: veja a sua casa ganhar forma.',
+    onde: 'no escritório',
+    fases: [
+      { id: 'briefing', nome: 'Briefing', agora: 'Entendemos como você vive, o terreno e o orçamento para a obra.', palavras: ['brief', 'programa', 'levant', 'reuni', 'necessidad', 'visita'] },
+      { id: 'estudo', nome: 'Estudo preliminar', agora: 'Desenhamos opções de layout para você escolher a que mais combina com você.', palavras: ['estudo', 'prelimin', 'layout', 'implant'] },
+      { id: 'anteprojeto', nome: 'Anteprojeto', agora: 'A solução escolhida ganha volume em 3D, fachadas e materiais.', palavras: ['antepro', '3d', 'volum', 'fachad', 'imag'] },
+      { id: 'legal', nome: 'Aprovação', agora: 'Preparamos o projeto legal e acompanhamos a análise da prefeitura.', palavras: ['legal', 'aprova', 'prefeit', 'protocol', 'exigênc'] },
+      { id: 'executivo', nome: 'Projeto executivo', agora: 'Detalhamos cada medida e acabamento para a obra executar sem dúvidas.', palavras: ['execut', 'detalh', 'entreg', 'art', 'caderno', 'compatib'] },
     ],
   },
   reforco: {
@@ -84,6 +96,18 @@ export const PERFIS: Record<Perfil, DefinicaoPerfil> = {
       { id: 'entrega', nome: 'Entrega e ART', agora: 'Entregamos o laudo assinado, com ART, e explicamos o resultado a você.', palavras: ['entreg', 'art', 'apresent', 'reuni'] },
     ],
   },
+  regularizacao: {
+    nome: 'Regularização do imóvel',
+    chamada: 'Do levantamento à matrícula atualizada: o seu imóvel entrando em dia.',
+    onde: 'no imóvel e nos órgãos',
+    fases: [
+      { id: 'levantamento', nome: 'Levantamento', agora: 'Medimos o imóvel e conferimos toda a documentação.', palavras: ['levant', 'medi', 'vistor', 'anális', 'topograf', 'document'] },
+      { id: 'plantas', nome: 'Plantas e memoriais', agora: 'Desenhamos as plantas e o memorial no padrão exigido, com ART.', palavras: ['planta', 'memorial', 'desenho', 'quadro de área', 'art'] },
+      { id: 'protocolo', nome: 'Protocolo', agora: 'Damos entrada no processo na prefeitura ou no cartório.', palavras: ['protocol', 'entrada', 'processo'] },
+      { id: 'exigencias', nome: 'Exigências', agora: 'Respondemos a cada exigência do órgão até a aprovação.', palavras: ['exigênc', 'exigenc', 'aprova', 'análise do órgão', 'acompanh'] },
+      { id: 'registro', nome: 'Registro', agora: 'Imóvel aprovado e averbado: documentação em dia.', palavras: ['registr', 'averba', 'matrícul', 'habite', 'cartóri', 'certid', 'inss'] },
+    ],
+  },
   gestao: {
     nome: 'Gestão de obra',
     chamada: 'Planejamento, execução e conferência: tudo acompanhado de perto.',
@@ -99,7 +123,8 @@ export const PERFIS: Record<Perfil, DefinicaoPerfil> = {
 };
 
 const PERFIL_DO_GERADOR: Record<string, Perfil> = {
-  projeto_estrutural: 'projeto', reforco: 'reforco', reforma: 'reforma', construcao: 'construcao', laudo: 'laudo', pericia: 'laudo',
+  projeto_estrutural: 'projeto', projeto_arquitetonico: 'arquitetura', reforco: 'reforco', reforma: 'reforma', construcao: 'construcao',
+  regularizacao: 'regularizacao', laudo: 'laudo', pericia: 'laudo',
 };
 
 const sem = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -109,6 +134,8 @@ export function perfilDaObra(tipoServico: string | null | undefined, gerador?: s
   if (gerador && PERFIL_DO_GERADOR[gerador]) return PERFIL_DO_GERADOR[gerador];
   const t = sem(tipoServico ?? '');
   if (/refor[cç]o/.test(t)) return 'reforco';
+  if (/regulariz|habite|averba|legaliza|usucapi|desmembra|retifica/.test(t)) return 'regularizacao';
+  if (/arquitet|interiores/.test(t)) return 'arquitetura';
   if (/projeto|calculo/.test(t)) return 'projeto';
   if (/laudo|vistoria|pericia|inspecao|parecer/.test(t)) return 'laudo';
   if (/reforma|retrofit|banheiro|cozinha/.test(t)) return 'reforma';

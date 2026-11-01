@@ -73,7 +73,7 @@ const G: Guia[] = [
     id: 'orcamento', titulo: 'Novo orçamento', manual: 'orcamento',
     serve: 'Responder poucas perguntas e receber o orçamento calculado, em três pacotes, com a apresentação de alto padrão pronta para enviar.',
     passos: [
-      { titulo: 'Escolha o serviço', texto: 'Projeto estrutural, reforço, reforma, construção, gestão ou perícia. Cada um tem as suas perguntas.' },
+      { titulo: 'Escolha um ou mais serviços', texto: 'Projeto estrutural, arquitetônico, reforço, reforma, construção, regularização, laudo ou perícia. Toque em vários para juntar tudo na mesma proposta.' },
       { titulo: 'Informe o cliente', texto: 'Já cadastrado ou Novo cliente.', alvo: 'Novo cliente' },
       { titulo: 'Responda e veja o preço mudar', texto: 'Área, complexidade, prazo: o valor é recalculado a cada resposta.' },
       { titulo: 'Compare os pacotes', texto: 'Essencial, Completo e Premium, com o que cada um inclui. Confira a margem estimada.' },
