@@ -19,6 +19,7 @@ const Financeiro = preguicoso(() => import('./pages/Financeiro'), 'Financeiro');
 const LancamentoDetalhe = preguicoso(() => import('./pages/Financeiro'), 'LancamentoDetalhe');
 const Contas = preguicoso(() => import('./pages/Contas'), 'Contas');
 const Configuracoes = preguicoso(() => import('./pages/Configuracoes'), 'Configuracoes');
+const Lixeira = preguicoso(() => import('./pages/Lixeira'), 'Lixeira');
 const Comercial = preguicoso(() => import('./pages/Comercial'), 'Comercial');
 const OportunidadeDetalhe = preguicoso(() => import('./pages/Comercial'), 'OportunidadeDetalhe');
 const Propostas = preguicoso(() => import('./pages/Propostas'), 'Propostas');
@@ -98,6 +99,7 @@ function Rotas() {
             {podeFinanceiro && <Route path="contas" element={<Contas />} />}
             {podeFinanceiro && <Route path="planejador" element={<Planejador />} />}
             {ehAdmin && <Route path="configuracoes" element={<Configuracoes />} />}
+            {ehAdmin && <Route path="lixeira" element={<Lixeira />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

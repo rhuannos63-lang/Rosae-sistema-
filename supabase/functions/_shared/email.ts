@@ -11,6 +11,16 @@ export function validarEnvio(c: { destinatario?: unknown; assunto?: unknown; men
   if (typeof c.mensagem !== 'string' || c.mensagem.length > 5000) return 'A mensagem passou de 5.000 caracteres.';
   if (typeof c.chave !== 'string' || c.chave.length < 16 || c.chave.length > 80) return 'Envio sem identificação. Recarregue a página.';
   if (typeof c.origem !== 'string' || !/^https?:\/\/[a-z0-9.-]+(:\d+)?$/i.test(c.origem)) return 'Endereço do sistema inválido.';
+  return validarAnexo(c as { anexo_nome?: unknown; anexo_base64?: unknown });
+}
+
+/** PDF anexado (opcional): nome .pdf e até 15 MB. */
+export const ANEXO_MAX_BASE64 = 20_000_000;
+export function validarAnexo(c: { anexo_nome?: unknown; anexo_base64?: unknown }): string | null {
+  if (c.anexo_nome === undefined && c.anexo_base64 === undefined) return null;
+  if (typeof c.anexo_nome !== 'string' || !/^[^\\/:*?"<>|]{1,140}\.pdf$/i.test(c.anexo_nome)) return 'Nome do anexo inválido.';
+  if (typeof c.anexo_base64 !== 'string' || !c.anexo_base64.startsWith('JVBER')) return 'O anexo precisa ser um PDF.';
+  if (c.anexo_base64.length > ANEXO_MAX_BASE64) return 'O PDF passou de 15 MB.';
   return null;
 }
 
@@ -28,12 +38,11 @@ export function montarEmail(mensagem: string, link: string, e: Empresa): { html:
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e2e4da;border-radius:12px">
 <tr><td style="padding:22px 28px;border-bottom:3px solid #5b6b2e"><b style="font-size:18px;letter-spacing:.04em;color:#3b451e">${escapar(nome)}</b></td></tr>
 <tr><td style="padding:24px 28px;font-size:15px;line-height:1.55">${paragrafos}
-<p style="margin:22px 0"><a href="${escapar(link)}" style="display:inline-block;background:#5b6b2e;color:#ffffff;text-decoration:none;font-weight:bold;padding:13px 22px;border-radius:8px">Ver a proposta e responder</a></p>
-<p style="margin:0;font-size:12px;color:#6b705e">Se o botão não abrir, copie este endereço no navegador:<br><span style="word-break:break-all">${escapar(link)}</span></p>
+<p style="margin:22px 0"><a href="${escapar(link)}" style="display:inline-block;background:#5b6b2e;color:#ffffff;text-decoration:none;font-weight:bold;padding:13px 22px;border-radius:999px">Aceitar ou pedir ajuste</a></p>
 </td></tr>
 <tr><td style="padding:16px 28px;border-top:1px solid #e2e4da;font-size:12px;color:#6b705e">${rodape.map(escapar).join(' · ')}${e.frase ? `<br><i>${escapar(e.frase)}</i>` : ''}</td></tr>
 </table></td></tr></table></body></html>`;
-  const texto = `${mensagem.trim()}\n\nVer a proposta e responder:\n${link}\n\n${rodape.join(' · ')}`;
+  const texto = `${mensagem.trim()}\n\nAceitar ou pedir ajuste:\n${link}\n\n${rodape.join(' · ')}`;
   return { html, texto };
 }
 

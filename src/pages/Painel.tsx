@@ -17,8 +17,13 @@ import { FluxoCaixa, ParaOndeFoi, ProjecaoCaixa } from './PainelGraficos';
 type Comercial = { enviadas: number; em_negociacao: number; aprovadas_periodo: number; recusadas_periodo: number; rascunhos: number; oportunidades_abertas: number; acoes_atrasadas: number; cliques_whatsapp: number; formularios: number };
 type Indicadores = Record<string, string | number | boolean | null | Comercial> & { sem_permissao?: boolean; gerencial?: boolean; comercial?: Comercial | null };
 
-function KpisComerciais({ c }: { c: Comercial | null | undefined }) {
-  if (!c) return null;
+/** Número seguro: campo ausente vira 0 em vez de "undefined" ou "NaN" na tela. */
+const n = (v: unknown) => Number(v ?? 0) || 0;
+
+function KpisComerciais({ c: bruto }: { c: Comercial | null | undefined }) {
+  if (!bruto) return null;
+  const c = Object.fromEntries(Object.entries(bruto).map(([k, v]) => [k, n(v)])) as Comercial;
+  for (const k of ['enviadas', 'em_negociacao', 'aprovadas_periodo', 'rascunhos', 'oportunidades_abertas', 'acoes_atrasadas'] as const) c[k] = n(bruto[k]);
   return (
     <>
       <Kpi rotulo="Propostas em aberto" valor={String(c.enviadas + c.em_negociacao)} det={<>{c.em_negociacao} em negociação · {c.rascunhos} rascunho(s) · {c.aprovadas_periodo} aprovada(s) no período</>} para="/propostas" />
@@ -117,7 +122,7 @@ export function Painel() {
       podeFinanceiro ? supabase.rpc('painel_indicadores', { p_inicio: py.inicio, p_fim: py.fim }) : Promise.resolve({ data: null, error: null }),
     ]);
     return {
-      ind: ok(ind) as Indicadores, serie: (ok(serie) ?? []) as Serie[], empresa: ok(empresa) as Empresa | null,
+      ind: (ok(ind) ?? {}) as Indicadores, serie: (ok(serie) ?? []) as Serie[], empresa: ok(empresa) as Empresa | null,
       comparar: ok(ant) ? { anterior: ok(ant) as Indicadores, anoAnterior: ok(anoAnt) as Indicadores, rotuloAnt: pa.rotulo, rotuloAno: py.rotulo } : null,
     };
   }, [p.inicio, p.fim, podeFinanceiro]);
@@ -172,7 +177,7 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
   if (ind.sem_permissao) {
     return (
       <div className="grid grid-kpi">
-        <Kpi rotulo="Obras ativas" valor={String(ind.obras_ativas)} para="/obras" />
+        <Kpi rotulo="Obras ativas" valor={String(n(ind.obras_ativas))} para="/obras" />
         <KpisComerciais c={ind.comercial} />
         <div className="aviso info" style={{ gridColumn: '1 / -1' }}>Os números financeiros aparecem só para quem tem acesso ao financeiro.</div>
       </div>
@@ -227,7 +232,7 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
         { rotulo: 'Pago em obras', valor: formatar(c('pago_obras')), det: 'Material e parceiros', para: `/contas?grupo=pago_obras&${qs}` },
         { rotulo: 'Despesas da empresa', valor: formatar(c('pago_empresa')), det: 'Pagas no período', para: `/contas?grupo=pago_empresa&${qs}` },
         { rotulo: 'Pró-labore', valor: formatar(c('retiradas')), det: 'Retiradas', para: `/contas?grupo=retiradas&${qs}` },
-        { rotulo: 'Obras ativas', valor: String(ind.obras_ativas), det: 'Contratadas ou em execução', para: '/obras' },
+        { rotulo: 'Obras ativas', valor: String(n(ind.obras_ativas)), det: 'Contratadas ou em execução', para: '/obras' },
         ...(ind.comercial ? [
           { rotulo: 'Propostas em aberto', valor: String(ind.comercial.enviadas + ind.comercial.em_negociacao), det: `${ind.comercial.aprovadas_periodo} aprovada(s)`, para: '/propostas' },
           { rotulo: 'Oportunidades', valor: String(ind.comercial.oportunidades_abertas), det: ind.comercial.acoes_atrasadas > 0 ? `${ind.comercial.acoes_atrasadas} atrasada(s)` : 'Em dia', alerta: ind.comercial.acoes_atrasadas > 0, para: '/comercial' },

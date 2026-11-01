@@ -1,12 +1,14 @@
 // Página que o cliente abre pelo link. Não exige login e só mostra o que está na versão emitida.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { variaveisDocumento } from '../lib/aparencia';
+import { baixarArquivo, gerarPdfProposta, nomeDoPdf } from '../lib/pdfProposta';
 import { useParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { PropostaDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
 import { Carregando, Erro } from '../components/ui';
 import { formatar } from '../core/dinheiro';
-import { formatarData, formatarDataHora } from '../core/datas';
-import { normalizar, paginaOculta, totalConteudo, type Conteudo } from '../core/proposta';
+import { formatarData, formatarDataHora, hoje } from '../core/datas';
+import { normalizar, paginaOculta, textoParcelamento, totalConteudo, type Conteudo } from '../core/proposta';
 
 type Publica = {
   erro?: string; codigo: string; tipo: 'proposta' | 'aditivo'; titulo: string; versao: number; valor_total: string; conteudo: Partial<Conteudo>;
@@ -20,6 +22,7 @@ export function PropostaPublica() {
   const [erro, setErro] = useState<string | null>(null);
   const [acao, setAcao] = useState<'aceitar' | 'ajuste' | 'recusar' | null>(null);
   const [f, setF] = useState({ nome: '', email: '', documento: '', comentario: '', concordo: false });
+  const [baixando, setBaixando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [resposta, setResposta] = useState<string | null>(null);
   const [opcao, setOpcao] = useState<string | null>(null);
@@ -69,8 +72,20 @@ export function PropostaPublica() {
   const principal = opcoes.find((o) => o.principal);
   const escolhida = opcoes.find((o) => o.nome === opcao) ?? principal;
   const outraOpcao = !!(escolhida && principal && escolhida.nome !== principal.nome);
+  const faltam = d.validade ? Math.round((Date.parse(d.validade.slice(0, 10)) - Date.parse(hoje())) / 86400000) : null;
+  const validadeTxt = d.validade && faltam !== null && faltam >= 0
+    ? `Válida até ${formatarData(d.validade)} · ${faltam === 0 ? 'último dia' : faltam === 1 ? 'falta 1 dia' : `faltam ${faltam} dias`}`
+    : null;
+  const parcelamento = textoParcelamento(c);
   const tel = (d.empresa?.telefone ?? '').replace(/\D/g, '');
   const whats = tel ? `https://wa.me/${tel.length <= 11 ? `55${tel}` : tel}?text=${encodeURIComponent(`Olá! Vi a proposta ${d.codigo} (${d.titulo}) e tenho uma dúvida.`)}` : null;
+  async function salvarPdf() {
+    setBaixando(true);
+    const doc = { codigo: d!.codigo, tipo: d!.tipo, titulo: d!.titulo, versao: d!.versao, cliente: d!.cliente, emitida_em: d!.emitida_em, validade: d!.validade, hash: d!.hash, conteudo: c, empresa: d!.empresa };
+    try { baixarArquivo(await gerarPdfProposta(doc, { aceite: window.location.href }), nomeDoPdf(doc)); }
+    catch { window.print(); }
+    finally { setBaixando(false); }
+  }
   function abrir(a: 'aceitar' | 'ajuste' | 'recusar') {
     if (a === 'aceitar' && outraOpcao) {
       setF((x) => ({ ...x, comentario: `Gostaria de seguir com o pacote ${escolhida!.nome} (${formatar(Math.round(escolhida!.valor * 100))}).` }));
@@ -80,7 +95,7 @@ export function PropostaPublica() {
   }
 
   return (
-    <div className="publica">
+    <div className="publica" style={variaveisDocumento(c.cor) as CSSProperties | undefined}>
       <header className="publica-cab">
         <img src="/marca/rosae-logo-horizontal.svg" alt="ROSAE Engenharia & Estruturas" />
         <div className="spacer" />
@@ -100,7 +115,8 @@ export function PropostaPublica() {
 
       <div className="card resposta-cliente" id="resposta">
         <h2>Sua resposta</h2>
-        <p className="muted" style={{ marginTop: 4 }}>Total desta versão: <b>{formatar(totalConteudo(c))}</b></p>
+        <p className="muted" style={{ marginTop: 4 }}>Total desta versão: <b>{formatar(totalConteudo(c))}</b>{parcelamento && ` · ${parcelamento}`}</p>
+        {podeAceitar && validadeTxt && <p className="validade-chip"><span aria-hidden="true">◷</span> {validadeTxt}. Com o aceite dentro da validade, os valores e a data de início ficam garantidos.</p>}
         {escolhe && escolhida && (
           <div className="pacote-escolhido">
             <span className="muted small">Pacote escolhido</span>
@@ -115,7 +131,7 @@ export function PropostaPublica() {
             {d.estado !== 'aprovada' && <button className="btn-secundario" onClick={() => abrir('ajuste')}>Pedir ajuste</button>}
             {whats && <a className="btn-secundario" href={whats} target="_blank" rel="noopener noreferrer">Falar com o engenheiro</a>}
             {d.estado !== 'aprovada' && d.atual && <button className="btn-link" onClick={() => abrir('recusar')}>Não tenho interesse</button>}
-            <button className="btn-link" onClick={() => window.print()}>Salvar em PDF</button>
+            <button className="btn-link" disabled={baixando} onClick={salvarPdf}>{baixando ? 'Preparando o PDF…' : 'Baixar em PDF'}</button>
           </div>
         ) : (
           <form className="stack" onSubmit={responder}>
@@ -148,7 +164,7 @@ export function PropostaPublica() {
       </div>
       {podeAceitar && !acao && (
         <div className="cta-fixa">
-          <span className="cta-total"><span className="muted small">{escolhida ? `Pacote ${escolhida.nome}` : 'Total'}</span><b className="num">{formatar(escolhida ? Math.round(escolhida.valor * 100) : totalConteudo(c))}</b></span>
+          <span className="cta-total"><span className="muted small">{escolhida ? `Pacote ${escolhida.nome}` : 'Total'}{validadeTxt ? ` · ${validadeTxt.replace('Válida até', 'válida até')}` : ''}</span><b className="num">{formatar(escolhida ? Math.round(escolhida.valor * 100) : totalConteudo(c))}</b></span>
           {whats && <a className="btn-secundario" href={whats} target="_blank" rel="noopener noreferrer">Tirar dúvida</a>}
           <button className="btn-primario" onClick={() => abrir('aceitar')}>{outraOpcao ? 'Quero este pacote' : 'Aceitar proposta'}</button>
         </div>

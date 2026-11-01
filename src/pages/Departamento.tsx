@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { useDepartamentos } from '../components/Layout';
 import { Icone } from '../components/Icone';
+import { ComoFunciona } from '../components/ComoFunciona';
 import { doBanco, formatar } from '../core/dinheiro';
 import { formatarData, hoje } from '../core/datas';
 import { DEPARTAMENTO_POR_ID, type Departamento as Dep } from '../core/departamentos';
@@ -39,7 +40,7 @@ async function carregar(dep: Dep): Promise<Resumo> {
         pendencias,
         numeros: c ? [
           { rotulo: 'Oportunidades abertas', valor: String(c.oportunidades_abertas), det: c.acoes_atrasadas ? `${c.acoes_atrasadas} com ação atrasada` : 'Ações em dia', alerta: c.acoes_atrasadas > 0, para: '/comercial' },
-          { rotulo: 'Propostas em aberto', valor: String(c.enviadas + c.em_negociacao), det: `${c.rascunhos} em rascunho`, para: '/propostas' },
+          { rotulo: 'Propostas em aberto', valor: String((Number(c.enviadas) || 0) + (Number(c.em_negociacao) || 0)), det: `${c.rascunhos} em rascunho`, para: '/propostas' },
           { rotulo: 'Aprovadas no mês', valor: String(c.aprovadas_periodo), det: 'Viram obra na Gestão de Obras', para: '/propostas' },
           numPend,
         ] : [numPend],
@@ -90,6 +91,7 @@ export function Departamento() {
           <h1>{dep.nome}</h1>
           <p className="dep-resumo">{dep.resumo}</p>
         </div>
+        <div className="dep-como"><ComoFunciona /></div>
       </header>
 
       <section className="dep-numeros" aria-busy={carregando && !resumo}>

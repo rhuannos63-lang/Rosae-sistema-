@@ -34,3 +34,27 @@ export function ok<T>(r: { data: T | null; error: unknown }): T {
 export function novaChave(): string {
   return crypto.randomUUID();
 }
+
+/**
+ * Busca todas as linhas de uma consulta, em lotes. O banco devolve no máximo 1.000 linhas
+ * por pedido; com muitos dados, uma lista simples cortaria o resto sem avisar.
+ * `montar` recebe o intervalo (de, até) e devolve a consulta com `.range(de, ate)` aplicado.
+ */
+export async function todas<T>(montar: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: unknown }>, lote = 1000, maximo = 50000): Promise<T[]> {
+  const saida: T[] = [];
+  for (let de = 0; de < maximo; de += lote) {
+    const r = await montar(de, de + lote - 1);
+    if (r.error) throw r.error;
+    const pagina = r.data ?? [];
+    saida.push(...pagina);
+    if (pagina.length < lote) break;
+  }
+  return saida;
+}
+
+/** Mostra uma lista longa aos poucos (rápido mesmo com milhares de itens). */
+export function useAosPoucos<T>(lista: T[], passo = 120): { visiveis: T[]; resta: number; mais: () => void } {
+  const [n, setN] = useState(passo);
+  useEffect(() => { setN(passo); }, [lista.length, passo]);
+  return { visiveis: lista.slice(0, n), resta: Math.max(0, lista.length - n), mais: () => setN((x) => x + passo * 2) };
+}

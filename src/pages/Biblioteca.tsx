@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import { doBanco, formatar, paraBanco, type Centavos } from '../core/dinheiro';
 import { UNIDADES, type ModeloServico } from '../core/proposta';
 
@@ -112,7 +113,7 @@ function ModeloForm({ modelo, aoFechar, aoSalvar }: { modelo: ModeloServico | nu
 
   return (
     <Modal titulo={m ? m.nome : 'Novo serviço'} aoFechar={aoFechar} largo
-      rodape={<><button type="button" className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" form="form-modelo" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</button></>}>
+      rodape={<>{m && <BotaoExcluir tabela="modelo_servico" id={m.id} nome={m.nome} aoExcluir={aoSalvar} classe="btn-link perigo" />}<span style={{ flex: 1 }} /><button type="button" className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" form="form-modelo" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</button></>}>
       <form id="form-modelo" className="stack" onSubmit={salvar}>
         <div className="grid grid-2">
           <label className="campo">Nome<input value={f.nome} onChange={(e) => set('nome', e.target.value)} required /></label>

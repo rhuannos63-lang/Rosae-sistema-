@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Topo } from '../components/Layout';
 import { Icone } from '../components/Icone';
 import { useToast } from '../components/ui';
-import { contraste, CORES_PRONTAS, PADRAO, useAparencia, type Aparencia as TAparencia } from '../lib/aparencia';
+import { contraste, misturar, PALETAS, PADRAO, paletaDaCor, useAparencia, type Aparencia as TAparencia } from '../lib/aparencia';
 
 type Opcao<K extends keyof TAparencia> = { valor: TAparencia[K]; rotulo: string; dica?: string };
 
@@ -52,7 +52,8 @@ export function Aparencia() {
   const [a, mudar] = useAparencia();
   const toast = useToast();
   const [hex, setHex] = useState(a.cor);
-  const pronta = CORES_PRONTAS.find((c) => c.cor === a.cor);
+  const pronta = paletaDaCor(a.cor);
+  const grupos = [...new Set(PALETAS.map((p) => p.grupo))];
   const baixoContraste = contraste(a.cor, '#ffffff') < 3;
   const aplicarHex = (v: string) => { setHex(v); if (/^#[0-9a-f]{6}$/i.test(v)) mudar({ cor: v.toLowerCase() }); };
 
@@ -67,15 +68,24 @@ export function Aparencia() {
       <div className="grid ap-grade">
         <div className="stack">
           <section className="card">
-            <div className="card-titulo"><div><h2>Cor principal</h2><div className="sub">Botões, destaques e item ativo do menu.</div></div></div>
-            <div className="ap-cores" role="radiogroup" aria-label="Cores prontas">
-              {CORES_PRONTAS.map((c) => (
-                <button key={c.cor} role="radio" aria-checked={a.cor === c.cor} className={`ap-cor${a.cor === c.cor ? ' ativo' : ''}`} onClick={() => { setHex(c.cor); mudar({ cor: c.cor }); }}>
-                  <span style={{ background: c.cor }}>{a.cor === c.cor && <Icone nome="check" />}</span>
-                  {c.nome}
-                </button>
-              ))}
-            </div>
+            <div className="card-titulo"><div><h2>Paleta</h2><div className="sub">Cada paleta muda o sistema inteiro em harmonia: botões, menu, cartões de destaque e as cores dos gráficos.</div></div></div>
+            {grupos.map((g) => (
+              <div key={g} className="ap-grupo">
+                <div className="ap-grupo-nome">{g}</div>
+                <div className="ap-paletas" role="radiogroup" aria-label={`Paletas ${g}`}>
+                  {PALETAS.filter((p) => p.grupo === g).map((p) => (
+                    <button key={p.id} role="radio" aria-checked={a.cor === p.cor} className={`ap-paleta${a.cor === p.cor ? ' ativo' : ''}`} onClick={() => { setHex(p.cor); mudar({ cor: p.cor }); }}>
+                      <span className="ap-paleta-amostra" aria-hidden="true">
+                        <i style={{ background: p.cor }} /><i style={{ background: misturar(p.cor, '#ffffff', 0.86) }} />
+                        <span>{p.series.slice(1).map((x) => <em key={x} style={{ background: x }} />)}</span>
+                      </span>
+                      <b>{p.nome}</b>
+                      {a.cor === p.cor && <Icone nome="check" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
             <div className="ap-linha" style={{ marginTop: 14 }}>
               <div className="ap-rotulo">Outra cor</div>
               <div className="row" style={{ gap: 8, flexWrap: 'nowrap' }}>
@@ -118,7 +128,7 @@ export function Aparencia() {
               <button className="btn-secundario">Secundário</button>
               <span className="selo">Selo</span>
             </div>
-            <p className="muted small" style={{ marginBottom: 0 }}>Propostas, contratos, relatórios e o portal do cliente continuam sempre com as cores da marca ROSAE.</p>
+            <p className="muted small" style={{ marginBottom: 0 }}>Contratos, relatórios e o portal do cliente ficam nas cores da marca ROSAE. A cor de cada proposta você escolhe no próprio editor da proposta.</p>
           </section>
         </div>
       </div>

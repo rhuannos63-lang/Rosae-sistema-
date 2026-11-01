@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Erro, Modal, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import { doBanco, formatar, paraBanco, type Centavos } from '../core/dinheiro';
 import { formatarDataHora, hoje } from '../core/datas';
 import { baixarArquivo, paraCsv } from '../core/exportar';
@@ -223,7 +224,7 @@ function ContaForm({ conta, aoFechar, aoSalvar }: { conta: ContaBancaria | null;
     aoSalvar();
   }
   return (
-    <Modal titulo={conta ? conta.nome : 'Nova conta'} aoFechar={aoFechar} rodape={<><button type="button" className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" form="form-cb">Salvar</button></>}>
+    <Modal titulo={conta ? conta.nome : 'Nova conta'} aoFechar={aoFechar} rodape={<>{conta && <BotaoExcluir tabela="conta_bancaria" id={conta.id} nome={conta.nome} aoExcluir={aoSalvar} classe="btn-link perigo" />}<span style={{ flex: 1 }} /><button type="button" className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" form="form-cb">Salvar</button></>}>
       <form id="form-cb" className="stack" onSubmit={salvar}>
         <label className="campo">Nome<input value={nome} onChange={(e) => setNome(e.target.value)} required autoFocus /></label>
         <div className="grid grid-2">

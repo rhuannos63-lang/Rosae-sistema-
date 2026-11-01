@@ -1,11 +1,13 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
-import { useConsulta, ok } from '../lib/consulta';
+import { useConsulta, ok, todas } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { COR_MARCA, PALETAS } from '../lib/aparencia';
+import { BotaoExcluir } from '../components/Excluir';
 import { PropostaDocumento, type DadosDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
 import { doBanco, formatar, paraBanco, somar, type Centavos } from '../core/dinheiro';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
@@ -13,12 +15,14 @@ import {
   acompanharTotal, ajustarTotal, aplicarModelos, compararVersoes, parcelasAoTotal, itemDoModelo, normalizar, novoId, paraCentavos, pendencias, prepararParaSalvar, rascunhoDoTexto,
   somaParcelas, sugerirPagamento, totalAmbiente, totalConteudo, totalItem, UNIDADES,
   type Ambiente, type Conteudo, type Item, type ModeloServico,
+  forcaDaProposta,
 } from '../core/proposta';
 import { ESTADO_PROPOSTA, EVENTO_PROPOSTA, type EstadoProposta, type Proposta, type PropostaEvento, type PropostaVersao } from '../lib/tipos';
 import { linkWhatsApp } from './Comercial';
 import { estadoInicial, OrcamentoGerador, type EstadoGerador } from '../components/OrcamentoGerador';
 import { carregarPrecos } from '../lib/orcamentoParametros';
 import { EnviarEmail, HistoricoEmails } from '../components/EnvioEmail';
+import { baixarArquivo, compartilharArquivo, gerarPdfProposta, nomeDoPdf, paraBase64 } from '../lib/pdfProposta';
 import type { Orcamento } from '../core/orcamento';
 
 type PropostaLista = Proposta & { versoes: { id: string; numero: number; valor_total: string; emitida: boolean; validade: string | null }[] };
@@ -29,7 +33,7 @@ export function Propostas() {
   const [filtro, setFiltro] = useState<'ativas' | EstadoProposta | 'todas'>(params.get('estado') === 'aprovada' ? 'aprovada' : 'ativas');
   const { dados, erro, carregando } = useConsulta(async () => {
     const [p, ev] = await Promise.all([
-      supabase.from('proposta').select('*, pessoa:pessoa(nome, telefone, email), versoes:proposta_versao!proposta_versao_proposta_id_fkey(id, numero, valor_total, emitida, validade)').order('atualizado_em', { ascending: false }),
+      todas((de, ate) => supabase.from('proposta').select('*, pessoa:pessoa(nome, telefone, email), versoes:proposta_versao!proposta_versao_proposta_id_fkey(id, numero, valor_total, emitida, validade)').order('atualizado_em', { ascending: false }).order('id').range(de, ate)).then((data) => ({ data, error: null })),
       supabase.from('proposta_evento').select('proposta_id, em').eq('tipo', 'visualizada').order('em', { ascending: false }).limit(2000),
     ]);
     const vistas = new Map<string, { n: number; ultima: string }>();
@@ -178,6 +182,7 @@ export function PropostaEditor() {
       <Topo titulo={p.titulo} sub={<>{p.codigo} · {p.pessoa?.nome} · <span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span></>}>
         <button className="btn-secundario" onClick={() => (p.oportunidade_id ? navegar(`/comercial/${p.oportunidade_id}`) : navegar('/propostas'))}><Icone nome="voltar" /> Voltar</button>
         <button className="btn-secundario" onClick={duplicar}>Duplicar</button>
+        <BotaoExcluir tabela="proposta" id={p.id} nome={p.titulo} aoExcluir={() => navegar('/propostas')} />
       </Topo>
       <div className="row versoes" style={{ marginBottom: 14 }}>
         <span className="muted small">Versões:</span>
@@ -373,6 +378,8 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
             {modoPagina === 'editar' && (
               <p className="dica-pagina"><Icone nome="ajuda" /> Clique em qualquer texto ou valor da folha para mudar. Enter confirma, Esc desfaz. Mudou um preço? As parcelas e o total acompanham. Para tirar uma página, use “Tirar esta página” em cima dela.</p>
             )}
+            {modoPagina === 'editar' && <ForcaProposta c={c} />}
+            {modoPagina === 'editar' && <CorProposta cor={c.cor} aoMudar={(cor) => setC((x) => ({ ...x, cor }))} />}
             {modoPagina === 'editar'
               ? <PropostaDocumento d={doc} edicao={{ mudar: (f) => setC((x) => f(x)) }} />
               : <PropostaDocumento d={doc} />}
@@ -701,6 +708,10 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
   const [comparar, setComparar] = useState(false);
   const [email, setEmail] = useState(false);
   const [emails, setEmails] = useState(0);
+  const [gerando, setGerando] = useState<string | null>(null);
+  const [pdf, setPdf] = useState<{ blob: Blob; nome: string } | null>(null);
+  const [pdfAberto, setPdfAberto] = useState(false);
+  const [verLink, setVerLink] = useState(false);
   const c = normalizar(versao.conteudo as Partial<Conteudo>);
   const eventos = carga.eventos.filter((e) => e.versao_id === versao.id);
   const respostas = carga.eventos.filter((e) => ['aceita', 'ajuste_pedido', 'recusada'].includes(e.tipo));
@@ -732,6 +743,40 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
     const r = await supabase.rpc('registrar_envio_proposta', { p_versao: versao.id, p_canal: canal, p_destinatario: destino || null });
     if (r.error) return setErro(mensagemErro(r.error));
     toast(canal === 'whatsapp' ? 'Mensagem preparada no WhatsApp. Confira e toque em enviar.' : 'E-mail preparado no seu aplicativo de e-mail. Confira e envie.');
+    aoMudar();
+  }
+
+  /** Gera o PDF deitado com o botão de aceite apontando para o link seguro desta versão. */
+  async function gerarPdf(): Promise<{ blob: Blob; nome: string } | null> {
+    if (pdf) return pdf;
+    setErro(null);
+    const url = link ?? (await gerarLink());
+    if (!url) return null;
+    setGerando('Preparando o PDF…');
+    try {
+      const blob = await gerarPdfProposta(doc, { aceite: url, aoProgredir: (f, t) => setGerando(`Preparando o PDF… página ${f} de ${t}`) });
+      const pronto = { blob, nome: nomeDoPdf(doc) };
+      setPdf(pronto);
+      return pronto;
+    } catch (e) {
+      setErro(`Não consegui gerar o PDF: ${e instanceof Error ? e.message : 'erro inesperado'}. Tente de novo.`);
+      return null;
+    } finally { setGerando(null); }
+  }
+
+  const textoPdf = () => `Olá, ${p.pessoa?.nome?.split(' ')[0] ?? ''}! Segue em anexo a proposta ${p.codigo} da ROSAE Engenharia: ${p.titulo}.\n\nPara aprovar, é só tocar em “Aceitar esta proposta” dentro do PDF. Qualquer dúvida, estou à disposição.\nRhuann Rosa · ROSAE Engenharia & Estruturas`;
+
+  /** Compartilha o arquivo pronto. No celular abre a lista de apps com o PDF anexado. */
+  async function compartilharPdf(arquivo: { blob: Blob; nome: string }) {
+    const texto = textoPdf();
+    const r = await compartilharArquivo(arquivo.blob, arquivo.nome, texto);
+    if (r === 'cancelado') return;
+    if (r === 'sem-suporte') {
+      baixarArquivo(arquivo.blob, arquivo.nome);
+      window.open(linkWhatsApp(p.pessoa?.telefone ?? '', texto) ?? `https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
+      toast('PDF salvo. No WhatsApp, toque no clipe, anexe o arquivo e envie.');
+    } else toast('Proposta enviada com o PDF.');
+    await supabase.rpc('registrar_envio_proposta', { p_versao: versao.id, p_canal: 'whatsapp', p_destinatario: p.pessoa?.telefone || null });
     aoMudar();
   }
 
@@ -777,20 +822,22 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
           {ehUltima && p.estado !== 'aprovada' && (
             <div className="stack" style={{ marginTop: 12 }}>
               <div className="row">
-                <button className="btn-primario" onClick={() => enviar('whatsapp')}>Enviar por WhatsApp</button>
-                <button className="btn-secundario" onClick={() => setEmail(true)}>Enviar por e-mail</button>
-                <button className="btn-secundario" onClick={gerarLink}>Gerar link</button>
+                <button className="btn-primario" disabled={!!gerando} onClick={async () => { const a = await gerarPdf(); if (a) setPdfAberto(true); }}><Icone nome="mensagem" /> Enviar PDF pelo WhatsApp</button>
+                <button className="btn-secundario" disabled={!!gerando} onClick={() => setEmail(true)}><Icone nome="documento" /> Enviar por e-mail</button>
               </div>
-              {link && (
+              {gerando && <div className="aviso info"><span className="girando" aria-hidden="true">◌</span><span>{gerando}</span></div>}
+              {link && verLink && (
                 <div className="aviso info" style={{ wordBreak: 'break-all' }}>
                   <span>{link} <button className="btn-link" onClick={() => { navigator.clipboard.writeText(link); toast('Link copiado.'); }}>Copiar</button></span>
                 </div>
               )}
-              <p className="muted small" style={{ margin: 0 }}>O e-mail sai pelo sistema com prévia e registro de entrega (quando o envio automático está ligado). O WhatsApp abre com a mensagem pronta para você conferir e enviar. O link vale 60 dias e mostra só o que está nesta versão.</p>
+              <p className="muted small" style={{ margin: 0 }}>O cliente recebe o arquivo PDF deitado, como uma apresentação. Dentro dele há o botão “Aceitar esta proposta”, que abre a página segura de aceite (válida por 60 dias). Ninguém precisa copiar link.</p>
             </div>
           )}
           <div className="row" style={{ marginTop: 12 }}>
-            <Link className="btn-secundario" to={`/propostas/${p.id}/imprimir?v=${versao.id}`} target="_blank"><Icone nome="baixar" /> PDF / imprimir</Link>
+            <button className="btn-secundario" disabled={!!gerando} onClick={async () => { const a = await gerarPdf(); if (a) baixarArquivo(a.blob, a.nome); }}><Icone nome="baixar" /> Baixar PDF</button>
+            {ehUltima && p.estado !== 'aprovada' && <button className="btn-link" onClick={() => enviar('whatsapp')}>Mandar só o link</button>}
+            {ehUltima && p.estado !== 'aprovada' && !verLink && <button className="btn-link" onClick={async () => { if (link || (await gerarLink())) setVerLink(true); }}>Ver link</button>}
             {anterior && <button className="btn-link" onClick={() => setComparar(true)}>Comparar com v{anterior.numero}</button>}
             {ehUltima && <button className="btn-link" onClick={revogar}>Desativar links</button>}
           </div>
@@ -828,7 +875,18 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
       {comparar && anterior && <Comparacao a={normalizar(anterior.conteudo as Partial<Conteudo>)} b={c} na={anterior.numero} nb={versao.numero} aoFechar={() => setComparar(false)} />}
       {email && (
         <EnviarEmail versaoId={versao.id} codigo={p.codigo} versao={versao.numero} titulo={p.titulo} cliente={p.pessoa?.nome ?? ''} emailCliente={p.pessoa?.email ?? null}
-          aoFechar={() => setEmail(false)} aoEnviar={() => { setEmails((n) => n + 1); aoMudar(); }} abrirNoAplicativo={() => enviar('email')} />
+          aoFechar={() => setEmail(false)} aoEnviar={() => { setEmails((n) => n + 1); aoMudar(); }} abrirNoAplicativo={() => enviar('email')}
+          anexo={async () => { const a = await gerarPdf(); return a ? { nome: a.nome, base64: await paraBase64(a.blob) } : null; }} />
+      )}
+      {pdfAberto && pdf && (
+        <Modal titulo="PDF pronto para enviar" aoFechar={() => setPdfAberto(false)}
+          rodape={<><button className="btn-link" onClick={() => baixarArquivo(pdf.blob, pdf.nome)}>Só baixar</button><button className="btn-primario" onClick={() => { setPdfAberto(false); compartilharPdf(pdf); }}><Icone nome="mensagem" /> Enviar pelo WhatsApp</button></>}>
+          <div className="pdf-pronto">
+            <span className="pdf-pronto-icone" aria-hidden="true">PDF</span>
+            <div><b>{pdf.nome}</b><span className="muted small">{(pdf.blob.size / 1024 / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB · páginas deitadas 16:9 · botão de aceite clicável</span></div>
+          </div>
+          <p className="muted small" style={{ marginBottom: 0 }}>No celular, escolha o WhatsApp e a conversa do cliente: o arquivo vai anexado. No computador, o arquivo é salvo e o WhatsApp abre na conversa para você anexar.</p>
+        </Modal>
       )}
     </div>
   );
@@ -873,10 +931,11 @@ function Converter({ proposta, versaoId }: { proposta: Proposta; versaoId: strin
   );
 }
 
-// Página só com a apresentação, para salvar em PDF pelo navegador.
+// Página só com a apresentação: gera o PDF deitado (16:9) e baixa; imprimir fica como alternativa.
 export function PropostaImprimir() {
   const { id } = useParams();
   const [params] = useSearchParams();
+  const [estado, setEstado] = useState<string>('Preparando o PDF…');
   const { dados, erro, carregando } = useConsulta(async () => {
     const [p, v, emp] = await Promise.all([
       supabase.from('proposta').select('*, pessoa:pessoa(nome)').eq('id', id!).single(),
@@ -885,19 +944,91 @@ export function PropostaImprimir() {
     ]);
     return { p: ok(p) as Proposta, v: ok(v) as PropostaVersao, empresa: ok(emp) as EmpresaPublica | null };
   }, [id, params]);
+  const doc: DadosDocumento | null = dados ? {
+    codigo: dados.p.codigo, tipo: dados.p.tipo, titulo: dados.p.titulo, versao: dados.v.numero, cliente: dados.p.pessoa?.nome ?? '', emitida_em: dados.v.emitida_em,
+    validade: dados.v.validade, hash: dados.v.hash, conteudo: normalizar(dados.v.conteudo as Partial<Conteudo>), empresa: dados.empresa, rascunho: !dados.v.emitida,
+  } : null;
+  const baixar = useCallback(async (d: DadosDocumento) => {
+    setEstado('Preparando o PDF…');
+    try {
+      const blob = await gerarPdfProposta(d, { aoProgredir: (f, t) => setEstado(`Preparando o PDF… página ${f} de ${t}`) });
+      baixarArquivo(blob, nomeDoPdf(d));
+      setEstado('PDF salvo. Confira a pasta de downloads.');
+    } catch {
+      setEstado('Não consegui gerar o PDF aqui. Use Imprimir e escolha “Salvar como PDF”.');
+    }
+  }, []);
+  const iniciado = useRef(false);
   useEffect(() => {
-    if (dados) { document.title = `${dados.p.codigo} v${dados.v.numero} · ROSAE`; setTimeout(() => window.print(), 600); }
-  }, [dados]);
+    if (!doc || iniciado.current) return;
+    iniciado.current = true;
+    document.title = `${doc.codigo} v${doc.versao} · ROSAE`;
+    baixar(doc);
+  }, [doc, baixar]);
   if (carregando) return <Carregando />;
-  if (erro || !dados) return <Erro mensagem={erro ?? 'Não encontrado.'} />;
-  const { p, v } = dados;
+  if (erro || !dados || !doc) return <Erro mensagem={erro ?? 'Não encontrado.'} />;
   return (
     <div className="pagina-impressao">
-      <div className="nao-imprimir aviso info" style={{ margin: 16 }}><span>Na janela de impressão, escolha “Salvar como PDF”. Margens: nenhuma. Ative “Gráficos de fundo”.</span></div>
-      <PropostaDocumento d={{
-        codigo: p.codigo, tipo: p.tipo, titulo: p.titulo, versao: v.numero, cliente: p.pessoa?.nome ?? '', emitida_em: v.emitida_em,
-        validade: v.validade, hash: v.hash, conteudo: normalizar(v.conteudo as Partial<Conteudo>), empresa: dados.empresa, rascunho: !v.emitida,
-      }} />
+      <div className="nao-imprimir aviso info" style={{ margin: 16 }}>
+        <span>{estado}</span>
+        <span className="spacer" />
+        <button className="btn-secundario" onClick={() => baixar(doc)}><Icone nome="baixar" /> Baixar de novo</button>
+        <button className="btn-link" onClick={() => window.print()}>Imprimir</button>
+      </div>
+      <PropostaDocumento d={doc} />
     </div>
+  );
+}
+
+/** Cor da apresentação: qualquer paleta de Aparência. Capa, destaques e gráficos acompanham. */
+function CorProposta({ cor, aoMudar }: { cor?: string; aoMudar: (cor: string | undefined) => void }) {
+  const atual = (cor ?? COR_MARCA).toLowerCase();
+  const nome = PALETAS.find((p) => p.cor === atual)?.nome ?? 'Personalizada';
+  return (
+    <div className="cor-proposta card">
+      <div className="cor-proposta-topo">
+        <Icone nome="paleta" />
+        <b>Cor desta proposta</b>
+        <span className="muted small">{nome} · capa, destaques e gráficos mudam juntos</span>
+      </div>
+      <div className="cor-proposta-lista" role="radiogroup" aria-label="Cor desta proposta">
+        {PALETAS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            role="radio"
+            aria-checked={atual === p.cor}
+            aria-label={p.nome}
+            title={p.nome}
+            className={`cor-bolinha${atual === p.cor ? ' marcada' : ''}`}
+            style={{ background: `linear-gradient(90deg, ${p.cor} 0 50%, ${p.series[1]} 50% 75%, ${p.series[2]} 75%)` }}
+            onClick={() => aoMudar(p.cor === COR_MARCA ? undefined : p.cor)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Confere os elementos que mais convencem o cliente e mostra o que falta, com a dica de cada um. */
+function ForcaProposta({ c }: { c: Conteudo }) {
+  const { nota, itens } = useMemo(() => forcaDaProposta(c), [c]);
+  const faltam = itens.filter((i) => !i.ok);
+  return (
+    <details className="forca-proposta card">
+      <summary>
+        <span className={`forca-nota${nota >= 8 ? ' alta' : nota >= 5 ? ' media' : ''}`}><b>{nota}</b>/10</span>
+        <span><b>Força da proposta</b><span className="muted small"> · {faltam.length ? `${faltam.length} ${faltam.length === 1 ? 'ponto' : 'pontos'} para convencer ainda mais` : 'todos os gatilhos de decisão presentes'}</span></span>
+        <Icone nome="chevron" />
+      </summary>
+      <ul>
+        {itens.map((i) => (
+          <li key={i.titulo} className={i.ok ? 'ok' : ''}>
+            <span className="forca-marca" aria-hidden="true">{i.ok ? '✓' : '○'}</span>
+            <span><b>{i.titulo}</b>{!i.ok && <span className="muted small"> {i.dica}</span>}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

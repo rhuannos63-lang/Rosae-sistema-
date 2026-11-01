@@ -5,6 +5,7 @@ import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok, novaChave } from '../lib/consulta';
 import { Ajuda, Carregando, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { BotaoExcluir } from '../components/Excluir';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
 import {
   RESPONSAVEL_PENDENCIA, TIPO_PENDENCIA, TIPO_REGISTRO,
@@ -323,7 +324,7 @@ function VerFoto({ foto, url, ehAdm, nome, aoFechar, aoMudar }: { foto: Foto; ur
   }
   return (
     <Modal titulo={foto.legenda || `Foto de ${formatarDataHora(foto.tirada_em)}`} aoFechar={aoFechar} largo
-      rodape={ehAdm ? <><button className="btn-secundario" onClick={aoFechar}>Fechar</button><button className="btn-primario" onClick={salvar}>Salvar</button></> : <button className="btn-secundario" onClick={aoFechar}>Fechar</button>}>
+      rodape={ehAdm ? <><BotaoExcluir tabela="foto" id={foto.id} nome={foto.legenda || 'Foto'} aoExcluir={() => { aoMudar(); aoFechar(); }} classe="btn-link perigo" /><span style={{ flex: 1 }} /><button className="btn-secundario" onClick={aoFechar}>Fechar</button><button className="btn-primario" onClick={salvar}>Salvar</button></> : <button className="btn-secundario" onClick={aoFechar}>Fechar</button>}>
       <div className="stack">
         {url ? <img src={url} alt={foto.legenda ?? ''} className="foto-grande" /> : <Carregando />}
         <p className="muted small" style={{ margin: 0 }}>{formatarDataHora(foto.tirada_em)} · {MOMENTO[foto.momento]}{[foto.servico_id, foto.ambiente_id].filter(Boolean).map((x) => ` · ${nome.get(x!) ?? ''}`).join('')}{foto.publicada_em ? ' · publicada ao cliente' : ' · interna'}</p>

@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Icone } from './Icone';
 import { useAuth } from '../auth/AuthProvider';
 import { BuscaRapida, useBuscaRapida } from './BuscaRapida';
+import { ComoFunciona } from './ComoFunciona';
 import { useAparencia, type Modo } from '../lib/aparencia';
 import { departamentosVisiveis, localizar, type Departamento } from '../core/departamentos';
 
@@ -179,7 +180,7 @@ export function Topo({ titulo, sub, children }: { titulo: string; sub?: React.Re
         <h1>{titulo}</h1>
         {sub && <div className="sub">{sub}</div>}
       </div>
-      {children && <div className="row">{children}</div>}
+      <div className="row"><ComoFunciona />{children}</div>
     </div>
   );
 }

@@ -6,6 +6,11 @@ import { Erro } from '../components/ui';
 function Moldura({ children }: { children: React.ReactNode }) {
   return (
     <div className="tela-login">
+      <aside className="login-arte" aria-hidden="true">
+        <img src="/marca/rosae-logo-horizontal-negativo.svg" alt="" className="login-arte-logo" />
+        <p className="login-arte-frase">Projetamos para funcionar no <em>cálculo</em>.<br />E principalmente na <em>obra</em>.</p>
+        <span className="login-arte-assina">Engenharia &amp; Estruturas</span>
+      </aside>
       <div className="card">
         <img className="logo" src="/marca/rosae-logo-vertical.svg" alt="ROSAE Engenharia & Estruturas" />
         {children}

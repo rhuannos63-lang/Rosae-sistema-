@@ -18,16 +18,43 @@ export type Aparencia = {
 export const COR_MARCA = '#5b6b2e';
 export const PADRAO: Aparencia = { modo: 'claro', cor: COR_MARCA, menu: 'claro', fundo: 'branco', cantos: 'suaves', densidade: 'confortavel', fonte: 'normal' };
 
-export const CORES_PRONTAS: { nome: string; cor: string }[] = [
-  { nome: 'Verde musgo', cor: COR_MARCA },
-  { nome: 'Oliva da marca', cor: '#6f7343' },
-  { nome: 'Verde floresta', cor: '#1b6e52' },
-  { nome: 'Petróleo', cor: '#0f5f6b' },
-  { nome: 'Azul marinho', cor: '#1f3f73' },
-  { nome: 'Grafite', cor: '#3a4048' },
-  { nome: 'Terracota', cor: '#a1502c' },
-  { nome: 'Vinho', cor: '#7a2840' },
+/**
+ * Paletas prontas. Cada uma tem a cor principal, o tom profundo (menu escuro) e quatro
+ * cores de gráfico em duotom: a principal, uma companheira discreta (areia, ouro velho,
+ * rosé, lavanda, ardósia…) e variações claras ou escuras delas. Nada de arco-íris:
+ * as cores conversam entre si e continuam distinguíveis pelo tom e pela claridade.
+ */
+export type Paleta = { id: string; nome: string; grupo: 'Verdes' | 'Azuis' | 'Roxos e rosas' | 'Quentes' | 'Neutros'; cor: string; profundo: string; series: [string, string, string, string] };
+export const PALETAS: Paleta[] = [
+  { id: 'musgo', nome: 'Musgo ROSAE', grupo: 'Verdes', cor: COR_MARCA, profundo: '#1e2412', series: ['#5b6b2e', '#b39a5e', '#adb597', '#2e3617'] },
+  { id: 'oliva', nome: 'Oliva', grupo: 'Verdes', cor: '#6f7343', profundo: '#26281a', series: ['#6f7343', '#b07a5a', '#b7b9a1', '#383a22'] },
+  { id: 'salvia', nome: 'Sálvia', grupo: 'Verdes', cor: '#566f5b', profundo: '#1d2620', series: ['#566f5b', '#b48a8a', '#abb7ad', '#2b382e'] },
+  { id: 'menta', nome: 'Menta', grupo: 'Verdes', cor: '#0f7a63', profundo: '#05251e', series: ['#0f7a63', '#5b7a99', '#87bdb1', '#083d32'] },
+  { id: 'esmeralda', nome: 'Esmeralda', grupo: 'Verdes', cor: '#0d7356', profundo: '#05291f', series: ['#0d7356', '#b8964a', '#86b9ab', '#725d2e'] },
+  { id: 'floresta', nome: 'Floresta', grupo: 'Verdes', cor: '#1f5c46', profundo: '#0c241b', series: ['#1f5c46', '#a07a4a', '#8faea3', '#634c2e'] },
+  { id: 'turquesa', nome: 'Turquesa', grupo: 'Azuis', cor: '#0a7385', profundo: '#032328', series: ['#0a7385', '#8a7cc4', '#85b9c2', '#564d7a'] },
+  { id: 'ceu', nome: 'Azul céu', grupo: 'Azuis', cor: '#1f66c9', profundo: '#091f3c', series: ['#1f66c9', '#c0a46e', '#8fb3e4', '#103365'] },
+  { id: 'indigo', nome: 'Índigo', grupo: 'Azuis', cor: '#4a44d6', profundo: '#161440', series: ['#4a44d6', '#c8b48a', '#a5a2eb', '#7c7056'] },
+  { id: 'safira', nome: 'Safira', grupo: 'Azuis', cor: '#234a9e', profundo: '#0b1838', series: ['#234a9e', '#c09a50', '#91a5cf', '#775f32'] },
+  { id: 'petroleo', nome: 'Petróleo', grupo: 'Azuis', cor: '#0f5f6b', profundo: '#072a30', series: ['#0f5f6b', '#b07850', '#87afb5', '#6d4a32'] },
+  { id: 'marinho', nome: 'Azul marinho', grupo: 'Azuis', cor: '#1f3f73', profundo: '#0b1830', series: ['#1f3f73', '#c2a46e', '#8f9fb9', '#786644'] },
+  { id: 'lavanda', nome: 'Lavanda', grupo: 'Roxos e rosas', cor: '#6a4fcf', profundo: '#20183e', series: ['#6a4fcf', '#5fa3a8', '#b5a7e7', '#3b6568'] },
+  { id: 'orquidea', nome: 'Orquídea', grupo: 'Roxos e rosas', cor: '#9a3aa6', profundo: '#2e1132', series: ['#9a3aa6', '#7fb0a0', '#cd9dd3', '#4f6d63'] },
+  { id: 'rosa', nome: 'Rosa', grupo: 'Roxos e rosas', cor: '#c02a68', profundo: '#3a0d1f', series: ['#c02a68', '#9a7aa0', '#e095b4', '#5f4c63'] },
+  { id: 'ameixa', nome: 'Ameixa', grupo: 'Roxos e rosas', cor: '#5b3a6e', profundo: '#201427', series: ['#5b3a6e', '#b89a5e', '#ad9db7', '#2e1d37'] },
+  { id: 'coral', nome: 'Coral', grupo: 'Quentes', cor: '#c2452f', profundo: '#3a150e', series: ['#c2452f', '#6f8aa0', '#e1a297', '#612318'] },
+  { id: 'tangerina', nome: 'Tangerina', grupo: 'Quentes', cor: '#b4510f', profundo: '#361805', series: ['#b4510f', '#5f7080', '#daa887', '#5a2908'] },
+  { id: 'ambar', nome: 'Âmbar', grupo: 'Quentes', cor: '#8f5f00', profundo: '#2b1d00', series: ['#8f5f00', '#7a8050', '#c7af80', '#483000'] },
+  { id: 'terracota', nome: 'Terracota', grupo: 'Quentes', cor: '#a1502c', profundo: '#36190d', series: ['#a1502c', '#7f9a85', '#d0a896', '#4f5f52'] },
+  { id: 'vinho', nome: 'Vinho', grupo: 'Quentes', cor: '#7a2840', profundo: '#2a0e16', series: ['#7a2840', '#b8964a', '#bd94a0', '#3d1420'] },
+  { id: 'ardosia', nome: 'Ardósia', grupo: 'Neutros', cor: '#46566b', profundo: '#151a20', series: ['#46566b', '#b8a07a', '#a3abb5', '#232b36'] },
+  { id: 'aco', nome: 'Azul aço', grupo: 'Neutros', cor: '#3b5a7a', profundo: '#141f2b', series: ['#3b5a7a', '#b07850', '#9dadbd', '#6d4a32'] },
+  { id: 'grafite', nome: 'Grafite', grupo: 'Neutros', cor: '#3a4048', profundo: '#121417', series: ['#3a4048', '#b39a5e', '#9da0a4', '#6f5f3a'] },
+  { id: 'onix', nome: 'Ônix', grupo: 'Neutros', cor: '#1f2023', profundo: '#0b0b0c', series: ['#2b2d31', '#c2a878', '#959698', '#78684a'] },
 ];
+/** Compatibilidade: lista simples de cores prontas. */
+export const CORES_PRONTAS = PALETAS.map((p) => ({ nome: p.nome, cor: p.cor }));
+export const paletaDaCor = (c: string) => PALETAS.find((p) => p.cor === c.toLowerCase());
 
 const CHAVE = 'rosae.aparencia';
 const ehHex = (c: unknown): c is string => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
@@ -65,6 +92,32 @@ export function contraste(a: string, b: string) {
   return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
 }
 
+function hsl(h: string): [number, number, number] {
+  const [r, g, b] = rgb(h).map((v) => v / 255);
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (d === 0) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const hh = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(hh * 60 + 360) % 360, s, l];
+}
+function deHsl(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return hex([r, g, b].map((v) => (v + m) * 255) as RGB);
+}
+/** Tom profundo e cores de gráfico da cor escolhida: da paleta pronta ou calculados. */
+export function derivarPaleta(c: string): { profundo: string; series: [string, string, string, string] } {
+  const p = paletaDaCor(c);
+  if (p) return { profundo: p.profundo, series: p.series };
+  const [h] = hsl(c);
+  // Companheira discreta: tom vizinho, pouco saturado e médio-claro (como areia para o azul).
+  const companheira = deHsl((h + 150) % 360, 0.28, 0.55);
+  return {
+    profundo: misturar(c, '#000000', 0.68),
+    series: [c, companheira, misturar(c, '#ffffff', 0.5), misturar(c, '#000000', 0.5)],
+  };
+}
+
 const FUNDOS = { branco: '#ffffff', gelo: '#f7f8f5', cinza: '#f1f3f4' } as const;
 const RAIOS = { retos: 4, suaves: 10, redondos: 16 } as const;
 const FONTES = { pequena: 14, normal: 15, grande: 16.5 } as const;
@@ -94,19 +147,39 @@ export function variaveis(a: Aparencia, escuro: boolean): Record<string, string>
         '--fundo': FUNDOS[a.fundo],
       };
   const btn = base['--btn-fundo'];
+  const pal = derivarPaleta(c);
+  const serie = (x: string) => (escuro ? misturar(x, '#ffffff', 0.3) : x);
   return {
     ...base,
+    '--profundo': escuro ? misturar(pal.profundo, '#ffffff', 0.06) : pal.profundo,
+    '--profundo-rgb': rgb(pal.profundo).join(', '),
+    '--serie-1': serie(pal.series[0]),
+    '--serie-2': serie(pal.series[1]),
+    '--serie-3': serie(pal.series[2]),
+    '--serie-4': serie(pal.series[3]),
     '--cor-rgb': rgb(escuro ? base['--verde'] : c).join(', '),
     '--btn-texto': escuro ? (contraste(btn, '#ffffff') >= 3 ? '#ffffff' : '#14171a') : textoBotao,
     '--btn-fundo-hover': escuro ? misturar(btn, '#ffffff', 0.12) : misturar(c, '#000000', 0.18),
-    '--menu-fundo': misturar(c, '#000000', escuro ? 0.78 : 0.5),
-    '--menu-fundo-2': misturar(c, '#000000', escuro ? 0.86 : 0.68),
+    '--menu-fundo': escuro ? misturar(pal.profundo, '#000000', 0.25) : pal.profundo,
+    '--menu-fundo-2': escuro ? misturar(pal.profundo, '#000000', 0.35) : misturar(pal.profundo, '#000000', 0.15),
     '--menu-cor': c,
     '--menu-destaque': misturar(c, '#ffffff', 0.62),
     '--raio': `${RAIOS[a.cantos]}px`,
     '--raio-p': `${Math.max(3, RAIOS[a.cantos] - 4)}px`,
     '--fonte-base': `${FONTES[a.fonte]}px`,
   };
+}
+
+/**
+ * Cores de um documento ao cliente (proposta) na paleta escolhida para ele. Sempre no modo
+ * claro: só a cor de destaque e as cores de gráfico mudam; papel e texto continuam os mesmos.
+ */
+export function variaveisDocumento(cor?: string | null): Record<string, string> | undefined {
+  if (!cor || !ehHex(cor) || cor.toLowerCase() === COR_MARCA) return undefined;
+  const v = variaveis({ ...PADRAO, cor: cor.toLowerCase() }, false);
+  const r: Record<string, string> = {};
+  for (const k of ['--verde', '--verde-escuro', '--verde-profundo', '--verde-claro', '--verde-suave', '--verde-tinta', '--btn-fundo', '--btn-fundo-hover', '--btn-texto', '--cor-rgb', '--profundo', '--profundo-rgb', '--serie-1', '--serie-2', '--serie-3', '--serie-4']) r[k] = v[k];
+  return r;
 }
 
 // ---------- Aplicar ----------
@@ -124,7 +197,7 @@ export function aplicar(a: Aparencia = estado) {
   raiz.dataset.menu = a.menu;
   raiz.dataset.densidade = a.densidade;
   for (const [k, v] of Object.entries(variaveis(a, escuro))) { raiz.style.setProperty(k, v); aplicadas.push(k); }
-  const barra = a.menu === 'claro' ? (escuro ? '#16181b' : '#ffffff') : a.menu === 'cor' ? a.cor : misturar(a.cor, '#000000', escuro ? 0.78 : 0.5);
+  const barra = a.menu === 'claro' ? (escuro ? '#16181b' : '#ffffff') : a.menu === 'cor' ? a.cor : derivarPaleta(a.cor).profundo;
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', barra);
 }
 
