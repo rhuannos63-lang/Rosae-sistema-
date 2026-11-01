@@ -1,4 +1,4 @@
-// Envio da proposta por e-mail pelo provedor configurado (Resend), com prévia,
+// Envio da proposta por e-mail pelo provedor configurado (Gmail da ROSAE ou Resend), com prévia,
 // conferência do destinatário e histórico com a situação de cada envio.
 import { useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
@@ -97,7 +97,7 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
       {!s ? <Carregando /> : !s.configurado ? (
         <div className="stack">
           <div className="aviso info"><Icone nome="alerta" /><span>
-            O envio automático de e-mail ainda não está ligado{s.publicado ? ': falta cadastrar a chave do Resend e o remetente' : ''}. Nada foi enviado.
+            O envio automático de e-mail ainda não está ligado{s.publicado ? ': falta cadastrar o Gmail da ROSAE e a senha de app' : ''}. Nada foi enviado.
             Por enquanto, abra a mensagem pronta no seu aplicativo de e-mail e envie de lá.
           </span></div>
           <div className="row"><button className="btn-primario" onClick={() => { abrirNoAplicativo(); aoFechar(); }}><Icone nome="documento" /> Abrir no meu e-mail</button></div>

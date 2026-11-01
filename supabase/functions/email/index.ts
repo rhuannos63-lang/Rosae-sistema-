@@ -1,8 +1,9 @@
-// Envio da proposta por e-mail pelo Resend. A tela chama com o login da pessoa
+// Envio da proposta por e-mail: pelo Gmail da ROSAE (SMTP com senha de app) ou pelo Resend. A tela chama com o login da pessoa
 // (as permissões do banco valem para ler a proposta e gerar o link); a situação
 // do envio é gravada aqui com a chave de serviço, para "enviado" só aparecer
 // quando o provedor aceitou de verdade.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import nodemailer from 'nodemailer';
 import { erroDoProvedor, estadoDoEvento, montarEmail, validarEnvio, type Empresa, type Estado } from '../_shared/email.ts';
 
 const URL = Deno.env.get('SUPABASE_URL')!;
@@ -10,6 +11,35 @@ const ANON = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICO = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CHAVE = () => Deno.env.get('RESEND_API_KEY') ?? '';
 const REMETENTE = () => Deno.env.get('EMAIL_REMETENTE') ?? '';
+// Gmail: o endereço e a senha de app (16 letras, gerada na conta Google). Tem prioridade sobre o Resend.
+const GMAIL_USUARIO = () => (Deno.env.get('GMAIL_USUARIO') ?? '').trim();
+const GMAIL_SENHA = () => (Deno.env.get('GMAIL_SENHA_APP') ?? '').replace(/\s+/g, '');
+type Provedor = 'gmail' | 'resend';
+const provedor = (): Provedor | null => (GMAIL_USUARIO() && GMAIL_SENHA() ? 'gmail' : CHAVE() && REMETENTE() ? 'resend' : null);
+const remetenteAtual = () => (provedor() === 'gmail' ? GMAIL_USUARIO() : provedor() === 'resend' ? REMETENTE() : null);
+
+/** Envia pelo Gmail (porta 465, TLS). Devolve o id da mensagem ou o erro em português. */
+async function enviarGmail(m: { de: string; para: string; assunto: string; html: string; texto: string; responderPara?: string | null; anexo?: { nome: string; base64: string } | null }): Promise<{ id?: string; erro?: string }> {
+  const transporte = nodemailer.createTransport({ host: 'smtp.gmail.com', port: 465, secure: true, auth: { user: GMAIL_USUARIO(), pass: GMAIL_SENHA() } });
+  try {
+    const info = await transporte.sendMail({
+      from: m.de, to: m.para, subject: m.assunto, html: m.html, text: m.texto,
+      ...(m.responderPara ? { replyTo: m.responderPara } : {}),
+      ...(m.anexo ? { attachments: [{ filename: m.anexo.nome, content: m.anexo.base64, encoding: 'base64', contentType: 'application/pdf' }] } : {}),
+    });
+    return { id: String(info.messageId ?? 'gmail') };
+  } catch (e) {
+    const err = e as { code?: string; responseCode?: number; message?: string };
+    if (err.code === 'EAUTH' || err.responseCode === 535) return { erro: 'O Gmail recusou o login. Confira o endereço e a senha de app cadastrados.' };
+    if (err.responseCode === 550 || err.responseCode === 553) return { erro: 'O Gmail recusou o destinatário. Confira o e-mail do cliente.' };
+    if (err.responseCode === 552) return { erro: 'O Gmail recusou o anexo (grande demais).' };
+    if (err.responseCode === 421 || err.responseCode === 454) return { erro: 'Limite de envios do Gmail atingido. Tente de novo mais tarde.' };
+    console.error('gmail', err.code, err.responseCode);
+    return { erro: 'Não consegui falar com o Gmail. Tente de novo.' };
+  } finally {
+    transporte.close();
+  }
+}
 const CORS = {
   'access-control-allow-origin': '*',
   'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type',
@@ -61,25 +91,35 @@ async function enviar(db: SupabaseClient, adm: SupabaseClient, c: Record<string,
   const empresa = ((await db.rpc('empresa_publica')).data ?? {}) as Empresa;
   const { html, texto } = montarEmail(envio.mensagem, url, empresa);
 
-  let resp: Response;
-  try {
-    resp = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${CHAVE()}`, 'content-type': 'application/json', 'idempotency-key': chave },
-      body: JSON.stringify({
-        from: REMETENTE(), to: [envio.destinatario], subject: envio.assunto, html, text: texto,
-        ...(c.anexo_base64 ? { attachments: [{ filename: c.anexo_nome, content: c.anexo_base64 }] } : {}),
-        ...(empresa.email ? { reply_to: empresa.email } : {}),
-        tags: [{ name: 'tipo', value: 'proposta' }],
-      }),
-    });
-  } catch {
-    return falhar('Não consegui falar com o provedor de e-mail. Tente de novo.');
+  const anexo = c.anexo_base64 ? { nome: c.anexo_nome, base64: c.anexo_base64 } : null;
+  let provedorId: string;
+  if (provedor() === 'gmail') {
+    const nome = (empresa.nome || 'ROSAE Engenharia & Estruturas').replace(/["<>]/g, '');
+    const r = await enviarGmail({ de: `"${nome}" <${GMAIL_USUARIO()}>`, para: envio.destinatario, assunto: envio.assunto, html, texto, responderPara: empresa.email, anexo });
+    if (!r.id) return falhar(r.erro ?? 'Falha no Gmail.');
+    provedorId = r.id;
+  } else {
+    let resp: Response;
+    try {
+      resp = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${CHAVE()}`, 'content-type': 'application/json', 'idempotency-key': chave },
+        body: JSON.stringify({
+          from: REMETENTE(), to: [envio.destinatario], subject: envio.assunto, html, text: texto,
+          ...(anexo ? { attachments: [{ filename: anexo.nome, content: anexo.base64 }] } : {}),
+          ...(empresa.email ? { reply_to: empresa.email } : {}),
+          tags: [{ name: 'tipo', value: 'proposta' }],
+        }),
+      });
+    } catch {
+      return falhar('Não consegui falar com o provedor de e-mail. Tente de novo.');
+    }
+    const corpo = await resp.json().catch(() => null) as { id?: string; message?: string; name?: string } | null;
+    if (!resp.ok || !corpo?.id) return falhar(erroDoProvedor(resp.status, corpo));
+    provedorId = corpo.id;
   }
-  const corpo = await resp.json().catch(() => null) as { id?: string; message?: string; name?: string } | null;
-  if (!resp.ok || !corpo?.id) return falhar(erroDoProvedor(resp.status, corpo));
 
-  const ok = await adm.from('envio_email').update({ estado: 'enviado', provedor_id: corpo.id, erro: null }).eq('id', envio.id).select(CAMPOS).maybeSingle();
+  const ok = await adm.from('envio_email').update({ estado: 'enviado', provedor_id: provedorId, erro: null }).eq('id', envio.id).select(CAMPOS).maybeSingle();
   // Histórico da proposta e funil ("Proposta enviada"), com o login da pessoa.
   await db.rpc('registrar_envio_proposta', { p_versao: envio.versao_id, p_canal: 'email', p_destinatario: envio.destinatario });
   return json({ envio: ok.data });
@@ -89,6 +129,8 @@ async function atualizar(adm: SupabaseClient, id: string) {
   const envio = (await adm.from('envio_email').select(CAMPOS).eq('id', id).maybeSingle()).data as Envio | null;
   if (!envio) return json({ erro: 'Envio não encontrado.' }, 404);
   if (!envio.provedor_id) return json({ envio });
+  // O Gmail não informa a entrega depois do envio: o e-mail fica como enviado.
+  if (envio.provedor_id.startsWith('<') || provedor() === 'gmail') return json({ envio, aviso: 'O Gmail não informa a entrega. Se o e-mail voltar, o aviso chega na caixa do Gmail da ROSAE.' });
   const resp = await fetch(`https://api.resend.com/emails/${encodeURIComponent(envio.provedor_id)}`, { headers: { authorization: `Bearer ${CHAVE()}` } }).catch(() => null);
   if (!resp?.ok) return json({ envio, aviso: 'O provedor não respondeu agora. Tente de novo depois.' });
   const dados = await resp.json().catch(() => null) as { last_event?: string } | null;
@@ -111,10 +153,10 @@ Deno.serve(async (req) => {
 
   try {
     const corpo = await req.json();
-    const configurado = Boolean(CHAVE() && REMETENTE());
-    if (corpo.acao === 'status') return json({ configurado, remetente: configurado ? REMETENTE() : null });
+    const configurado = provedor() !== null;
+    if (corpo.acao === 'status') return json({ configurado, remetente: remetenteAtual(), provedor: provedor() });
     if (!configurado) {
-      return json({ erro: 'O envio automático de e-mail ainda não está ligado: falta a chave do Resend e o remetente.', nao_configurado: true }, 409);
+      return json({ erro: 'O envio automático de e-mail ainda não está ligado: falta cadastrar o Gmail e a senha de app.', nao_configurado: true }, 409);
     }
     const adm = createClient(URL, SERVICO, { auth: { persistSession: false, autoRefreshToken: false } });
     if (corpo.acao === 'enviar') {

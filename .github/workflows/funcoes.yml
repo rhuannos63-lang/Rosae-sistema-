@@ -22,6 +22,8 @@ jobs:
       WHATSAPP_NUMERO_EXIBICAO: ${{ secrets.WHATSAPP_NUMERO_EXIBICAO }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
+      GMAIL_USUARIO: ${{ secrets.GMAIL_USUARIO }}
+      GMAIL_SENHA_APP: ${{ secrets.GMAIL_SENHA_APP }}
     steps:
       - uses: actions/checkout@v4
       - name: Projeto
@@ -41,7 +43,7 @@ jobs:
         if: steps.p.outputs.ok == 'sim'
         run: |
           : > segredos.env
-          for n in ANTHROPIC_API_KEY GEMINI_API_KEY WHATSAPP_TOKEN WHATSAPP_NUMERO_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN WHATSAPP_NUMERO_EXIBICAO RESEND_API_KEY EMAIL_REMETENTE; do
+          for n in ANTHROPIC_API_KEY GEMINI_API_KEY WHATSAPP_TOKEN WHATSAPP_NUMERO_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN WHATSAPP_NUMERO_EXIBICAO RESEND_API_KEY EMAIL_REMETENTE GMAIL_USUARIO GMAIL_SENHA_APP; do
             v="${!n}"
             if [ -n "$v" ]; then echo "$n=$v" >> segredos.env; echo "• $n cadastrada"; else echo "• $n ainda não cadastrada"; fi
           done
