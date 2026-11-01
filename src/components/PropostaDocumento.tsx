@@ -1,6 +1,8 @@
 // Proposta em formato de apresentação 16:9. A mesma peça serve para a pré-visualização,
 // a edição direta na página, a página do cliente e o PDF (impressão). Nunca recebe custos nem margens.
-import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { variaveisDocumento } from '../lib/aparencia';
+import { Icone } from './Icone';
 import { formatar, lerDigitado } from '../core/dinheiro';
 import { formatarData } from '../core/datas';
 import {
@@ -145,7 +147,7 @@ function Slide({ n, total, titulo, children, d, classe }: { n: number; total: nu
       {d.rascunho && <div className="marca-rascunho">RASCUNHO · não enviado ao cliente</div>}
       {titulo && (
         <header className="slide-cab">
-          <span className="slide-kicker">{d.codigo} · versão {d.versao}</span>
+          <span className="slide-kicker"><span className="slide-n">{String(n).padStart(2, '0')}</span>{d.codigo} · versão {d.versao}</span>
           <h2>{titulo}</h2>
         </header>
       )}
@@ -154,6 +156,7 @@ function Slide({ n, total, titulo, children, d, classe }: { n: number; total: nu
         <img src="/marca/rosae-simbolo.svg" alt="" />
         <span>{d.empresa?.nome ?? 'ROSAE Engenharia & Estruturas'}</span>
         <span className="spacer" />
+        <span className="slide-progresso" aria-hidden="true"><i style={{ width: `${Math.round((n / Math.max(1, total)) * 100)}%` }} /></span>
         <span>{n}/{total}</span>
       </footer>
     </section>
@@ -202,10 +205,16 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
     conteudo: (
       <div className="capa-grade">
         <div className="capa-texto">
-          <img className="capa-logo" src="/marca/rosae-logo-horizontal-negativo.svg" alt="ROSAE Engenharia & Estruturas" />
+          <img className="capa-logo" src="/marca/rosae-logo-horizontal.svg" alt="ROSAE Engenharia & Estruturas" />
           <p className="capa-tipo">{d.tipo === 'aditivo' ? 'Aditivo de escopo' : 'Proposta técnica e comercial'}</p>
           <h1>{d.titulo}</h1>
           <p className="capa-cliente">Preparada exclusivamente para <b>{d.cliente}</b></p>
+          <ul className="capa-selos">
+            <li>Responsabilidade técnica com ART</li>
+            <li>Acompanhamento pelo portal</li>
+            {c.garantia ? <li>Garantia por escrito</li> : <li>Escopo detalhado</li>}
+            <li>Normas ABNT</li>
+          </ul>
         </div>
         <dl className="capa-dados">
           {(c.local || ed) && <div><dt>Local</dt><T tag="dd" v={c.local} set={set('local')} ph="Endereço da obra" /></div>}
@@ -227,10 +236,10 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
         <div className="resumo-exec">
           <T tag="p" className="resumo-frase" v={c.resumo ?? ''} set={set('resumo')} multi ph="Em duas ou três frases: o que você vai fazer e o que o cliente ganha" />
           <div className="resumo-cartoes">
-            <div><span>Investimento</span><b className="num">{formatar(total)}</b><small>{[principal && `pacote ${principal.nome}`, textoParcelamento(c)].filter(Boolean).join(' · ')}</small></div>
-            <div><span>Prazo</span><b>{c.prazo_total_dias ? `${c.prazo_total_dias} dias` : '—'}</b><small>{c.etapas.length} etapas</small></div>
-            <div><span>Você recebe</span><b>{(c.entregaveis ?? []).length || c.inclusoes.length}</b><small>{(c.entregaveis ?? []).length ? 'entregáveis' : 'itens inclusos'}</small></div>
-            <div><span>Responsável técnico</span><b className="resumo-nome">{d.empresa?.responsavel ?? 'Engenheiro ROSAE'}</b><small>com ART</small></div>
+            <div><Icone nome="financeiro" /><span>Investimento</span><b className="num">{formatar(total)}</b><small>{[principal && `pacote ${principal.nome}`, textoParcelamento(c)].filter(Boolean).join(' · ')}</small></div>
+            <div><Icone nome="calendario" /><span>Prazo</span><b>{c.prazo_total_dias ? `${c.prazo_total_dias} dias` : '—'}</b><small>{c.etapas.length} etapas</small></div>
+            <div><Icone nome="documento" /><span>Você recebe</span><b>{(c.entregaveis ?? []).length || c.inclusoes.length}</b><small>{(c.entregaveis ?? []).length ? 'entregáveis' : 'itens inclusos'}</small></div>
+            <div><Icone nome="check" /><span>Responsável técnico</span><b className="resumo-nome">{d.empresa?.responsavel ?? 'Engenheiro ROSAE'}</b><small>com ART</small></div>
           </div>
         </div>
       ),
@@ -621,11 +630,12 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
   });
 
   const visiveis = paginas.filter((p) => !paginaOculta(c, p.id));
+  const estilo = variaveisDocumento(c.cor) as CSSProperties | undefined;
   const numero = new Map(visiveis.map((p, k) => [p, k + 1]));
 
   if (!ed) {
     return (
-      <div className="documento-proposta">
+      <div className="documento-proposta" style={estilo}>
         {visiveis.map((p, k) => <Slide key={k} n={k + 1} total={visiveis.length} titulo={p.titulo} d={d} classe={p.classe}>{p.conteudo}</Slide>)}
       </div>
     );
@@ -635,7 +645,7 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
   let anterior = '';
   return (
     <Ed.Provider value={ed}>
-      <div className="documento-proposta editando">
+      <div className="documento-proposta editando" style={estilo}>
         {paginas.map((p, k) => {
           const oculta = paginaOculta(c, p.id);
           const opcional = p.id in PAGINAS_OPCIONAIS;

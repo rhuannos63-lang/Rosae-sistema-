@@ -6,6 +6,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { COR_MARCA, PALETAS } from '../lib/aparencia';
 import { BotaoExcluir } from '../components/Excluir';
 import { PropostaDocumento, type DadosDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
 import { doBanco, formatar, paraBanco, somar, type Centavos } from '../core/dinheiro';
@@ -377,6 +378,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
               <p className="dica-pagina"><Icone nome="ajuda" /> Clique em qualquer texto ou valor da folha para mudar. Enter confirma, Esc desfaz. Mudou um preço? As parcelas e o total acompanham. Para tirar uma página, use “Tirar esta página” em cima dela.</p>
             )}
             {modoPagina === 'editar' && <ForcaProposta c={c} />}
+            {modoPagina === 'editar' && <CorProposta cor={c.cor} aoMudar={(cor) => setC((x) => ({ ...x, cor }))} />}
             {modoPagina === 'editar'
               ? <PropostaDocumento d={doc} edicao={{ mudar: (f) => setC((x) => f(x)) }} />
               : <PropostaDocumento d={doc} />}
@@ -902,6 +904,36 @@ export function PropostaImprimir() {
         codigo: p.codigo, tipo: p.tipo, titulo: p.titulo, versao: v.numero, cliente: p.pessoa?.nome ?? '', emitida_em: v.emitida_em,
         validade: v.validade, hash: v.hash, conteudo: normalizar(v.conteudo as Partial<Conteudo>), empresa: dados.empresa, rascunho: !v.emitida,
       }} />
+    </div>
+  );
+}
+
+/** Cor da apresentação: qualquer paleta de Aparência. Capa, destaques e gráficos acompanham. */
+function CorProposta({ cor, aoMudar }: { cor?: string; aoMudar: (cor: string | undefined) => void }) {
+  const atual = (cor ?? COR_MARCA).toLowerCase();
+  const nome = PALETAS.find((p) => p.cor === atual)?.nome ?? 'Personalizada';
+  return (
+    <div className="cor-proposta card">
+      <div className="cor-proposta-topo">
+        <Icone nome="paleta" />
+        <b>Cor desta proposta</b>
+        <span className="muted small">{nome} · capa, destaques e gráficos mudam juntos</span>
+      </div>
+      <div className="cor-proposta-lista" role="radiogroup" aria-label="Cor desta proposta">
+        {PALETAS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            role="radio"
+            aria-checked={atual === p.cor}
+            aria-label={p.nome}
+            title={p.nome}
+            className={`cor-bolinha${atual === p.cor ? ' marcada' : ''}`}
+            style={{ background: `linear-gradient(90deg, ${p.cor} 0 50%, ${p.series[1]} 50% 75%, ${p.series[2]} 75%)` }}
+            onClick={() => aoMudar(p.cor === COR_MARCA ? undefined : p.cor)}
+          />
+        ))}
+      </div>
     </div>
   );
 }

@@ -23,22 +23,33 @@ export const PADRAO: Aparencia = { modo: 'claro', cor: COR_MARCA, menu: 'claro',
  * cartão de destaque) e quatro cores de gráfico escolhidas para combinar com ela e
  * continuar distinguíveis entre si (inclusive para daltonismo).
  */
-export type Paleta = { id: string; nome: string; grupo: 'Verdes' | 'Azuis' | 'Neutros' | 'Quentes'; cor: string; profundo: string; series: [string, string, string, string] };
+export type Paleta = { id: string; nome: string; grupo: 'Verdes' | 'Azuis' | 'Roxos e rosas' | 'Quentes' | 'Neutros'; cor: string; profundo: string; series: [string, string, string, string] };
 export const PALETAS: Paleta[] = [
   { id: 'musgo', nome: 'Musgo ROSAE', grupo: 'Verdes', cor: COR_MARCA, profundo: '#1e2412', series: ['#5b6b2e', '#3c6e91', '#c47f3a', '#8e4f72'] },
   { id: 'oliva', nome: 'Oliva', grupo: 'Verdes', cor: '#6f7343', profundo: '#26281a', series: ['#6f7343', '#40708a', '#d39a3e', '#a8476e'] },
   { id: 'salvia', nome: 'Sálvia', grupo: 'Verdes', cor: '#566f5b', profundo: '#1d2620', series: ['#566f5b', '#3f6fb8', '#d39a4e', '#a64d73'] },
-  { id: 'floresta', nome: 'Floresta', grupo: 'Verdes', cor: '#1f5c46', profundo: '#0c241b', series: ['#1f5c46', '#4a72b0', '#cc8a3e', '#9a5a8a'] },
+  { id: 'menta', nome: 'Menta', grupo: 'Verdes', cor: '#0f7a63', profundo: '#05251e', series: ['#0f7a63', '#4b6fe0', '#e2903a', '#c2477f'] },
   { id: 'esmeralda', nome: 'Esmeralda', grupo: 'Verdes', cor: '#0d7356', profundo: '#05291f', series: ['#0d7356', '#3f6fd1', '#e0913c', '#a8509a'] },
+  { id: 'floresta', nome: 'Floresta', grupo: 'Verdes', cor: '#1f5c46', profundo: '#0c241b', series: ['#1f5c46', '#4a72b0', '#cc8a3e', '#9a5a8a'] },
+  { id: 'turquesa', nome: 'Turquesa', grupo: 'Azuis', cor: '#0a7385', profundo: '#032328', series: ['#0a7385', '#e0703a', '#7a5ad6', '#6f9a2e'] },
+  { id: 'ceu', nome: 'Azul céu', grupo: 'Azuis', cor: '#1f66c9', profundo: '#091f3c', series: ['#1f66c9', '#e58a2f', '#1f9a7a', '#c2477f'] },
+  { id: 'indigo', nome: 'Índigo', grupo: 'Azuis', cor: '#4a44d6', profundo: '#161440', series: ['#4a44d6', '#e0953a', '#17907a', '#d0466e'] },
+  { id: 'safira', nome: 'Safira', grupo: 'Azuis', cor: '#234a9e', profundo: '#0b1838', series: ['#234a9e', '#d08a3c', '#2f8f6f', '#a0506e'] },
   { id: 'petroleo', nome: 'Petróleo', grupo: 'Azuis', cor: '#0f5f6b', profundo: '#072a30', series: ['#0f5f6b', '#c8743a', '#6b6fbf', '#7d9a3a'] },
   { id: 'marinho', nome: 'Azul marinho', grupo: 'Azuis', cor: '#1f3f73', profundo: '#0b1830', series: ['#1f3f73', '#c98b3a', '#3d8f7a', '#a0506e'] },
-  { id: 'safira', nome: 'Safira', grupo: 'Azuis', cor: '#234a9e', profundo: '#0b1838', series: ['#234a9e', '#d08a3c', '#2f8f6f', '#a0506e'] },
-  { id: 'aco', nome: 'Azul aço', grupo: 'Azuis', cor: '#3b5a7a', profundo: '#141f2b', series: ['#3b5a7a', '#c47a3a', '#6f9a3e', '#9a4f8a'] },
-  { id: 'onix', nome: 'Ônix', grupo: 'Neutros', cor: '#1f2023', profundo: '#0b0b0c', series: ['#2b2d31', '#4f7cc9', '#d08a3c', '#4f9a78'] },
-  { id: 'grafite', nome: 'Grafite', grupo: 'Neutros', cor: '#3a4048', profundo: '#121417', series: ['#3a4048', '#4f7cc9', '#d08a3c', '#5a9a7a'] },
-  { id: 'vinho', nome: 'Vinho', grupo: 'Quentes', cor: '#7a2840', profundo: '#2a0e16', series: ['#7a2840', '#3a72b0', '#c8913c', '#5e8a4a'] },
-  { id: 'ameixa', nome: 'Ameixa', grupo: 'Quentes', cor: '#5b3a6e', profundo: '#201427', series: ['#5b3a6e', '#2f8f8a', '#d08a3c', '#8a9a2e'] },
+  { id: 'lavanda', nome: 'Lavanda', grupo: 'Roxos e rosas', cor: '#6a4fcf', profundo: '#20183e', series: ['#6a4fcf', '#e0953a', '#1f9a8a', '#d0466e'] },
+  { id: 'orquidea', nome: 'Orquídea', grupo: 'Roxos e rosas', cor: '#9a3aa6', profundo: '#2e1132', series: ['#9a3aa6', '#2f8fb0', '#e0953a', '#5f9a3a'] },
+  { id: 'rosa', nome: 'Rosa', grupo: 'Roxos e rosas', cor: '#c02a68', profundo: '#3a0d1f', series: ['#c02a68', '#2f7fd0', '#e0a03a', '#1f9a7a'] },
+  { id: 'ameixa', nome: 'Ameixa', grupo: 'Roxos e rosas', cor: '#5b3a6e', profundo: '#201427', series: ['#5b3a6e', '#2f8f8a', '#d08a3c', '#8a9a2e'] },
+  { id: 'coral', nome: 'Coral', grupo: 'Quentes', cor: '#c2452f', profundo: '#3a150e', series: ['#c2452f', '#2f7fbf', '#1f9a7a', '#8a5ad0'] },
+  { id: 'tangerina', nome: 'Tangerina', grupo: 'Quentes', cor: '#b4510f', profundo: '#361805', series: ['#b4510f', '#2f6fcf', '#1f9a7a', '#a8509a'] },
+  { id: 'ambar', nome: 'Âmbar', grupo: 'Quentes', cor: '#8f5f00', profundo: '#2b1d00', series: ['#8f5f00', '#3f6fd1', '#c2477f', '#1f9a7a'] },
   { id: 'terracota', nome: 'Terracota', grupo: 'Quentes', cor: '#a1502c', profundo: '#36190d', series: ['#a1502c', '#2f6f8f', '#6f9a3a', '#7a4a9a'] },
+  { id: 'vinho', nome: 'Vinho', grupo: 'Quentes', cor: '#7a2840', profundo: '#2a0e16', series: ['#7a2840', '#3a72b0', '#c8913c', '#5e8a4a'] },
+  { id: 'ardosia', nome: 'Ardósia', grupo: 'Neutros', cor: '#46566b', profundo: '#151a20', series: ['#46566b', '#3f7fe0', '#e0953a', '#1f9a7a'] },
+  { id: 'aco', nome: 'Azul aço', grupo: 'Neutros', cor: '#3b5a7a', profundo: '#141f2b', series: ['#3b5a7a', '#c47a3a', '#6f9a3e', '#9a4f8a'] },
+  { id: 'grafite', nome: 'Grafite', grupo: 'Neutros', cor: '#3a4048', profundo: '#121417', series: ['#3a4048', '#4f7cc9', '#d08a3c', '#5a9a7a'] },
+  { id: 'onix', nome: 'Ônix', grupo: 'Neutros', cor: '#1f2023', profundo: '#0b0b0c', series: ['#2b2d31', '#4f7cc9', '#d08a3c', '#4f9a78'] },
 ];
 /** Compatibilidade: lista simples de cores prontas. */
 export const CORES_PRONTAS = PALETAS.map((p) => ({ nome: p.nome, cor: p.cor }));
@@ -155,6 +166,18 @@ export function variaveis(a: Aparencia, escuro: boolean): Record<string, string>
     '--raio-p': `${Math.max(3, RAIOS[a.cantos] - 4)}px`,
     '--fonte-base': `${FONTES[a.fonte]}px`,
   };
+}
+
+/**
+ * Cores de um documento ao cliente (proposta) na paleta escolhida para ele. Sempre no modo
+ * claro: só a cor de destaque e as cores de gráfico mudam; papel e texto continuam os mesmos.
+ */
+export function variaveisDocumento(cor?: string | null): Record<string, string> | undefined {
+  if (!cor || !ehHex(cor) || cor.toLowerCase() === COR_MARCA) return undefined;
+  const v = variaveis({ ...PADRAO, cor: cor.toLowerCase() }, false);
+  const r: Record<string, string> = {};
+  for (const k of ['--verde', '--verde-escuro', '--verde-profundo', '--verde-claro', '--verde-suave', '--verde-tinta', '--btn-fundo', '--btn-fundo-hover', '--btn-texto', '--cor-rgb', '--profundo', '--profundo-rgb', '--serie-1', '--serie-2', '--serie-3', '--serie-4']) r[k] = v[k];
+  return r;
 }
 
 // ---------- Aplicar ----------

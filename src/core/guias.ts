@@ -97,6 +97,7 @@ const G: Guia[] = [
     passos: [
       { titulo: 'Edite na própria página', texto: 'Clique em qualquer texto ou valor da folha. Enter confirma, Esc desfaz. Mudou um preço? Parcelas e total acompanham.', alvo: 'Editar na página' },
       { titulo: 'Confira a força da proposta', texto: 'A nota de 0 a 10 mostra os gatilhos de decisão que faltam: depoimentos, parcelamento, validade curta e outros, com a dica de cada um.', alvo: 'Força da proposta' },
+      { titulo: 'Escolha a cor da proposta', texto: 'Em “Cor desta proposta”, toque numa das cores. A capa, os destaques, os pacotes e o cronograma mudam juntos, sempre no papel branco.', alvo: 'Cor desta proposta' },
       { titulo: 'Tire o que não precisa', texto: '“Tirar esta página” some com a página para o cliente. “Mostrar de novo” devolve.', alvo: 'Tirar esta página' },
       { titulo: 'Veja como o cliente vê', texto: 'Alterne para conferir a versão final sem os controles de edição.', alvo: 'Como o cliente vê' },
       { titulo: 'Emita e envie', texto: 'Emitir congela a versão com um código de verificação. Depois envie por e-mail ou WhatsApp.', alvo: 'Emitir versão' },

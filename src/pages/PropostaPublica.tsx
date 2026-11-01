@@ -1,5 +1,6 @@
 // Página que o cliente abre pelo link. Não exige login e só mostra o que está na versão emitida.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { variaveisDocumento } from '../lib/aparencia';
 import { useParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { PropostaDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
@@ -85,7 +86,7 @@ export function PropostaPublica() {
   }
 
   return (
-    <div className="publica">
+    <div className="publica" style={variaveisDocumento(c.cor) as CSSProperties | undefined}>
       <header className="publica-cab">
         <img src="/marca/rosae-logo-horizontal.svg" alt="ROSAE Engenharia & Estruturas" />
         <div className="spacer" />

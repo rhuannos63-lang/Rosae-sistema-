@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PALETAS, contraste, derivarPaleta, variaveis, normalizar } from '../lib/aparencia';
+import { COR_MARCA, PALETAS, contraste, derivarPaleta, variaveis, variaveisDocumento, normalizar } from '../lib/aparencia';
 
 const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const distancia = (a: string, b: string) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
@@ -32,5 +32,20 @@ describe('paletas prontas', () => {
     const v = variaveis(normalizar({ cor: '#7a2840' }), false);
     expect(v['--serie-1']).toBe('#7a2840');
     expect(v['--profundo']).toBe('#2a0e16');
+  });
+
+  it('a proposta pode usar qualquer paleta; sem cor fica no musgo da marca', () => {
+    expect(variaveisDocumento(undefined)).toBeUndefined();
+    expect(variaveisDocumento(COR_MARCA)).toBeUndefined();
+    expect(variaveisDocumento('azul')).toBeUndefined();
+    const v = variaveisDocumento('#1f66c9')!;
+    expect(v['--verde']).toBe('#1f66c9');
+    expect(v['--serie-2']).toBe('#e58a2f');
+    expect(v['--fundo']).toBeUndefined();
+  });
+
+  it('há paletas em todas as famílias de cor', () => {
+    const grupos = new Set(PALETAS.map((p) => p.grupo));
+    expect([...grupos].sort()).toEqual(['Azuis', 'Neutros', 'Quentes', 'Roxos e rosas', 'Verdes']);
   });
 });

@@ -66,6 +66,8 @@ export type Conteudo = {
   // Gatilhos de confiança: compromissos (reduzem o risco percebido) e depoimentos (prova social).
   compromissos?: string[];
   depoimentos?: string[];
+  // Cor da apresentação (uma das paletas de Aparência). Vazio = musgo da marca.
+  cor?: string;
   gerador?: { tipo: string; respostas: Record<string, string | number | boolean | null>; pacote: number; valores?: ValoresManuais; em: string };
 };
 

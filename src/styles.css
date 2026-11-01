@@ -2013,3 +2013,100 @@ h1 { font-size: 2.6rem; line-height: 1.02; letter-spacing: -0.012em; }
 .zona-excluir { display: flex; align-items: center; gap: 12px; justify-content: space-between; padding: 12px 14px; border: 1px dashed var(--linha-forte); border-radius: var(--raio); }
 .mostrar-mais { display: flex; margin: 12px auto 4px; }
 :root:not([data-menu='claro']) .sidebar .avatar { background: rgba(255, 255, 255, .14); }
+
+/* =====================================================================
+   Proposta clara (2026-11-01): papel branco, painel suave na cor da
+   proposta, assinatura de quatro cores e destaques claros. Nada escuro.
+   ===================================================================== */
+.slide.capa { background: linear-gradient(90deg, #ffffff 0 61%, var(--verde-tinta) 61% 100%); color: var(--grafite); border: 1px solid var(--linha); }
+.slide.capa::before { right: -20%; top: -34%; width: 72%; background: rgba(var(--cor-rgb), .30); }
+.slide.capa::after { left: 0; right: 0; top: 0; bottom: auto; height: calc(.55 * var(--cq, 1cqw)); background: linear-gradient(90deg, var(--serie-1) 0 25%, var(--serie-2) 25% 50%, var(--serie-3) 50% 75%, var(--serie-4) 75% 100%); z-index: 2; }
+.slide.capa .capa-tipo { color: var(--verde); }
+.slide.capa h1 { color: var(--grafite); }
+.slide.capa .capa-cliente { color: var(--texto-2); }
+.slide.capa .capa-cliente b { color: var(--grafite); }
+.slide.capa .capa-dados { border-left: 1px solid rgba(var(--cor-rgb), .25); }
+.slide.capa .capa-dados dt { color: var(--verde-escuro); opacity: .8; }
+.slide.capa .capa-dados dd { color: var(--grafite); }
+.slide.capa .slide-rodape { color: var(--texto-2); }
+.slide.capa .slide-rodape img { filter: none; opacity: 1; }
+.editando .slide.capa .ed:empty::before { color: var(--texto-3); }
+.capa-selos { list-style: none; margin: calc(2.4 * var(--cq, 1cqw)) 0 0 !important; padding: 0 !important; display: flex !important; flex-wrap: wrap; gap: calc(.8 * var(--cq, 1cqw)) calc(1 * var(--cq, 1cqw)) !important; }
+.capa-selos li { display: inline-flex; align-items: center; gap: calc(.7 * var(--cq, 1cqw)); font-size: calc(1.1 * var(--cq, 1cqw)); color: var(--texto-2); border: 1px solid var(--linha); background: #fff; border-radius: 99px; padding: calc(.45 * var(--cq, 1cqw)) calc(1.2 * var(--cq, 1cqw)); }
+.capa-selos li::before { content: ''; width: calc(.75 * var(--cq, 1cqw)); height: calc(.75 * var(--cq, 1cqw)); border-radius: 50%; background: var(--serie-1); flex: none; }
+.capa-selos li:nth-child(2)::before { background: var(--serie-2); }
+.capa-selos li:nth-child(3)::before { background: var(--serie-3); }
+.capa-selos li:nth-child(4)::before { background: var(--serie-4); }
+
+/* Cabeçalho de cada página: número em destaque e traço de quatro cores */
+.slide-kicker { display: inline-flex; align-items: center; gap: calc(1 * var(--cq, 1cqw)); }
+.slide-n { font-family: var(--fonte-display); font-size: calc(1.7 * var(--cq, 1cqw)); letter-spacing: 0; color: var(--verde); padding-right: calc(1 * var(--cq, 1cqw)); border-right: 1px solid var(--linha-forte); line-height: 1; }
+.slide-cab h2::after { content: ''; display: block; width: calc(7 * var(--cq, 1cqw)); height: calc(.3 * var(--cq, 1cqw)); margin-top: calc(1.2 * var(--cq, 1cqw)); background: linear-gradient(90deg, var(--serie-1) 0 40%, var(--serie-2) 40% 60%, var(--serie-3) 60% 80%, var(--serie-4) 80% 100%); border-radius: 99px; }
+.slide-progresso { width: calc(10 * var(--cq, 1cqw)); height: calc(.25 * var(--cq, 1cqw)); background: var(--linha); border-radius: 99px; overflow: hidden; display: inline-block; }
+.slide-progresso i { display: block; height: 100%; background: var(--verde); border-radius: 99px; }
+
+/* Resumo: quatro cartões claros, cada um com sua cor e ícone */
+.resumo-cartoes > div, .resumo-cartoes div:first-child { background: #fff; color: var(--grafite); border: 1px solid var(--linha); border-top: calc(.35 * var(--cq, 1cqw)) solid var(--serie-1); }
+.resumo-cartoes div:first-child { background: var(--verde-tinta); }
+.resumo-cartoes > div:nth-child(2) { border-top-color: var(--serie-2); }
+.resumo-cartoes > div:nth-child(3) { border-top-color: var(--serie-3); }
+.resumo-cartoes > div:nth-child(4) { border-top-color: var(--serie-4); }
+.resumo-cartoes svg { width: calc(2.4 * var(--cq, 1cqw)); height: calc(2.4 * var(--cq, 1cqw)); color: var(--serie-1); margin-bottom: calc(.4 * var(--cq, 1cqw)); }
+.resumo-cartoes > div:nth-child(2) svg { color: var(--serie-2); }
+.resumo-cartoes > div:nth-child(3) svg { color: var(--serie-3); }
+.resumo-cartoes > div:nth-child(4) svg { color: var(--serie-4); }
+.resumo-cartoes div:first-child b { color: var(--verde-escuro); }
+.resumo-cartoes span, .resumo-cartoes small { opacity: 1; color: var(--texto-2); }
+
+/* Valores e pagamento: claros, com a cor da proposta como acento */
+.pagamento-total { background: var(--verde-tinta); color: var(--grafite); border: 1px solid rgba(var(--cor-rgb), .22); border-left: calc(.45 * var(--cq, 1cqw)) solid var(--verde); }
+.pagamento-total b { color: var(--verde-escuro); }
+.pagamento-total span, .pagamento-total small { opacity: 1; color: var(--texto-2); }
+
+/* Cores que se alternam: etapas, entregáveis, compromissos e cronograma */
+.metodo li:nth-child(4n+1) .etapa-n, .linha-etapas li:nth-child(4n+1) .etapa-n, .entregaveis > div:nth-child(4n+1) .entregavel-n { color: var(--serie-1); }
+.metodo li:nth-child(4n+2) .etapa-n, .linha-etapas li:nth-child(4n+2) .etapa-n, .entregaveis > div:nth-child(4n+2) .entregavel-n { color: var(--serie-2); }
+.metodo li:nth-child(4n+3) .etapa-n, .linha-etapas li:nth-child(4n+3) .etapa-n, .entregaveis > div:nth-child(4n+3) .entregavel-n { color: var(--serie-3); }
+.metodo li:nth-child(4n+4) .etapa-n, .linha-etapas li:nth-child(4n+4) .etapa-n, .entregaveis > div:nth-child(4n+4) .entregavel-n { color: var(--serie-4); }
+.gantt-linha:nth-child(4n+1) .gantt-barra { background: var(--serie-1); }
+.gantt-linha:nth-child(4n+2) .gantt-barra { background: var(--serie-2); }
+.gantt-linha:nth-child(4n+3) .gantt-barra { background: var(--serie-3); }
+.gantt-linha:nth-child(4n+4) .gantt-barra { background: var(--serie-4); }
+.compromissos-lista > li:nth-child(4n+2)::before { color: var(--serie-2); }
+.compromissos-lista > li:nth-child(4n+3)::before { color: var(--serie-3); }
+.compromissos-lista > li:nth-child(4n+4)::before { color: var(--serie-4); }
+
+/* Pacotes: faixa de cor no topo de cada um; o recomendado na cor da proposta */
+.opcoes-doc .opcao-doc, .opcoes-doc.escolhivel .opcao-doc { border-top: calc(.4 * var(--cq, 1cqw)) solid var(--serie-2); }
+.opcoes-doc .opcao-doc:nth-child(2), .opcoes-doc.escolhivel .opcao-doc:nth-child(2) { border-top-color: var(--serie-3); }
+.opcoes-doc .opcao-doc:nth-child(3), .opcoes-doc.escolhivel .opcao-doc:nth-child(3) { border-top-color: var(--serie-4); }
+.opcoes-doc .opcao-doc.recomendado, .opcoes-doc.escolhivel .opcao-doc.recomendado, .opcoes-doc.escolhivel .opcao-doc.marcada { border-top-color: var(--verde); }
+.opcoes-doc .opcao-doc.recomendado, .opcoes-doc.escolhivel .opcao-doc.marcada { border-color: var(--verde); background: var(--verde-tinta); }
+.opcao-selo { background: var(--verde); color: var(--btn-texto); }
+.opcao-valor { color: var(--verde-escuro); }
+
+/* Sistema: o destaque passa a usar a cor principal, mais clara que o tom profundo */
+.kpi.destaque, :root[data-tema='escuro'] .kpi.destaque { background: var(--btn-fundo); border-color: var(--btn-fundo); color: var(--btn-texto); }
+.kpi.destaque::after { background: rgba(255,255,255,.16); }
+.avatar, .dep-selo { background: var(--verde); }
+.portal-capa:not(.com-imagem) { background-color: var(--verde); }
+.perfil-projeto .pj-cena { background: var(--verde-escuro); }
+@media (min-width: 960px) { .login-arte { background: var(--verde); } .login-arte::before { background: rgba(255,255,255,.18); } }
+
+/* Celular: a capa clara empilhada, com o painel suave embaixo */
+@media (max-width: 639px) {
+  .documento-proposta .slide.capa { background: #ffffff; }
+  .documento-proposta .slide.capa .capa-dados { border-top: 1px solid rgba(var(--cor-rgb), .25); background: var(--verde-tinta); border-radius: 12px; padding: calc(3 * var(--cq)); }
+  .documento-proposta .slide.capa::after { display: block; }
+  .documento-proposta .slide.capa::before { width: 120%; right: -45%; top: -18%; }
+}
+@media print { .slide-progresso i { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* Editor: escolha da cor da proposta */
+.cor-proposta { padding: 12px 14px; display: grid; gap: 10px; }
+.cor-proposta-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cor-proposta-topo svg { width: 18px; height: 18px; color: var(--verde); }
+.cor-proposta-lista { display: flex; flex-wrap: wrap; gap: 8px; }
+.cor-bolinha { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--linha-forte); padding: 0; cursor: pointer; transition: transform .15s; }
+.cor-bolinha:hover { transform: scale(1.1); }
+.cor-bolinha.marcada { box-shadow: 0 0 0 2px var(--grafite); }

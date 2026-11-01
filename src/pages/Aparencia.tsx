@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Topo } from '../components/Layout';
 import { Icone } from '../components/Icone';
 import { useToast } from '../components/ui';
-import { contraste, PALETAS, PADRAO, paletaDaCor, useAparencia, type Aparencia as TAparencia } from '../lib/aparencia';
+import { contraste, misturar, PALETAS, PADRAO, paletaDaCor, useAparencia, type Aparencia as TAparencia } from '../lib/aparencia';
 
 type Opcao<K extends keyof TAparencia> = { valor: TAparencia[K]; rotulo: string; dica?: string };
 
@@ -76,7 +76,7 @@ export function Aparencia() {
                   {PALETAS.filter((p) => p.grupo === g).map((p) => (
                     <button key={p.id} role="radio" aria-checked={a.cor === p.cor} className={`ap-paleta${a.cor === p.cor ? ' ativo' : ''}`} onClick={() => { setHex(p.cor); mudar({ cor: p.cor }); }}>
                       <span className="ap-paleta-amostra" aria-hidden="true">
-                        <i style={{ background: p.profundo }} /><i style={{ background: p.cor }} />
+                        <i style={{ background: p.cor }} /><i style={{ background: misturar(p.cor, '#ffffff', 0.86) }} />
                         <span>{p.series.slice(1).map((x) => <em key={x} style={{ background: x }} />)}</span>
                       </span>
                       <b>{p.nome}</b>
@@ -128,7 +128,7 @@ export function Aparencia() {
               <button className="btn-secundario">Secundário</button>
               <span className="selo">Selo</span>
             </div>
-            <p className="muted small" style={{ marginBottom: 0 }}>Propostas, contratos, relatórios e o portal do cliente continuam sempre com as cores da marca ROSAE.</p>
+            <p className="muted small" style={{ marginBottom: 0 }}>Contratos, relatórios e o portal do cliente ficam nas cores da marca ROSAE. A cor de cada proposta você escolhe no próprio editor da proposta.</p>
           </section>
         </div>
       </div>
