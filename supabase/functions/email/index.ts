@@ -68,6 +68,7 @@ async function enviar(db: SupabaseClient, adm: SupabaseClient, c: Record<string,
       headers: { authorization: `Bearer ${CHAVE()}`, 'content-type': 'application/json', 'idempotency-key': chave },
       body: JSON.stringify({
         from: REMETENTE(), to: [envio.destinatario], subject: envio.assunto, html, text: texto,
+        ...(c.anexo_base64 ? { attachments: [{ filename: c.anexo_nome, content: c.anexo_base64 }] } : {}),
         ...(empresa.email ? { reply_to: empresa.email } : {}),
         tags: [{ name: 'tipo', value: 'proposta' }],
       }),

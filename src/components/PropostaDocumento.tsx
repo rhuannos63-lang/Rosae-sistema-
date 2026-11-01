@@ -3,6 +3,7 @@
 import { createContext, useContext, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { variaveisDocumento } from '../lib/aparencia';
 import { Icone } from './Icone';
+import { RosaTopografica } from './RosaTopografica';
 import { formatar, lerDigitado } from '../core/dinheiro';
 import { formatarData } from '../core/datas';
 import {
@@ -174,7 +175,10 @@ const qtd = (i: Item) => `${Number(i.quantidade).toLocaleString('pt-BR', { maxim
 
 type Pagina = { id: string; titulo?: ReactNode; nome: string; classe?: string; conteudo: ReactNode };
 
-export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; edicao?: EdicaoDocumento; escolha?: EscolhaPacote }) {
+/** Arquivo PDF: o documento fica fixo em 16:9 e ganha botões clicáveis para o aceite. */
+export type ModoPdf = { aceite?: string | null };
+
+export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumento; edicao?: EdicaoDocumento; escolha?: EscolhaPacote; pdf?: ModoPdf }) {
   const c = d.conteudo;
   const ed = edicao ?? null;
   const mudar = (f: (c: Conteudo) => Conteudo) => ed?.mudar(f);
@@ -204,6 +208,7 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
     classe: 'capa',
     conteudo: (
       <div className="capa-grade">
+        <RosaTopografica className="capa-rosa" />
         <div className="capa-texto">
           <img className="capa-logo" src="/marca/rosae-logo-horizontal.svg" alt="ROSAE Engenharia & Estruturas" />
           <p className="capa-tipo">{d.tipo === 'aditivo' ? 'Aditivo de escopo' : 'Proposta técnica e comercial'}</p>
@@ -215,6 +220,7 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
             {c.garantia ? <li>Garantia por escrito</li> : <li>Escopo detalhado</li>}
             <li>Normas ABNT</li>
           </ul>
+          {pdf?.aceite && <a className="pdf-botao capa-pdf-botao" href={pdf.aceite}>Ver online e aceitar →</a>}
         </div>
         <dl className="capa-dados">
           {(c.local || ed) && <div><dt>Local</dt><T tag="dd" v={c.local} set={set('local')} ph="Endereço da obra" /></div>}
@@ -610,11 +616,12 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
         <div>
           <h3>Como aprovar</h3>
           <ol className="passos-aceite">
-            <li><b>Hoje, em 2 minutos.</b> Abra o link desta proposta e toque em <b>Aceitar esta proposta</b>. Se quiser mudar algo, peça o ajuste por lá.</li>
+            <li><b>Hoje, em 2 minutos.</b> {pdf?.aceite ? <>Toque no botão <b>Aceitar esta proposta</b> logo abaixo. Se quiser mudar algo, peça o ajuste pela mesma página.</> : <>Abra o link desta proposta e toque em <b>Aceitar esta proposta</b>. Se quiser mudar algo, peça o ajuste por lá.</>}</li>
             <li><b>Em até 1 dia útil.</b> Enviamos o contrato para assinatura pelo celular e combinamos a data de início.</li>
             <li><b>Durante todo o serviço.</b> Você acompanha cada etapa pelo portal do cliente, com fotos e registros.</li>
           </ol>
           <p className="total-final">Total: <b>{formatar(total)}</b>{parcelamento && <span className="muted"> · {parcelamento}</span>}</p>
+          {pdf?.aceite && <a className="pdf-botao" href={pdf.aceite}>Aceitar esta proposta →</a>}
           <p className="validade-aviso">{d.validade ? <>Proposta válida até <b>{formatarData(d.validade)}</b>.</> : <>Proposta válida por <b>{c.validade_dias || 15} dias</b> após o envio.</>} Com o aceite dentro da validade, os valores ficam garantidos e reservamos a sua data de início na agenda.</p>
         </div>
         <div className="assinatura">
@@ -635,7 +642,7 @@ export function PropostaDocumento({ d, edicao, escolha }: { d: DadosDocumento; e
 
   if (!ed) {
     return (
-      <div className="documento-proposta" style={estilo}>
+      <div className={`documento-proposta${pdf ? ' para-pdf' : ''}`} style={estilo}>
         {visiveis.map((p, k) => <Slide key={k} n={k + 1} total={visiveis.length} titulo={p.titulo} d={d} classe={p.classe}>{p.conteudo}</Slide>)}
       </div>
     );

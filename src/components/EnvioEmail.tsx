@@ -48,16 +48,21 @@ function novaChave() {
 }
 
 /** Janela de envio: confere destinatário, assunto e mensagem, mostra a prévia e envia uma única vez. */
-export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCliente, aoFechar, aoEnviar, abrirNoAplicativo }: {
+export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCliente, aoFechar, aoEnviar, abrirNoAplicativo, anexo }: {
   versaoId: string; codigo: string; versao: number; titulo: string; cliente: string; emailCliente: string | null;
   aoFechar: () => void; aoEnviar: () => void; abrirNoAplicativo: () => void;
+  /** Gera o PDF da proposta para ir anexado. */
+  anexo?: () => Promise<{ nome: string; base64: string } | null>;
 }) {
   const toast = useToast();
   const status = useConsulta(() => statusEmail(), []);
   const primeiro = cliente.split(' ')[0] ?? '';
   const [dest, setDest] = useState(emailCliente ?? '');
   const [assunto, setAssunto] = useState(`Proposta ${codigo} · ROSAE Engenharia & Estruturas`);
-  const [mensagem, setMensagem] = useState(`Olá, ${primeiro}!\n\nSegue a proposta ${codigo} (versão ${versao}): ${titulo}.\n\nNo link abaixo estão o escopo, o que está e o que não está incluso, prazos e condições. Por lá você também pode aceitar ou pedir ajustes.\n\nQualquer dúvida, estou à disposição.`);
+  const [mensagem, setMensagem] = useState(anexo
+    ? `Olá, ${primeiro}!\n\nSegue em anexo a proposta ${codigo} (versão ${versao}): ${titulo}.\n\nNo PDF estão o escopo, o que está e o que não está incluso, prazos e condições. Para aprovar, é só tocar em “Aceitar esta proposta” dentro do arquivo ou no botão abaixo.\n\nQualquer dúvida, estou à disposição.`
+    : `Olá, ${primeiro}!\n\nSegue a proposta ${codigo} (versão ${versao}): ${titulo}.\n\nNo botão abaixo estão o escopo, o que está e o que não está incluso, prazos e condições. Por lá você também pode aceitar ou pedir ajustes.\n\nQualquer dúvida, estou à disposição.`);
+  const [comPdf, setComPdf] = useState(!!anexo);
   const chave = useMemo(novaChave, []);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -68,7 +73,9 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
     if (!valido) return setErro('Confira o e-mail do cliente.');
     setEnviando(true);
     try {
-      const r = await chamar({ acao: 'enviar', versao_id: versaoId, destinatario: dest.trim(), assunto, mensagem, chave, origem: window.location.origin });
+      const arquivo = comPdf && anexo ? await anexo() : null;
+      if (comPdf && anexo && !arquivo) throw new Error('Não consegui gerar o PDF para anexar. Tente de novo.');
+      const r = await chamar({ acao: 'enviar', versao_id: versaoId, destinatario: dest.trim(), assunto, mensagem, chave, origem: window.location.origin, ...(arquivo ? { anexo_nome: arquivo.nome, anexo_base64: arquivo.base64 } : {}) });
       toast(r.envio?.estado === 'enviando' ? 'Esse envio já está em andamento.' : r.repetido ? 'Esse e-mail já tinha sido enviado. Nada foi duplicado.' : `E-mail enviado ao provedor para ${dest.trim()}. A entrega aparece no histórico.`);
       aoEnviar();
       aoFechar();
@@ -84,7 +91,7 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
       rodape={s?.configurado ? (
         <>
           <button className="btn-link" onClick={aoFechar}>Cancelar</button>
-          <button className="btn-primario" onClick={enviar} disabled={enviando || !valido || !assunto.trim()}>{enviando ? 'Enviando…' : erro ? 'Tentar de novo' : 'Enviar e-mail'}</button>
+          <button className="btn-primario" onClick={enviar} disabled={enviando || !valido || !assunto.trim()}>{enviando ? (comPdf ? 'Gerando o PDF e enviando…' : 'Enviando…') : erro ? 'Tentar de novo' : 'Enviar e-mail'}</button>
         </>
       ) : undefined}>
       {!s ? <Carregando /> : !s.configurado ? (
@@ -105,14 +112,16 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
             </label>
             <label className="campo">Assunto<input value={assunto} onChange={(e) => setAssunto(e.target.value)} maxLength={200} /></label>
             <label className="campo">Mensagem<textarea rows={9} value={mensagem} onChange={(e) => setMensagem(e.target.value)} maxLength={5000} /></label>
-            <p className="muted small" style={{ margin: 0 }}>Sai de <b>{s.remetente}</b>. O botão com o link seguro da proposta (válido por 60 dias) entra no fim da mensagem.</p>
+            {anexo && <label className="check"><input type="checkbox" checked={comPdf} onChange={(e) => setComPdf(e.target.checked)} /> Anexar a proposta em PDF (deitada, com botão de aceite)</label>}
+            <p className="muted small" style={{ margin: 0 }}>Sai de <b>{s.remetente}</b>. O botão “Aceitar ou pedir ajuste” entra no fim da mensagem, sem endereço aparente.</p>
             <Erro mensagem={erro} />
           </div>
           <div className="previa-email" aria-label="Prévia do e-mail">
             <div className="previa-email-cab"><span className="muted small">Para</span> {dest || '—'}<br /><span className="muted small">Assunto</span> <b>{assunto}</b></div>
             <div className="previa-email-corpo">
               {mensagem.trim().split(/\n{2,}/).map((p, k) => <p key={k}>{p}</p>)}
-              <span className="previa-email-botao">Ver a proposta e responder</span>
+              {comPdf && anexo && <span className="previa-email-anexo"><Icone nome="anexo" /> Proposta {codigo} v{versao}.pdf</span>}
+              <span className="previa-email-botao">Aceitar ou pedir ajuste</span>
             </div>
           </div>
         </div>

@@ -19,37 +19,38 @@ export const COR_MARCA = '#5b6b2e';
 export const PADRAO: Aparencia = { modo: 'claro', cor: COR_MARCA, menu: 'claro', fundo: 'branco', cantos: 'suaves', densidade: 'confortavel', fonte: 'normal' };
 
 /**
- * Paletas prontas. Cada uma tem a cor principal, o tom profundo (menu escuro, capas e
- * cartão de destaque) e quatro cores de gráfico escolhidas para combinar com ela e
- * continuar distinguíveis entre si (inclusive para daltonismo).
+ * Paletas prontas. Cada uma tem a cor principal, o tom profundo (menu escuro) e quatro
+ * cores de gráfico em duotom: a principal, uma companheira discreta (areia, ouro velho,
+ * rosé, lavanda, ardósia…) e variações claras ou escuras delas. Nada de arco-íris:
+ * as cores conversam entre si e continuam distinguíveis pelo tom e pela claridade.
  */
 export type Paleta = { id: string; nome: string; grupo: 'Verdes' | 'Azuis' | 'Roxos e rosas' | 'Quentes' | 'Neutros'; cor: string; profundo: string; series: [string, string, string, string] };
 export const PALETAS: Paleta[] = [
-  { id: 'musgo', nome: 'Musgo ROSAE', grupo: 'Verdes', cor: COR_MARCA, profundo: '#1e2412', series: ['#5b6b2e', '#3c6e91', '#c47f3a', '#8e4f72'] },
-  { id: 'oliva', nome: 'Oliva', grupo: 'Verdes', cor: '#6f7343', profundo: '#26281a', series: ['#6f7343', '#40708a', '#d39a3e', '#a8476e'] },
-  { id: 'salvia', nome: 'Sálvia', grupo: 'Verdes', cor: '#566f5b', profundo: '#1d2620', series: ['#566f5b', '#3f6fb8', '#d39a4e', '#a64d73'] },
-  { id: 'menta', nome: 'Menta', grupo: 'Verdes', cor: '#0f7a63', profundo: '#05251e', series: ['#0f7a63', '#4b6fe0', '#e2903a', '#c2477f'] },
-  { id: 'esmeralda', nome: 'Esmeralda', grupo: 'Verdes', cor: '#0d7356', profundo: '#05291f', series: ['#0d7356', '#3f6fd1', '#e0913c', '#a8509a'] },
-  { id: 'floresta', nome: 'Floresta', grupo: 'Verdes', cor: '#1f5c46', profundo: '#0c241b', series: ['#1f5c46', '#4a72b0', '#cc8a3e', '#9a5a8a'] },
-  { id: 'turquesa', nome: 'Turquesa', grupo: 'Azuis', cor: '#0a7385', profundo: '#032328', series: ['#0a7385', '#e0703a', '#7a5ad6', '#6f9a2e'] },
-  { id: 'ceu', nome: 'Azul céu', grupo: 'Azuis', cor: '#1f66c9', profundo: '#091f3c', series: ['#1f66c9', '#e58a2f', '#1f9a7a', '#c2477f'] },
-  { id: 'indigo', nome: 'Índigo', grupo: 'Azuis', cor: '#4a44d6', profundo: '#161440', series: ['#4a44d6', '#e0953a', '#17907a', '#d0466e'] },
-  { id: 'safira', nome: 'Safira', grupo: 'Azuis', cor: '#234a9e', profundo: '#0b1838', series: ['#234a9e', '#d08a3c', '#2f8f6f', '#a0506e'] },
-  { id: 'petroleo', nome: 'Petróleo', grupo: 'Azuis', cor: '#0f5f6b', profundo: '#072a30', series: ['#0f5f6b', '#c8743a', '#6b6fbf', '#7d9a3a'] },
-  { id: 'marinho', nome: 'Azul marinho', grupo: 'Azuis', cor: '#1f3f73', profundo: '#0b1830', series: ['#1f3f73', '#c98b3a', '#3d8f7a', '#a0506e'] },
-  { id: 'lavanda', nome: 'Lavanda', grupo: 'Roxos e rosas', cor: '#6a4fcf', profundo: '#20183e', series: ['#6a4fcf', '#e0953a', '#1f9a8a', '#d0466e'] },
-  { id: 'orquidea', nome: 'Orquídea', grupo: 'Roxos e rosas', cor: '#9a3aa6', profundo: '#2e1132', series: ['#9a3aa6', '#2f8fb0', '#e0953a', '#5f9a3a'] },
-  { id: 'rosa', nome: 'Rosa', grupo: 'Roxos e rosas', cor: '#c02a68', profundo: '#3a0d1f', series: ['#c02a68', '#2f7fd0', '#e0a03a', '#1f9a7a'] },
-  { id: 'ameixa', nome: 'Ameixa', grupo: 'Roxos e rosas', cor: '#5b3a6e', profundo: '#201427', series: ['#5b3a6e', '#2f8f8a', '#d08a3c', '#8a9a2e'] },
-  { id: 'coral', nome: 'Coral', grupo: 'Quentes', cor: '#c2452f', profundo: '#3a150e', series: ['#c2452f', '#2f7fbf', '#1f9a7a', '#8a5ad0'] },
-  { id: 'tangerina', nome: 'Tangerina', grupo: 'Quentes', cor: '#b4510f', profundo: '#361805', series: ['#b4510f', '#2f6fcf', '#1f9a7a', '#a8509a'] },
-  { id: 'ambar', nome: 'Âmbar', grupo: 'Quentes', cor: '#8f5f00', profundo: '#2b1d00', series: ['#8f5f00', '#3f6fd1', '#c2477f', '#1f9a7a'] },
-  { id: 'terracota', nome: 'Terracota', grupo: 'Quentes', cor: '#a1502c', profundo: '#36190d', series: ['#a1502c', '#2f6f8f', '#6f9a3a', '#7a4a9a'] },
-  { id: 'vinho', nome: 'Vinho', grupo: 'Quentes', cor: '#7a2840', profundo: '#2a0e16', series: ['#7a2840', '#3a72b0', '#c8913c', '#5e8a4a'] },
-  { id: 'ardosia', nome: 'Ardósia', grupo: 'Neutros', cor: '#46566b', profundo: '#151a20', series: ['#46566b', '#3f7fe0', '#e0953a', '#1f9a7a'] },
-  { id: 'aco', nome: 'Azul aço', grupo: 'Neutros', cor: '#3b5a7a', profundo: '#141f2b', series: ['#3b5a7a', '#c47a3a', '#6f9a3e', '#9a4f8a'] },
-  { id: 'grafite', nome: 'Grafite', grupo: 'Neutros', cor: '#3a4048', profundo: '#121417', series: ['#3a4048', '#4f7cc9', '#d08a3c', '#5a9a7a'] },
-  { id: 'onix', nome: 'Ônix', grupo: 'Neutros', cor: '#1f2023', profundo: '#0b0b0c', series: ['#2b2d31', '#4f7cc9', '#d08a3c', '#4f9a78'] },
+  { id: 'musgo', nome: 'Musgo ROSAE', grupo: 'Verdes', cor: COR_MARCA, profundo: '#1e2412', series: ['#5b6b2e', '#b39a5e', '#adb597', '#2e3617'] },
+  { id: 'oliva', nome: 'Oliva', grupo: 'Verdes', cor: '#6f7343', profundo: '#26281a', series: ['#6f7343', '#b07a5a', '#b7b9a1', '#383a22'] },
+  { id: 'salvia', nome: 'Sálvia', grupo: 'Verdes', cor: '#566f5b', profundo: '#1d2620', series: ['#566f5b', '#b48a8a', '#abb7ad', '#2b382e'] },
+  { id: 'menta', nome: 'Menta', grupo: 'Verdes', cor: '#0f7a63', profundo: '#05251e', series: ['#0f7a63', '#5b7a99', '#87bdb1', '#083d32'] },
+  { id: 'esmeralda', nome: 'Esmeralda', grupo: 'Verdes', cor: '#0d7356', profundo: '#05291f', series: ['#0d7356', '#b8964a', '#86b9ab', '#725d2e'] },
+  { id: 'floresta', nome: 'Floresta', grupo: 'Verdes', cor: '#1f5c46', profundo: '#0c241b', series: ['#1f5c46', '#a07a4a', '#8faea3', '#634c2e'] },
+  { id: 'turquesa', nome: 'Turquesa', grupo: 'Azuis', cor: '#0a7385', profundo: '#032328', series: ['#0a7385', '#8a7cc4', '#85b9c2', '#564d7a'] },
+  { id: 'ceu', nome: 'Azul céu', grupo: 'Azuis', cor: '#1f66c9', profundo: '#091f3c', series: ['#1f66c9', '#c0a46e', '#8fb3e4', '#103365'] },
+  { id: 'indigo', nome: 'Índigo', grupo: 'Azuis', cor: '#4a44d6', profundo: '#161440', series: ['#4a44d6', '#c8b48a', '#a5a2eb', '#7c7056'] },
+  { id: 'safira', nome: 'Safira', grupo: 'Azuis', cor: '#234a9e', profundo: '#0b1838', series: ['#234a9e', '#c09a50', '#91a5cf', '#775f32'] },
+  { id: 'petroleo', nome: 'Petróleo', grupo: 'Azuis', cor: '#0f5f6b', profundo: '#072a30', series: ['#0f5f6b', '#b07850', '#87afb5', '#6d4a32'] },
+  { id: 'marinho', nome: 'Azul marinho', grupo: 'Azuis', cor: '#1f3f73', profundo: '#0b1830', series: ['#1f3f73', '#c2a46e', '#8f9fb9', '#786644'] },
+  { id: 'lavanda', nome: 'Lavanda', grupo: 'Roxos e rosas', cor: '#6a4fcf', profundo: '#20183e', series: ['#6a4fcf', '#5fa3a8', '#b5a7e7', '#3b6568'] },
+  { id: 'orquidea', nome: 'Orquídea', grupo: 'Roxos e rosas', cor: '#9a3aa6', profundo: '#2e1132', series: ['#9a3aa6', '#7fb0a0', '#cd9dd3', '#4f6d63'] },
+  { id: 'rosa', nome: 'Rosa', grupo: 'Roxos e rosas', cor: '#c02a68', profundo: '#3a0d1f', series: ['#c02a68', '#9a7aa0', '#e095b4', '#5f4c63'] },
+  { id: 'ameixa', nome: 'Ameixa', grupo: 'Roxos e rosas', cor: '#5b3a6e', profundo: '#201427', series: ['#5b3a6e', '#b89a5e', '#ad9db7', '#2e1d37'] },
+  { id: 'coral', nome: 'Coral', grupo: 'Quentes', cor: '#c2452f', profundo: '#3a150e', series: ['#c2452f', '#6f8aa0', '#e1a297', '#612318'] },
+  { id: 'tangerina', nome: 'Tangerina', grupo: 'Quentes', cor: '#b4510f', profundo: '#361805', series: ['#b4510f', '#5f7080', '#daa887', '#5a2908'] },
+  { id: 'ambar', nome: 'Âmbar', grupo: 'Quentes', cor: '#8f5f00', profundo: '#2b1d00', series: ['#8f5f00', '#7a8050', '#c7af80', '#483000'] },
+  { id: 'terracota', nome: 'Terracota', grupo: 'Quentes', cor: '#a1502c', profundo: '#36190d', series: ['#a1502c', '#7f9a85', '#d0a896', '#4f5f52'] },
+  { id: 'vinho', nome: 'Vinho', grupo: 'Quentes', cor: '#7a2840', profundo: '#2a0e16', series: ['#7a2840', '#b8964a', '#bd94a0', '#3d1420'] },
+  { id: 'ardosia', nome: 'Ardósia', grupo: 'Neutros', cor: '#46566b', profundo: '#151a20', series: ['#46566b', '#b8a07a', '#a3abb5', '#232b36'] },
+  { id: 'aco', nome: 'Azul aço', grupo: 'Neutros', cor: '#3b5a7a', profundo: '#141f2b', series: ['#3b5a7a', '#b07850', '#9dadbd', '#6d4a32'] },
+  { id: 'grafite', nome: 'Grafite', grupo: 'Neutros', cor: '#3a4048', profundo: '#121417', series: ['#3a4048', '#b39a5e', '#9da0a4', '#6f5f3a'] },
+  { id: 'onix', nome: 'Ônix', grupo: 'Neutros', cor: '#1f2023', profundo: '#0b0b0c', series: ['#2b2d31', '#c2a878', '#959698', '#78684a'] },
 ];
 /** Compatibilidade: lista simples de cores prontas. */
 export const CORES_PRONTAS = PALETAS.map((p) => ({ nome: p.nome, cor: p.cor }));
@@ -108,11 +109,12 @@ function deHsl(h: number, s: number, l: number): string {
 export function derivarPaleta(c: string): { profundo: string; series: [string, string, string, string] } {
   const p = paletaDaCor(c);
   if (p) return { profundo: p.profundo, series: p.series };
-  const [h, s] = hsl(c);
-  const sat = Math.min(0.6, Math.max(0.35, s));
+  const [h] = hsl(c);
+  // Companheira discreta: tom vizinho, pouco saturado e médio-claro (como areia para o azul).
+  const companheira = deHsl((h + 150) % 360, 0.28, 0.55);
   return {
     profundo: misturar(c, '#000000', 0.68),
-    series: [c, deHsl((h + 200) % 360, sat, 0.42), deHsl((h + 35) % 360, 0.62, 0.52), deHsl((h + 290) % 360, 0.38, 0.46)],
+    series: [c, companheira, misturar(c, '#ffffff', 0.5), misturar(c, '#000000', 0.5)],
   };
 }
 

@@ -80,11 +80,11 @@ export const MANUAL: Capitulo[] = [
       { titulo: 'Emita a versão', texto: 'Toque em “Emitir versão”. Ela fica congelada com código de verificação, que prova ao cliente que o documento não mudou depois de enviado.' },
       { titulo: 'Edite um orçamento já pronto', texto: 'Na proposta emitida, toque em “Editar orçamento”. O sistema cria a versão seguinte com tudo copiado e abre direto em “Escopo e valores”. Mude o que precisar, emita e envie o link novo. A versão anterior fica guardada e dá para comparar o que mudou. Depois de aprovada, mudanças viram aditivo na obra (aba Contrato).' },
       { titulo: 'Envie por e-mail', texto: 'Toque em “Enviar por e-mail”, confira o destinatário, o assunto e a mensagem na prévia e toque em Enviar. O e-mail sai do endereço da ROSAE com o botão do link seguro. No histórico da versão aparece a situação: enviado ao provedor, entregue, voltou ou falhou (com “Tentar de novo”, que nunca manda em dobro). Entregue não é aceite: o aceite aparece em Respostas do cliente.' },
-      { titulo: 'Ou envie pelo WhatsApp', texto: 'Toque em “Enviar por WhatsApp”: o aplicativo abre com a mensagem e o link prontos para você conferir e enviar.' },
+      { titulo: 'Ou envie o PDF pelo WhatsApp', texto: 'Toque em “Enviar PDF pelo WhatsApp”. O sistema monta o PDF deitado, como uma apresentação, com o botão “Aceitar esta proposta” clicável dentro. No celular, escolha o WhatsApp e a conversa do cliente e o arquivo vai anexado. No computador, o arquivo é salvo e o WhatsApp abre para você anexar.' },
       { titulo: 'Acompanhe o aceite', texto: 'O cliente abre no celular, lê e toca em Aceitar ou pede ajuste. O aceite fica registrado com nome, data e a versão exata, e a proposta passa a Aprovada.' },
       { titulo: 'Converta em obra', texto: 'Na proposta aprovada, toque em “Converter em obra”. Serviços, etapas, materiais e recebimentos são criados sem redigitar.' },
     ],
-    dicas: ['“Duplicar” cria uma proposta nova a partir de outra parecida.', 'Para imprimir ou salvar em PDF, abra a prévia e use Imprimir.'],
+    dicas: ['“Duplicar” cria uma proposta nova a partir de outra parecida.', '“Baixar PDF” salva o arquivo deitado (16:9) que ocupa a folha inteira, do celular ou do computador.'],
   },
   {
     id: 'obras', titulo: 'Obras: do contrato à entrega', icone: 'obras', link: { para: '/obras', rotulo: 'Abrir as obras' },

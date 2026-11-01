@@ -1,6 +1,7 @@
 // Página que o cliente abre pelo link. Não exige login e só mostra o que está na versão emitida.
 import { useEffect, useState, type CSSProperties } from 'react';
 import { variaveisDocumento } from '../lib/aparencia';
+import { baixarArquivo, gerarPdfProposta, nomeDoPdf } from '../lib/pdfProposta';
 import { useParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { PropostaDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
@@ -21,6 +22,7 @@ export function PropostaPublica() {
   const [erro, setErro] = useState<string | null>(null);
   const [acao, setAcao] = useState<'aceitar' | 'ajuste' | 'recusar' | null>(null);
   const [f, setF] = useState({ nome: '', email: '', documento: '', comentario: '', concordo: false });
+  const [baixando, setBaixando] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [resposta, setResposta] = useState<string | null>(null);
   const [opcao, setOpcao] = useState<string | null>(null);
@@ -77,6 +79,13 @@ export function PropostaPublica() {
   const parcelamento = textoParcelamento(c);
   const tel = (d.empresa?.telefone ?? '').replace(/\D/g, '');
   const whats = tel ? `https://wa.me/${tel.length <= 11 ? `55${tel}` : tel}?text=${encodeURIComponent(`Olá! Vi a proposta ${d.codigo} (${d.titulo}) e tenho uma dúvida.`)}` : null;
+  async function salvarPdf() {
+    setBaixando(true);
+    const doc = { codigo: d!.codigo, tipo: d!.tipo, titulo: d!.titulo, versao: d!.versao, cliente: d!.cliente, emitida_em: d!.emitida_em, validade: d!.validade, hash: d!.hash, conteudo: c, empresa: d!.empresa };
+    try { baixarArquivo(await gerarPdfProposta(doc, { aceite: window.location.href }), nomeDoPdf(doc)); }
+    catch { window.print(); }
+    finally { setBaixando(false); }
+  }
   function abrir(a: 'aceitar' | 'ajuste' | 'recusar') {
     if (a === 'aceitar' && outraOpcao) {
       setF((x) => ({ ...x, comentario: `Gostaria de seguir com o pacote ${escolhida!.nome} (${formatar(Math.round(escolhida!.valor * 100))}).` }));
@@ -122,7 +131,7 @@ export function PropostaPublica() {
             {d.estado !== 'aprovada' && <button className="btn-secundario" onClick={() => abrir('ajuste')}>Pedir ajuste</button>}
             {whats && <a className="btn-secundario" href={whats} target="_blank" rel="noopener noreferrer">Falar com o engenheiro</a>}
             {d.estado !== 'aprovada' && d.atual && <button className="btn-link" onClick={() => abrir('recusar')}>Não tenho interesse</button>}
-            <button className="btn-link" onClick={() => window.print()}>Salvar em PDF</button>
+            <button className="btn-link" disabled={baixando} onClick={salvarPdf}>{baixando ? 'Preparando o PDF…' : 'Baixar em PDF'}</button>
           </div>
         ) : (
           <form className="stack" onSubmit={responder}>
