@@ -9,6 +9,7 @@ import { Carregando, Erro, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
 import { CampoNumero, estadoInicial, OrcamentoGerador, servicosDo, type EstadoGerador } from '../components/OrcamentoGerador';
 import { carregarPrecos, salvarPrecos, type TabelaPrecos } from '../lib/orcamentoParametros';
+import { carregarCondicoes } from '../lib/composicoes';
 import { paraBanco } from '../core/dinheiro';
 import { prepararParaSalvar, type ModeloServico } from '../core/proposta';
 import {
@@ -41,13 +42,14 @@ export function NovoOrcamento() {
   const { podeFinanceiro } = useAuth();
   const opId = params.get('oportunidade');
   const { dados, erro: erroCarga, carregando } = useConsulta(async () => {
-    const [precos, pessoas, bib, op] = await Promise.all([
+    const [precos, pessoas, bib, op, condicoes] = await Promise.all([
       carregarPrecos(),
       supabase.from('pessoa').select('id, nome, telefone, email').eq('arquivado', false).order('nome'),
       supabase.from('modelo_servico').select('*').eq('ativo', true),
       opId ? supabase.from('oportunidade').select('id, titulo, pessoa_id, resumo, local_obra, estado_id').eq('id', opId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      carregarCondicoes().catch(() => []),
     ]);
-    return { precos, pessoas: ok(pessoas) as PessoaMin[], biblioteca: ok(bib) as ModeloServico[], op: ok(op) as Op | null };
+    return { precos, pessoas: ok(pessoas) as PessoaMin[], biblioteca: ok(bib) as ModeloServico[], op: ok(op) as Op | null, condicoes };
   }, [opId]);
   const [estado, setEstado] = useState<EstadoGerador>(() => estadoInicial(params.get('tipo') ? { tipo: params.get('tipo')!, respostas: {}, pacote: 2 } : null));
   const [modoCliente, setModoCliente] = useState<'existente' | 'novo'>('existente');
@@ -61,7 +63,7 @@ export function NovoOrcamento() {
   const [gravando, setGravando] = useState(false);
 
   const op = dados?.op ?? null;
-  const contexto = useMemo(() => ({ necessidade: necessidade || op?.resumo || '', local: local || op?.local_obra || '', biblioteca: dados?.biblioteca }), [necessidade, local, op, dados?.biblioteca]);
+  const contexto = useMemo(() => ({ necessidade: necessidade || op?.resumo || '', local: local || op?.local_obra || '', biblioteca: dados?.biblioteca, condicoes: dados?.condicoes }), [necessidade, local, op, dados?.biblioteca, dados?.condicoes]);
   if (carregando && !dados) return <Carregando />;
   if (erroCarga || !dados) return <Erro mensagem={erroCarga ?? 'Erro ao carregar.'} />;
   const filtradas = dados.pessoas.filter((p) => !busca || p.nome.toLowerCase().includes(busca.toLowerCase())).slice(0, 50);

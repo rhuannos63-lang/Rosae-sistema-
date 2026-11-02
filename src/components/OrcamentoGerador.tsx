@@ -7,9 +7,11 @@ import { formatar } from '../core/dinheiro';
 import { CampoValor } from './ui';
 import type { ValoresManuais } from '../core/proposta';
 import {
-  CAMPOS_GERAIS, DEFINICOES, gerarOrcamentoServicos, respostasPadrao, TIPOS,
+  CAMPOS_GERAIS, DEFINICOES, gerarOrcamentoServicos, respostasPadrao, TIPOS, usaCondicoes,
   type Campo, type Contexto, type Orcamento, type Pacote, type Respostas, type Servico, type TipoServico,
 } from '../core/orcamento';
+import { codigosDe, CONDICAO_OCUPADO } from '../core/condicoes';
+import { SeletorCondicoes } from './SeletorCondicoes';
 import type { TabelaPrecos } from '../lib/orcamentoParametros';
 
 const reais = (v: number) => formatar(Math.round(v * 100));
@@ -120,6 +122,16 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
                 {CAMPOS_GERAIS.filter((c) => !c.se || c.se(respostas)).map((c) => <CampoGerador key={c.id} c={c} valor={respostas[c.id]} aoMudar={(v) => set(0, c.id, v)} />)}
               </div>
             </div>
+            {servicos.some((sv) => usaCondicoes(sv.tipo)) && (contexto.condicoes?.length ?? 0) > 0 && (
+              <div className="card gerador-perguntas">
+                <div className="card-titulo">
+                  <div><h2>Condições do local e logística</h2><div className="sub">Marque o que deixa a obra mais trabalhosa. O acréscimo entra numa linha própria{varios ? ', só nos serviços de execução' : ''}, e a proposta explica o que foi considerado.</div></div>
+                </div>
+                <SeletorCondicoes base={contexto.condicoes ?? []} marcadas={codigosDe(respostas.condicoes)} aoMudar={(cs) => set(0, 'condicoes', cs.join(',') || null)}
+                  ocultar={servicos.filter((sv) => usaCondicoes(sv.tipo)).every((sv) => DEFINICOES[sv.tipo].campos.some((c) => c.id === 'ocupado')) ? [CONDICAO_OCUPADO] : []} />
+                {podeFinanceiro && <Link className="btn-link small" to="/orcamento/composicoes?aba=condicoes">Ajustar os percentuais</Link>}
+              </div>
+            )}
           </div>
 
           <aside className="gerador-lateral">

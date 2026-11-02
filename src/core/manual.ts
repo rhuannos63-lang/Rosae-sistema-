@@ -66,6 +66,21 @@ export const MANUAL: Capitulo[] = [
     atencao: ['Os preços que vieram de fábrica são referências iniciais. Revise a tabela com os seus valores antes de enviar orçamentos reais.'],
   },
   {
+    id: 'composicoes', titulo: 'Insumos, composições e lista de compras', icone: 'financeiro', link: { para: '/orcamento/composicoes', rotulo: 'Abrir insumos e composições' },
+    resumo: 'Custo de material e mão de obra de cada serviço, em três padrões de acabamento, e a lista de compras da obra aprovada.',
+    passos: [
+      { titulo: 'Conheça a base', texto: 'Em Comercial e Orçamentos → Insumos e composições ficam os insumos (materiais, mão de obra própria e dos profissionais, equipamentos) e as composições: quanto de cada insumo vai em 1 m², 1 m³ ou 1 unidade de serviço, com a metodologia de execução. A base veio com valores de referência do Rio de Janeiro no formato da SINAPI.' },
+      { titulo: 'Três padrões de acabamento', texto: 'Cada insumo tem três preços: básico, médio e premium. Material de acabamento (piso, revestimento, louça, tinta, elétrica) muda bastante entre os padrões; cimento, aço e areia não mudam. A mão de obra de acabamento também muda, porque o acabamento premium exige profissional mais caro e mais tempo. Estrutura, fundação e projeto não variam.' },
+      { titulo: 'Edite os preços', texto: 'Na aba Insumos e preços, clique no valor de cada padrão e digite o seu. O que você mudar passa a valer nos próximos cálculos. A sua hora e a dos parceiros também ficam aqui.' },
+      { titulo: 'Ajuste ou crie composições', texto: 'Abra uma composição para mudar os coeficientes, a metodologia e os fatores de tempo da mão de obra nos padrões básico e premium. “Duplicar” cria uma variação sua a partir de outra.' },
+      { titulo: 'Use na proposta', texto: 'Na proposta, aba Custos internos, escolha o padrão de acabamento da obra (Básico, Médio ou Premium) e ligue cada item do escopo às composições. O sistema sugere as mais prováveis. Você vê material, mão de obra e o preço com BDI de cada item e pode tocar em “Usar R$ X no item” para levar o valor à proposta. Uma composição pode ter padrão diferente do geral (por exemplo piso premium numa obra média).' },
+      { titulo: 'Condições da obra e logística', texto: 'Na aba Condições da obra ficam as situações que dão trabalho a mais: apartamento com ou sem elevador, material pela escada, casa em terreno em aclive, rua sem acesso para caminhão, comunidade, condomínio com horário reduzido, trabalho à noite, imóvel ocupado, proteção de móveis, ambiente apertado, sem água ou luz, trabalho em altura, entulho ensacado, demolição manual, chuva, fora da Região Metropolitana e área de risco. Cada uma soma um percentual na mão de obra e outro no material, que você edita. Casa térrea de acesso fácil não precisa marcar nada.' },
+      { titulo: 'Marque as condições no orçamento', texto: 'No Novo orçamento de reforço, reforma ou construção aparece o cartão “Condições do local e logística”. Marque as que valem: o preço ganha a linha “Logística e condições do local” e a proposta explica ao cliente o que foi considerado. Na proposta, aba Custos internos, as mesmas condições aumentam a mão de obra e o material das composições (a quantidade de material para comprar não muda). A divisão entre mão de obra e material do orçamento automático fica na Tabela de preços, em “Parte de mão de obra no preço da execução”.' },
+      { titulo: 'Lista de compras', texto: 'Quando o cliente aceita e você converte em obra, o sistema soma os materiais de todas as composições, com a perda, e cria a lista de compras na aba Materiais da obra, já na embalagem de compra (sacos, galões, barras). Material de acabamento sai com o padrão no nome. Se a obra já existia, use “Lista de compras da proposta” na aba Materiais.' },
+    ],
+    atencao: ['Os preços da base são estimativas de referência para o Rio de Janeiro. Confira com os seus fornecedores e parceiros antes de usar em orçamentos reais.', 'A lista de compras não aparece para o cliente. Confira as quantidades antes de comprar.'],
+  },
+  {
     id: 'propostas', titulo: 'Propostas: editar, emitir e enviar', icone: 'documento', link: { para: '/propostas', rotulo: 'Abrir as propostas' },
     resumo: 'Transformar o orçamento numa apresentação de alto padrão e mandar ao cliente com aceite pelo link.',
     passos: [

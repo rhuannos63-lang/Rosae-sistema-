@@ -21,6 +21,7 @@ export const DEPARTAMENTOS: Departamento[] = [
       { para: '/orcamento', rotulo: 'Novo orçamento', icone: 'varinha', descricao: 'Orçamento automático por tipo de serviço, em 3 pacotes.' },
       { para: '/propostas', rotulo: 'Propostas', icone: 'documento', descricao: 'Editar, emitir, enviar o link e acompanhar o aceite.' },
       { para: '/orcamento/precos', rotulo: 'Tabela de preços', icone: 'tabela', descricao: 'Valores de referência que o orçamento usa.' },
+      { para: '/orcamento/composicoes', rotulo: 'Insumos e composições', icone: 'lista', descricao: 'Material, mão de obra e consumo de cada serviço, com metodologia.', acesso: 'financeiro' },
       { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista', descricao: 'Serviços prontos com escopo, inclusões e exclusões.' },
       { para: '/clausulas', rotulo: 'Cláusulas de contrato', icone: 'livro', descricao: 'Modelos de cláusulas usados nos contratos.' },
     ],

@@ -2131,3 +2131,31 @@ h1 { font-size: 2.6rem; line-height: 1.02; letter-spacing: -0.012em; }
 .segmentado { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .segmentado::-webkit-scrollbar { display: none; }
 .segmentado > button { flex: none; }
+
+/* Condições da obra e logística */
+.condicoes-sel { display: grid; gap: 12px; }
+.condicoes-grupo { border: 0; padding: 0; margin: 0; min-width: 0; }
+.condicoes-grupo legend { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.02em; color: var(--texto-2); margin-bottom: 6px; padding: 0; }
+.condicoes-lista { display: flex; flex-wrap: wrap; gap: 6px; }
+.condicao { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 7px 11px; border: 1px solid var(--linha); border-radius: 9px; background: var(--papel); color: inherit; font-size: 0.85rem; cursor: pointer; transition: border-color 0.15s, background 0.15s; max-width: 100%; }
+.condicao:hover { border-color: var(--verde-claro); }
+.condicao .condicao-pct { font-size: 0.74rem; color: var(--texto-2); font-variant-numeric: tabular-nums; }
+.condicao.ativo { background: var(--verde-tinta); border-color: var(--verde); }
+.condicao.ativo .condicao-nome { font-weight: 600; color: var(--verde-escuro); }
+.condicao.ativo .condicao-nome::before { content: '✓ '; color: var(--verde); }
+.condicoes-total { margin: 0; color: var(--texto-2); }
+.condicoes-total b { color: var(--verde-escuro); }
+.condicoes-sel.compacto .condicao { padding: 5px 9px; }
+
+/* Composição por insumos (custos internos da proposta) */
+.composicao-item h3 { font-size: 1rem; }
+.composicao-resumo { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 0.86rem; color: var(--texto-2); }
+.composicao-resumo b { color: var(--grafite); margin-left: 4px; }
+.composicao .tabela select { width: 100%; min-width: 0; }
+.composicao .tabela td:first-child { min-width: 220px; }
+.composicao .kpi .valor { font-size: 1.35rem; line-height: 1.25; word-break: break-word; }
+.condicoes-card summary { cursor: pointer; list-style: none; }
+.condicoes-card summary::-webkit-details-marker { display: none; }
+.condicoes-card summary::before { content: '▸ '; color: var(--verde); }
+.condicoes-card[open] summary::before { content: '▾ '; }
+.composicao .tabela-wrap .tabela { min-width: 660px; }

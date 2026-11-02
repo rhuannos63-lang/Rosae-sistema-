@@ -6,6 +6,7 @@ import {
   APRESENTACAO_PADRAO, conteudoVazio, novoId, parcelasPorPercentual,
   type Conteudo, type Etapa, type Item, type ModeloServico, type OpcaoProposta, type ParcelaProposta, type Pergunta as PerguntaFaq, type Responsabilidade, type Topico, type ValoresManuais,
 } from './proposta';
+import { acrescimoDas, codigosDe, CONDICAO_OCUPADO, type Acrescimo, type CondicaoObra } from './condicoes';
 
 export type TipoServico = 'projeto_estrutural' | 'projeto_arquitetonico' | 'reforco' | 'reforma' | 'construcao' | 'regularizacao' | 'laudo' | 'pericia';
 export type Valor = string | number | boolean | null;
@@ -1166,7 +1167,11 @@ export function camposDe(tipo: TipoServico): Campo[] {
   return [...DEFINICOES[tipo].campos, ...CAMPOS_COMUNS];
 }
 export function parametrosDe(tipo: TipoServico): Parametro[] {
-  return [...DEFINICOES[tipo].parametros, ...PARAMETROS_COMUNS];
+  const logistica: Parametro[] = usaCondicoes(tipo) ? [{
+    id: 'logistica_mo_pct', rotulo: 'Parte de mão de obra no preço da execução', unidade: '%', padrao: tipo === 'construcao' ? 45 : 55,
+    ajuda: 'Usada nas condições da obra (escada, aclive, condomínio...): o acréscimo de mão de obra pesa nesta parte do preço e o de material no restante.',
+  }] : [];
+  return [...DEFINICOES[tipo].parametros, ...logistica, ...PARAMETROS_COMUNS];
 }
 export function parametrosPadrao(tipo: TipoServico): Parametros {
   return Object.fromEntries(parametrosDe(tipo).map((x) => [x.id, x.padrao]));
@@ -1200,8 +1205,21 @@ export type Orcamento = {
 };
 
 /** Linhas de um pacote, com deslocamento e prioridade (urgência) já somados. */
-function linhasDoPacote(base: Base, k: 1 | 2 | 3, r: Respostas, p: Parametros): Linha[] {
+function linhasDoPacote(base: Base, k: 1 | 2 | 3, r: Respostas, p: Parametros, acr: Acrescimo | null = null): Linha[] {
   const ls = base.linhas.filter((l) => l.pacote <= k).map((l) => ({ ...l }));
+  if (acr && acr.nomes.length) {
+    // Condições da obra: o acréscimo de mão de obra pesa na parte de mão de obra do preço; o de material no resto.
+    const f = Math.min(100, Math.max(0, q(p, 'logistica_mo_pct'))) / 100;
+    const pctEf = acr.mao_de_obra_pct * f + acr.material_pct * (1 - f);
+    const sub = ls.reduce((t, l) => t + l.valor, 0);
+    const custo = ls.reduce((t, l) => t + l.custo, 0);
+    if (pctEf > 0 && sub > 0) {
+      ls.push({
+        titulo: 'Logística e condições do local', valor: arred10(sub * pctEf / 100), custo: Math.round(custo * pctEf / 100), pacote: 1,
+        descricao: `Considera: ${listaHumana(acr.nomes.map((x) => x.charAt(0).toLowerCase() + x.slice(1)))}. Inclui o tempo extra da equipe e o transporte do material até o local.`,
+      });
+    }
+  }
   const km = n(r, 'distancia_km');
   const vis = base.visitas[k - 1] ?? 0;
   if (km > 0 && vis > 0) {
@@ -1249,7 +1267,15 @@ const DIFERENCIAIS: Topico[] = [
   { titulo: 'Mudanças só com o seu aceite', texto: 'Qualquer alteração de escopo, prazo ou valor vira aditivo e só segue com a sua aprovação.' },
 ];
 
-export type Contexto = { necessidade?: string; local?: string; biblioteca?: ModeloServico[]; base?: Conteudo; valores?: ValoresManuais };
+export type Contexto = {
+  necessidade?: string; local?: string; biblioteca?: ModeloServico[]; base?: Conteudo; valores?: ValoresManuais;
+  /** Base de condições da obra e logística (escada, aclive, condomínio...), para os serviços de execução. */
+  condicoes?: CondicaoObra[];
+};
+
+/** Serviços com execução no local: as condições da obra e logística pesam no preço. */
+export const TIPOS_EXECUCAO: TipoServico[] = ['reforco', 'reforma', 'construcao'];
+export const usaCondicoes = (t: TipoServico) => TIPOS_EXECUCAO.includes(t);
 
 /** Leva as linhas de um pacote para o valor definido por você, na proporção de cada uma (soma exata ao centavo). */
 function aplicarValor(ls: Linha[], valor: number | undefined): Linha[] {
@@ -1283,9 +1309,12 @@ export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, p
   const pp = { ...parametrosPadrao(tipo), ...p };
   const base = def.calcular(r, pp);
   const urg = b(r, 'urgencia');
+  // Imóvel ocupado já é pergunta própria em reforço e reforma: não soma duas vezes.
+  const perguntaOcupado = def.campos.some((c) => c.id === 'ocupado');
+  const acr = usaCondicoes(tipo) && ctx.condicoes?.length ? acrescimoDas(codigosDe(r.condicoes).filter((x) => !(perguntaOcupado && x === CONDICAO_OCUPADO)), ctx.condicoes) : null;
   const pacotes: Pacote[] = base.pacotes.map((pc, i) => {
     const k = (i + 1) as 1 | 2 | 3;
-    const calc = linhasDoPacote(base, base.pacotes.length === 1 ? 3 : k, r, pp);
+    const calc = linhasDoPacote(base, base.pacotes.length === 1 ? 3 : k, r, pp, acr);
     const ls = aplicarValor(calc, ctx.valores?.[k]);
     const novos = base.pacotes.length === 1 ? [] : base.linhas.filter((l) => l.pacote === k && l.valor > 0).map((l) => l.titulo);
     return {
@@ -1332,7 +1361,7 @@ export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, p
       descricao: `${rotuloDe(CAMPOS_COMUNS, 'pagamento', forma)}. Pix, transferência ou boleto.${avista ? ` À vista: ${reaisFmt(avista)} (${fmtN(desc, 1)}% de desconto).` : ''}`,
       parcelas,
     },
-    premissas: base.premissas,
+    premissas: acr?.nomes.length ? [...base.premissas, `Valor calculado considerando as condições do local: ${listaHumana(acr.nomes.map((x) => x.charAt(0).toLowerCase() + x.slice(1)))}. Condições diferentes na obra podem alterar o preço.`] : base.premissas,
     garantia: base.garantia,
     validade_dias: Math.max(1, Math.round(q(pp, 'validade_dias')) || 15),
     tipo_servico: tipo,
@@ -1370,7 +1399,7 @@ export const NOME_TIPO: Record<TipoServico, string> = Object.fromEntries(TIPOS.m
 export type Servico = { tipo: TipoServico; respostas: Respostas };
 /** Perguntas que valem para a proposta inteira (deslocamento, urgência, pagamento). */
 export const CAMPOS_GERAIS: Campo[] = CAMPOS_COMUNS;
-const IDS_GERAIS = CAMPOS_COMUNS.map((c) => c.id);
+const IDS_GERAIS = [...CAMPOS_COMUNS.map((c) => c.id), 'condicoes'];
 
 const unicos = <T,>(xs: T[], chave: (x: T) => string = (x) => String(x)): T[] => {
   const vistos = new Set<string>();
