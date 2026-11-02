@@ -46,6 +46,8 @@ export const MODELO_CONTRATACAO: Record<string, string> = {
 
 export const TIPOS_SERVICO = [
   'Projeto estrutural',
+  'Projeto arquitetônico',
+  'Regularização de imóvel',
   'Reforço estrutural (concreto)',
   'Reforço estrutural (metálico)',
   'Reforma',
