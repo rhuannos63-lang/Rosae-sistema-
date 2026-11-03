@@ -74,6 +74,16 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
     if (!obra.cliente_id) return setErro('Defina o cliente da obra antes de criar um aditivo.');
     const titulo = window.prompt('Título do aditivo (ex.: Troca de tomadas da cozinha):');
     if (!titulo?.trim()) return;
+    // Obra que veio de um orçamento: o aditivo fica ligado a ele (total consolidado no orçamento).
+    if (obra.proposta_versao_id) {
+      const o = await supabase.from('proposta_versao').select('proposta_id').eq('id', obra.proposta_versao_id).maybeSingle();
+      const origem = (o.data as { proposta_id: string } | null)?.proposta_id;
+      if (origem) {
+        const a = await supabase.rpc('criar_aditivo', { p_origem: origem, p_titulo: titulo.trim() });
+        if (a.error) return setErro(mensagemErro(a.error));
+        return navegar(`/propostas/${a.data as string}?aba=escopo`);
+      }
+    }
     const r = await supabase.from('proposta').insert({ tipo: 'aditivo', obra_id: obra.id, pessoa_id: obra.cliente_id, titulo: titulo.trim() }).select('id').single();
     if (r.error) return setErro(mensagemErro(r.error));
     const id = (r.data as { id: string }).id;

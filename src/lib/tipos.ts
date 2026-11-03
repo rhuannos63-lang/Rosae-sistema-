@@ -131,7 +131,7 @@ export const ESTADO_PROPOSTA: Record<EstadoProposta, { rotulo: string; classe: s
 };
 export type Proposta = {
   id: string; codigo: string; tipo: 'proposta' | 'aditivo'; oportunidade_id: string | null; pessoa_id: string; obra_id: string | null;
-  titulo: string; estado: EstadoProposta; versao_aprovada_id: string | null; aprovada_em: string | null; aprovada_por_nome: string | null;
+  titulo: string; estado: EstadoProposta; versao_aprovada_id: string | null; proposta_origem_id?: string | null; aprovada_em: string | null; aprovada_por_nome: string | null;
   criado_em: string; atualizado_em: string;
   pessoa?: { nome: string; telefone: string | null; email: string | null } | null;
 };
