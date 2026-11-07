@@ -292,7 +292,9 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
           )}
           {d.tipo === 'aditivo' && (c.motivo || ed) && <p><b>Motivo:</b> <T v={c.motivo ?? ''} set={set('motivo')} ph="Por que o escopo mudou" /></p>}
           {d.tipo === 'aditivo' && c.impacto_prazo_dias != null && <p><b>Impacto no prazo:</b> {c.impacto_prazo_dias === 0 ? 'sem alteração' : `${c.impacto_prazo_dias > 0 ? '+' : ''}${c.impacto_prazo_dias} dia(s)`}</p>}
-          {d.tipo === 'aditivo' && <p className="small">Este aditivo complementa o contrato original, que permanece válido nas demais condições.</p>}
+          {d.tipo === 'aditivo' && (c.aditivo_de
+            ? <p className="small">Aditivo nº {c.aditivo_de.numero} ao orçamento <b>{c.aditivo_de.codigo}</b> ({c.aditivo_de.titulo}){c.aditivo_de.aprovada_em ? `, aceito em ${new Date(c.aditivo_de.aprovada_em).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : ''}. O orçamento original e o contrato continuam válidos nas demais condições; este documento trata só do que é acrescentado.</p>
+            : <p className="small">Este aditivo complementa o contrato original, que permanece válido nas demais condições.</p>)}
         </div>
       </div>
     ),

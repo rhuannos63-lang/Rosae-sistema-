@@ -2126,3 +2126,10 @@ h1 { font-size: 2.6rem; line-height: 1.02; letter-spacing: -0.012em; }
 .segmentado { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .segmentado::-webkit-scrollbar { display: none; }
 .segmentado > button { flex: none; }
+
+/* Números lado a lado em colunas estreitas (orçamento aceito): uma linha por número. */
+.numeros-compactos { display: grid; gap: 8px; }
+.numeros-compactos .kpi { display: grid; grid-template-columns: 1fr auto; align-items: baseline; column-gap: 12px; padding: 12px 14px; }
+.numeros-compactos .kpi .valor { margin-top: 0; font-size: 1.2rem; grid-column: 2; grid-row: 1; }
+.numeros-compactos .kpi .rotulo { grid-column: 1; grid-row: 1; padding-right: 0; }
+.numeros-compactos .kpi .det { grid-column: 1 / -1; }

@@ -26,7 +26,7 @@ export const DEPARTAMENTOS: Departamento[] = [
     ],
     ligacoes: [
       { com: 'obras', texto: 'Proposta aprovada vira obra, com serviços e etapas.' },
-      { com: 'financeiro', texto: 'Condições de pagamento viram parcelas a receber.' },
+      { com: 'financeiro', texto: 'Orçamento aceito aparece como fechado; o recebido você registra quando entrar.' },
     ],
     pendencias: ['proposta', 'comercial'],
   },
@@ -48,6 +48,7 @@ export const DEPARTAMENTOS: Departamento[] = [
     id: 'financeiro', nome: 'Financeiro', curto: 'Financeiro', icone: 'financeiro', acesso: 'financeiro',
     resumo: 'Dinheiro da empresa e de cada obra: contas a pagar e a receber, bancos, notas e planejamento.',
     subpastas: [
+      { para: '/recebimentos', rotulo: 'Contratos e recebimentos', icone: 'caixa', descricao: 'Quanto fechou em cada orçamento e quanto de fato entrou.' },
       { para: '/financeiro', rotulo: 'Pagar e receber', icone: 'financeiro', descricao: 'Lançamentos, parcelas, baixas e situação de cada conta.' },
       { para: '/contas', rotulo: 'Contas bancárias', icone: 'contas', descricao: 'Saldos, extrato e transferências entre contas.' },
       { para: '/notas', rotulo: 'Notas fiscais', icone: 'documento', descricao: 'Importar XML de NF-e e transformar em contas a pagar.' },

@@ -47,6 +47,8 @@ export type Conteudo = {
   // Só em aditivos: por que mudou e quanto muda o prazo.
   motivo?: string;
   impacto_prazo_dias?: number | null;
+  // Só em aditivos ligados a um orçamento aceito: qual orçamento ele complementa.
+  aditivo_de?: { codigo: string; titulo: string; versao: number; aprovada_em: string | null; valor: number | string; numero: number };
   // Partes da apresentação completa (o orçamento automático preenche; todas opcionais).
   tipo_servico?: string;
   resumo?: string;

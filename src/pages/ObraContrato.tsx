@@ -1,12 +1,13 @@
 // Contrato da obra (gerado da proposta aprovada, congelado ao emitir), aditivos e
 // biblioteca de cláusulas. Modelos sem revisão jurídica saem marcados como MINUTA.
 import { Fragment, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { NovoAditivo } from '../components/NovoAditivo';
 import { doBanco, formatar, paraBanco, type Centavos } from '../core/dinheiro';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
 import { normalizar, type Conteudo } from '../core/proposta';
@@ -34,10 +35,10 @@ function parteEmpresa(e: Empresa | null): Parte {
 
 export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome: string; telefone?: string | null } | null }; aoMudar: () => void }) {
   const toast = useToast();
-  const navegar = useNavigate();
   const [gerar, setGerar] = useState<Contrato | 'novo' | null>(null);
   const [assinar, setAssinar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [aditivo, setAditivo] = useState(false);
   const { dados, erro: erroCarga, carregando, recarregar } = useConsulta(async () => {
     const [c, a, s] = await Promise.all([
       supabase.from('contrato').select('*').eq('obra_id', obra.id).order('criado_em', { ascending: false }),
@@ -70,16 +71,9 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
     if (!motivo?.trim()) return;
     exec(supabase.from('contrato').update({ estado: 'cancelado', cancelado_motivo: motivo.trim() }).eq('id', atual.id), 'Contrato cancelado. Você pode gerar outro.');
   }
-  async function novoAditivo() {
+  function novoAditivo() {
     if (!obra.cliente_id) return setErro('Defina o cliente da obra antes de criar um aditivo.');
-    const titulo = window.prompt('Título do aditivo (ex.: Troca de tomadas da cozinha):');
-    if (!titulo?.trim()) return;
-    const r = await supabase.from('proposta').insert({ tipo: 'aditivo', obra_id: obra.id, pessoa_id: obra.cliente_id, titulo: titulo.trim() }).select('id').single();
-    if (r.error) return setErro(mensagemErro(r.error));
-    const id = (r.data as { id: string }).id;
-    const v = await supabase.rpc('nova_versao_proposta', { p_proposta: id });
-    if (v.error) return setErro(mensagemErro(v.error));
-    navegar(`/propostas/${id}`);
+    setAditivo(true);
   }
   async function incorporar(a: AditivoLista) {
     exec(supabase.rpc('converter_proposta', { p_versao: a.versao_aprovada_id }), 'Aditivo incorporado à obra: serviços, etapas e previsão de recebimento criados. O contrato original foi preservado.');
@@ -170,6 +164,7 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
       </div>
 
       {gerar && <GerarContrato obra={obra} contrato={gerar === 'novo' ? null : gerar} aoFechar={() => setGerar(null)} aoSalvar={() => { setGerar(null); recarregar(); }} />}
+      {aditivo && <NovoAditivo obraId={obra.id} aoFechar={() => setAditivo(false)} />}
       {assinar && atual && <AssinarContrato contrato={atual} aoFechar={() => setAssinar(false)} aoSalvar={() => { setAssinar(false); recarregar(); aoMudar(); }} />}
     </div>
   );

@@ -87,6 +87,7 @@ export type VParcela = {
 export type VMovimento = {
   id: string; codigo: string; conta_bancaria_id: string; natureza: 'entrada' | 'saida'; valor: Numeric; data: string;
   parcela_id: string | null; transferencia_id: string | null; estorno_de: string | null; descricao: string | null; criado_em: string;
+  chave_idempotencia?: string | null;
   conta_nome: string; valor_assinado: Numeric; lancamento_id: string | null; lancamento_codigo: string | null;
   lancamento_descricao: string | null; escopo: Escopo | null; obra_id: string | null; categoria_natureza: string; categoria_nome: string;
   estornado: boolean;
@@ -131,7 +132,7 @@ export const ESTADO_PROPOSTA: Record<EstadoProposta, { rotulo: string; classe: s
 };
 export type Proposta = {
   id: string; codigo: string; tipo: 'proposta' | 'aditivo'; oportunidade_id: string | null; pessoa_id: string; obra_id: string | null;
-  titulo: string; estado: EstadoProposta; versao_aprovada_id: string | null; aprovada_em: string | null; aprovada_por_nome: string | null;
+  titulo: string; estado: EstadoProposta; versao_aprovada_id: string | null; proposta_origem_id?: string | null; aprovada_em: string | null; aprovada_por_nome: string | null;
   criado_em: string; atualizado_em: string;
   pessoa?: { nome: string; telefone: string | null; email: string | null } | null;
 };
