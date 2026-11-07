@@ -22,6 +22,8 @@ import { linkWhatsApp } from './Comercial';
 import { estadoInicial, OrcamentoGerador, type EstadoGerador } from '../components/OrcamentoGerador';
 import { carregarPrecos } from '../lib/orcamentoParametros';
 import { EnviarEmail, HistoricoEmails } from '../components/EnvioEmail';
+import { NovoAditivo } from '../components/NovoAditivo';
+import { QuadroRecebido } from '../components/Recebimentos';
 import { baixarArquivo, compartilharArquivo, gerarPdfProposta, nomeDoPdf, paraBase64 } from '../lib/pdfProposta';
 import type { Orcamento } from '../core/orcamento';
 
@@ -144,6 +146,7 @@ export function PropostaEditor() {
   const toast = useToast();
   const { podeFinanceiro } = useAuth();
   const [erro, setErro] = useState<string | null>(null);
+  const [aditivo, setAditivo] = useState(false);
   const { dados, erro: erroCarga, carregando, recarregar } = useConsulta<Carga>(async () => {
     const [p, v, e, b, emp] = await Promise.all([
       supabase.from('proposta').select('*, pessoa:pessoa(nome, telefone, email), oportunidade:oportunidade(resumo, local_obra)').eq('id', id!).maybeSingle(),
@@ -195,7 +198,11 @@ export function PropostaEditor() {
         <button className="btn-secundario" onClick={() => (p.oportunidade_id ? navegar(`/comercial/${p.oportunidade_id}`) : navegar('/propostas'))}><Icone nome="voltar" /> Voltar</button>
         <button className="btn-secundario" onClick={duplicar}>Duplicar</button>
         <BotaoExcluir tabela="proposta" id={p.id} nome={p.titulo} aoExcluir={() => navegar('/propostas')} />
+        {p.estado === 'aprovada' && (p.tipo === 'proposta' || dados.origem) && (
+          <button className="btn-primario" onClick={() => setAditivo(true)}><Icone nome="mais" /> Adicionar aditivo</button>
+        )}
       </Topo>
+      {aditivo && <NovoAditivo origemId={p.tipo === 'proposta' ? p.id : dados.origem?.id} codigoOrigem={p.tipo === 'proposta' ? p.codigo : dados.origem?.codigo} aoFechar={() => setAditivo(false)} />}
       <div className="row versoes" style={{ marginBottom: 14 }}>
         <span className="muted small">Versões:</span>
         {versoes.map((x) => (
@@ -715,10 +722,17 @@ function AbaCustos({ custos, setCustos, notas, setNotas, total, carregado, salva
 function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }: { carga: Carga; versao: PropostaVersao; anterior?: PropostaVersao; ehUltima: boolean; aoMudar: () => void; aoEditar: () => void }) {
   const toast = useToast();
   const p = carga.proposta;
+  const { podeFinanceiro } = useAuth();
+  const [params, setParams] = useSearchParams();
   const [link, setLink] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [comparar, setComparar] = useState(false);
-  const [email, setEmail] = useState(false);
+  // Aditivo recém-criado chega com ?enviar=email: a janela do e-mail já abre.
+  const [email, setEmail] = useState(() => params.get('enviar') === 'email' && ehUltima && p.estado !== 'aprovada');
+  const ehAditivo = p.tipo === 'aditivo';
+  useEffect(() => {
+    if (params.get('enviar')) { const n = new URLSearchParams(params); n.delete('enviar'); setParams(n, { replace: true }); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [emails, setEmails] = useState(0);
   const [gerando, setGerando] = useState<string | null>(null);
   const [pdf, setPdf] = useState<{ blob: Blob; nome: string } | null>(null);
@@ -836,8 +850,9 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
           {ehUltima && p.estado !== 'aprovada' && (
             <div className="stack" style={{ marginTop: 12 }}>
               <div className="row">
-                <button className="btn-primario" disabled={!!gerando} onClick={async () => { const a = await gerarPdf(); if (a) setPdfAberto(true); }}><Icone nome="mensagem" /> Enviar PDF pelo WhatsApp</button>
-                <button className="btn-secundario" disabled={!!gerando} onClick={() => setEmail(true)}><Icone nome="documento" /> Enviar por e-mail</button>
+                {ehAditivo && <button className="btn-primario" disabled={!!gerando} onClick={() => setEmail(true)}><Icone nome="documento" /> Enviar aditivo por e-mail</button>}
+                <button className={ehAditivo ? 'btn-secundario' : 'btn-primario'} disabled={!!gerando} onClick={async () => { const a = await gerarPdf(); if (a) setPdfAberto(true); }}><Icone nome="mensagem" /> Enviar PDF pelo WhatsApp</button>
+                {!ehAditivo && <button className="btn-secundario" disabled={!!gerando} onClick={() => setEmail(true)}><Icone nome="documento" /> Enviar por e-mail</button>}
               </div>
               {gerando && <div className="aviso info"><span className="girando" aria-hidden="true">◌</span><span>{gerando}</span></div>}
               {link && verLink && (
@@ -856,6 +871,7 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
             {ehUltima && <button className="btn-link" onClick={revogar}>Desativar links</button>}
           </div>
         </div>
+        {p.tipo === 'proposta' && p.estado === 'aprovada' && p.versao_aprovada_id === versao.id && podeFinanceiro && <QuadroRecebido propostaId={p.id} aoMudar={aoMudar} compacto />}
         {p.tipo === 'proposta' && p.estado === 'aprovada' && p.versao_aprovada_id === versao.id && <AditivosDoOrcamento proposta={p} />}
         <HistoricoEmails key={emails} versaoId={versao.id} versao={versao.numero} />
         {respostas.length > 0 && (
@@ -889,7 +905,7 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
       <div className="card"><PropostaDocumento d={doc} /></div>
       {comparar && anterior && <Comparacao a={normalizar(anterior.conteudo as Partial<Conteudo>)} b={c} na={anterior.numero} nb={versao.numero} aoFechar={() => setComparar(false)} />}
       {email && (
-        <EnviarEmail versaoId={versao.id} codigo={p.codigo} versao={versao.numero} titulo={p.titulo} cliente={p.pessoa?.nome ?? ''} emailCliente={p.pessoa?.email ?? null}
+        <EnviarEmail aditivo={ehAditivo} versaoId={versao.id} codigo={p.codigo} versao={versao.numero} titulo={p.titulo} cliente={p.pessoa?.nome ?? ''} emailCliente={p.pessoa?.email ?? null}
           aoFechar={() => setEmail(false)} aoEnviar={() => { setEmails((n) => n + 1); aoMudar(); }} abrirNoAplicativo={() => enviar('email')}
           anexo={async () => { const a = await gerarPdf(); return a ? { nome: a.nome, base64: await paraBase64(a.blob) } : null; }} />
       )}
@@ -968,25 +984,11 @@ type ResumoOrcamento = {
 
 /** Aditivos lançados direto no orçamento aceito: histórico, total consolidado e botão para lançar outro. */
 function AditivosDoOrcamento({ proposta }: { proposta: Proposta }) {
-  const navegar = useNavigate();
   const toast = useToast();
   const [novo, setNovo] = useState(false);
-  const [titulo, setTitulo] = useState('');
-  const [motivo, setMotivo] = useState('');
   const [erro, setErro] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
   const { dados, recarregar } = useConsulta(async () => ok(await supabase.rpc('resumo_orcamento', { p_proposta: proposta.id })) as ResumoOrcamento | null, [proposta.id]);
 
-  async function criar() {
-    setErro(null);
-    if (!titulo.trim()) return setErro('Dê um título ao aditivo (ex.: Impermeabilização da laje).');
-    setOcupado(true);
-    const r = await supabase.rpc('criar_aditivo', { p_origem: proposta.id, p_titulo: titulo.trim(), p_motivo: motivo.trim() || null });
-    setOcupado(false);
-    if (r.error) return setErro(mensagemErro(r.error));
-    toast('Aditivo criado e ligado a este orçamento. Coloque os itens e o valor e emita.');
-    navegar(`/propostas/${r.data as string}?aba=escopo`);
-  }
   async function incorporar(id: string) {
     const v = await supabase.from('proposta').select('versao_aprovada_id').eq('id', id).single();
     const vid = (v.data as { versao_aprovada_id: string | null } | null)?.versao_aprovada_id;
@@ -1003,11 +1005,11 @@ function AditivosDoOrcamento({ proposta }: { proposta: Proposta }) {
   return (
     <div className="card">
       <div className="topo" style={{ marginBottom: 10 }}>
-        <h2>Aditivos deste orçamento <Ajuda>Serviço acrescentado depois do aceite vira um aditivo ligado a este orçamento, com itens, valor, motivo e impacto no prazo próprios. O cliente aceita pelo link, como na proposta. Este orçamento e o contrato não mudam: o total consolidado soma o original com os aditivos aceitos.</Ajuda></h2>
+        <h2>Aditivos deste orçamento <Ajuda>Serviço acrescentado depois do aceite vira um aditivo ligado a este orçamento, com itens, valor, motivo e impacto no prazo próprios. O cliente recebe por e-mail e aceita pelo botão, o que formaliza o aditivo. Este orçamento e o contrato não mudam: o total consolidado soma o original com os aditivos aceitos.</Ajuda></h2>
         <button className="btn-primario" onClick={() => setNovo(true)}><Icone nome="mais" /> Adicionar aditivo</button>
       </div>
       {dados && (
-        <div className="grid grid-3" style={{ marginBottom: 12 }}>
+        <div className="numeros-compactos" style={{ marginBottom: 12 }}>
           <div className="kpi"><div className="rotulo">Orçamento original</div><div className="valor num">{formatar(doBanco(dados.valor_original ?? 0))}</div><div className="det">Versão aceita, sem mudança</div></div>
           <div className="kpi"><div className="rotulo">Aditivos aceitos</div><div className="valor num">{formatar(aprovados)}</div><div className="det">{abertos ? `Em aberto: ${formatar(abertos)}` : `${ads.filter((a) => a.estado === 'aprovada').length} aceito(s)`}</div></div>
           <div className="kpi"><div className="rotulo">Total consolidado</div><div className="valor num">{formatar(doBanco(dados.total_consolidado))}</div><div className="det">Original + aditivos aceitos</div></div>
@@ -1036,15 +1038,7 @@ function AditivosDoOrcamento({ proposta }: { proposta: Proposta }) {
       )}
       {dados && !dados.obra_id && ads.some((a) => a.estado === 'aprovada') && <p className="muted small" style={{ marginBottom: 0 }}>Os aditivos aceitos entram na obra junto com o orçamento quando você tocar em “Converter em obra”.</p>}
       <Erro mensagem={erro} />
-      {novo && (
-        <Modal titulo="Adicionar aditivo" aoFechar={() => setNovo(false)}
-          rodape={<><button className="btn-link" onClick={() => setNovo(false)}>Cancelar</button><button className="btn-primario" disabled={ocupado} onClick={criar}>{ocupado ? 'Criando…' : 'Criar e colocar os itens'}</button></>}>
-          <p className="muted small" style={{ marginTop: 0 }}>O aditivo fica ligado a <b>{proposta.codigo}</b>. Você coloca os itens e o valor, emite e envia ao cliente pelo mesmo caminho da proposta. Este orçamento e o contrato continuam como estão.</p>
-          <label className="campo">O que está sendo acrescentado<input autoFocus value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Impermeabilização da laje" /></label>
-          <label className="campo">Motivo <Ajuda>Aparece no documento do cliente. Pode completar depois, mas é obrigatório para emitir.</Ajuda><input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex.: pedido do cliente durante a obra" /></label>
-          <Erro mensagem={erro} />
-        </Modal>
-      )}
+      {novo && <NovoAditivo origemId={proposta.id} codigoOrigem={proposta.codigo} aoFechar={() => setNovo(false)} />}
     </div>
   );
 }

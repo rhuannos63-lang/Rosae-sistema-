@@ -87,6 +87,7 @@ export type VParcela = {
 export type VMovimento = {
   id: string; codigo: string; conta_bancaria_id: string; natureza: 'entrada' | 'saida'; valor: Numeric; data: string;
   parcela_id: string | null; transferencia_id: string | null; estorno_de: string | null; descricao: string | null; criado_em: string;
+  chave_idempotencia?: string | null;
   conta_nome: string; valor_assinado: Numeric; lancamento_id: string | null; lancamento_codigo: string | null;
   lancamento_descricao: string | null; escopo: Escopo | null; obra_id: string | null; categoria_natureza: string; categoria_nome: string;
   estornado: boolean;

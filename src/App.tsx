@@ -32,6 +32,7 @@ const PrecosOrcamento = preguicoso(() => import('./pages/Orcamento'), 'PrecosOrc
 const Agenda = preguicoso(() => import('./pages/Agenda'), 'Agenda');
 const Biblioteca = preguicoso(() => import('./pages/Biblioteca'), 'Biblioteca');
 const Planejador = preguicoso(() => import('./pages/Planejador'), 'Planejador');
+const Recebimentos = preguicoso(() => import('./pages/Recebimentos'), 'Recebimentos');
 const Clausulas = preguicoso(() => import('./pages/ObraContrato'), 'Clausulas');
 const ContratoImprimir = preguicoso(() => import('./pages/ObraContrato'), 'ContratoImprimir');
 const FichaAtual = preguicoso(() => import('./pages/Fichas'), 'FichaAtual');
@@ -98,6 +99,7 @@ function Rotas() {
             {podeFinanceiro && <Route path="notas/:id" element={<NotaDetalhe />} />}
             {podeFinanceiro && <Route path="contas" element={<Contas />} />}
             {podeFinanceiro && <Route path="planejador" element={<Planejador />} />}
+            {podeFinanceiro && <Route path="recebimentos" element={<Recebimentos />} />}
             {ehAdmin && <Route path="configuracoes" element={<Configuracoes />} />}
             {ehAdmin && <Route path="lixeira" element={<Lixeira />} />}
             <Route path="*" element={<Navigate to="/" replace />} />
