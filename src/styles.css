@@ -621,6 +621,13 @@ fieldset.campo legend { padding: 0; margin-bottom: 6px; }
 .doc-tabela tr.grupo td { background: var(--verde-tinta); font-weight: 600; }
 .doc-tabela tfoot td { font-weight: 700; border-top: 2px solid var(--verde); }
 .clausula { break-inside: avoid; }
+/* Contrato: corpo 12 (CDC, art. 54, § 3º) e cláusulas que limitam direitos em destaque (§ 4º). */
+.doc-a4.doc-contrato { font-size: 12pt; }
+.doc-a4.doc-contrato h3 { font-size: 12pt; }
+.doc-a4.doc-contrato .doc-tabela { font-size: 11pt; }
+.clausula.destaque { border-left: 3px solid var(--verde-escuro); padding-left: 10px; }
+.clausula.destaque p { font-weight: 700; }
+.assinaturas.testemunhas { margin-top: 26px; }
 .assinaturas { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 40px; break-inside: avoid; }
 .assinaturas div { display: flex; flex-direction: column; align-items: center; text-align: center; font-size: 9.5pt; }
 .assinaturas span { width: 100%; border-top: 1px solid #333; margin-bottom: 4px; height: 36px; }
