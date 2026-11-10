@@ -21,12 +21,13 @@ export const DEPARTAMENTOS: Departamento[] = [
       { para: '/orcamento', rotulo: 'Novo orçamento', icone: 'varinha', descricao: 'Orçamento automático por tipo de serviço, em 3 pacotes.' },
       { para: '/propostas', rotulo: 'Propostas', icone: 'documento', descricao: 'Editar, emitir, enviar o link e acompanhar o aceite.' },
       { para: '/orcamento/precos', rotulo: 'Tabela de preços', icone: 'tabela', descricao: 'Valores de referência que o orçamento usa.' },
+      { para: '/orcamento/composicoes', rotulo: 'Insumos e composições', icone: 'lista', descricao: 'Material, mão de obra e consumo de cada serviço, com metodologia.', acesso: 'financeiro' },
       { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista', descricao: 'Serviços prontos com escopo, inclusões e exclusões.' },
       { para: '/clausulas', rotulo: 'Cláusulas de contrato', icone: 'livro', descricao: 'Modelos de cláusulas usados nos contratos.' },
     ],
     ligacoes: [
       { com: 'obras', texto: 'Proposta aprovada vira obra, com serviços e etapas.' },
-      { com: 'financeiro', texto: 'Condições de pagamento viram parcelas a receber.' },
+      { com: 'financeiro', texto: 'Orçamento aceito aparece como fechado; o recebido você registra quando entrar.' },
     ],
     pendencias: ['proposta', 'comercial'],
   },
@@ -48,6 +49,7 @@ export const DEPARTAMENTOS: Departamento[] = [
     id: 'financeiro', nome: 'Financeiro', curto: 'Financeiro', icone: 'financeiro', acesso: 'financeiro',
     resumo: 'Dinheiro da empresa e de cada obra: contas a pagar e a receber, bancos, notas e planejamento.',
     subpastas: [
+      { para: '/recebimentos', rotulo: 'Contratos e recebimentos', icone: 'caixa', descricao: 'Quanto fechou em cada orçamento e quanto de fato entrou.' },
       { para: '/financeiro', rotulo: 'Pagar e receber', icone: 'financeiro', descricao: 'Lançamentos, parcelas, baixas e situação de cada conta.' },
       { para: '/contas', rotulo: 'Contas bancárias', icone: 'contas', descricao: 'Saldos, extrato e transferências entre contas.' },
       { para: '/notas', rotulo: 'Notas fiscais', icone: 'documento', descricao: 'Importar XML de NF-e e transformar em contas a pagar.' },

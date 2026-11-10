@@ -360,3 +360,8 @@ import_map = "./functions/deno.json"
 [functions.email]
 verify_jwt = false
 import_map = "./functions/deno.json"
+
+# Avisos push (proposta aceita). A página do cliente chama sem login; a função só avisa aceites reais do banco.
+[functions.avisos]
+verify_jwt = false
+import_map = "./functions/deno.json"

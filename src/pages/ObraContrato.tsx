@@ -1,18 +1,19 @@
 // Contrato da obra (gerado da proposta aprovada, congelado ao emitir), aditivos e
 // biblioteca de cláusulas. Modelos sem revisão jurídica saem marcados como MINUTA.
 import { Fragment, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
+import { NovoAditivo } from '../components/NovoAditivo';
 import { doBanco, formatar, paraBanco, type Centavos } from '../core/dinheiro';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
 import { normalizar, type Conteudo } from '../core/proposta';
 import {
-  MODELO_CONTRATO, montarContrato, ROTULO_FALTANDO, textoHonorarios,
-  type Clausula, type ConteudoContrato, type Honorarios, type ModeloContrato, type Parte,
+  MODELO_CONTRATO, mesclarClausulas, montarContrato, pendenciasContrato, ROTULO_FALTANDO, textoHonorarios, totalEscopo,
+  type Clausula, type ClausulaContrato, type ConteudoContrato, type Honorarios, type ModeloContrato, type Parte,
 } from '../core/contrato';
 import { ESTADO_PROPOSTA, type Contrato, type Empresa, type EstadoProposta, type Obra, type Pessoa } from '../lib/tipos';
 
@@ -34,10 +35,10 @@ function parteEmpresa(e: Empresa | null): Parte {
 
 export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome: string; telefone?: string | null } | null }; aoMudar: () => void }) {
   const toast = useToast();
-  const navegar = useNavigate();
   const [gerar, setGerar] = useState<Contrato | 'novo' | null>(null);
   const [assinar, setAssinar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [aditivo, setAditivo] = useState(false);
   const { dados, erro: erroCarga, carregando, recarregar } = useConsulta(async () => {
     const [c, a, s] = await Promise.all([
       supabase.from('contrato').select('*').eq('obra_id', obra.id).order('criado_em', { ascending: false }),
@@ -70,16 +71,9 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
     if (!motivo?.trim()) return;
     exec(supabase.from('contrato').update({ estado: 'cancelado', cancelado_motivo: motivo.trim() }).eq('id', atual.id), 'Contrato cancelado. Você pode gerar outro.');
   }
-  async function novoAditivo() {
+  function novoAditivo() {
     if (!obra.cliente_id) return setErro('Defina o cliente da obra antes de criar um aditivo.');
-    const titulo = window.prompt('Título do aditivo (ex.: Troca de tomadas da cozinha):');
-    if (!titulo?.trim()) return;
-    const r = await supabase.from('proposta').insert({ tipo: 'aditivo', obra_id: obra.id, pessoa_id: obra.cliente_id, titulo: titulo.trim() }).select('id').single();
-    if (r.error) return setErro(mensagemErro(r.error));
-    const id = (r.data as { id: string }).id;
-    const v = await supabase.rpc('nova_versao_proposta', { p_proposta: id });
-    if (v.error) return setErro(mensagemErro(v.error));
-    navegar(`/propostas/${id}`);
+    setAditivo(true);
   }
   async function incorporar(a: AditivoLista) {
     exec(supabase.rpc('converter_proposta', { p_versao: a.versao_aprovada_id }), 'Aditivo incorporado à obra: serviços, etapas e previsão de recebimento criados. O contrato original foi preservado.');
@@ -170,6 +164,7 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
       </div>
 
       {gerar && <GerarContrato obra={obra} contrato={gerar === 'novo' ? null : gerar} aoFechar={() => setGerar(null)} aoSalvar={() => { setGerar(null); recarregar(); }} />}
+      {aditivo && <NovoAditivo obraId={obra.id} aoFechar={() => setAditivo(false)} />}
       {assinar && atual && <AssinarContrato contrato={atual} aoFechar={() => setAssinar(false)} aoSalvar={() => { setAssinar(false); recarregar(); aoMudar(); }} />}
     </div>
   );
@@ -255,6 +250,30 @@ function AssinaturaPorLink({ contrato, cliente }: { contrato: Contrato; cliente:
   );
 }
 
+function linhasDe(t: string): string[] {
+  return t.split('\n').map((x) => x.trim()).filter(Boolean);
+}
+
+/** Lista de frases, uma por linha (apagar a linha tira o item). */
+function ListaContrato({ rotulo, valor, aoMudar, ajuda }: { rotulo: string; valor: string[]; aoMudar: (v: string[]) => void; ajuda?: string }) {
+  const [texto, setTexto] = useState(valor.join('\n'));
+  useEffect(() => { if (linhasDe(texto).join('\n') !== valor.join('\n')) setTexto(valor.join('\n')); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valor]);
+  return (
+    <label className="campo">
+      <span>{rotulo} <span className="muted small">(um por linha; apague a linha para tirar)</span>{ajuda && <Ajuda>{ajuda}</Ajuda>}</span>
+      <textarea rows={Math.max(3, valor.length + 1)} value={texto} onChange={(e) => { setTexto(e.target.value); aoMudar(linhasDe(e.target.value)); }} />
+    </label>
+  );
+}
+
+const centavosDe = (v: number | null | undefined): Centavos => doBanco(v ?? 0);
+const reaisDe = (c: Centavos | null): number => Number(paraBanco(c ?? 0));
+
+/**
+ * Editor completo do contrato: começa com a sugestão (proposta aceita + cliente + cláusulas
+ * do modelo) e tudo pode ser editado, incluído ou tirado antes de emitir.
+ */
 function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; contrato: Contrato | null; aoFechar: () => void; aoSalvar: () => void }) {
   const toast = useToast();
   const apoio = useConsulta(async () => {
@@ -279,15 +298,10 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
     valor_visita_adicional: h0.valor_visita_adicional != null ? doBanco(h0.valor_visita_adicional) : null,
   });
   const [valorTotal, setValorTotal] = useState<Centavos | null>(contrato ? doBanco(contrato.valor_total) : null);
-  const [textos, setTextos] = useState<Record<string, string>>({});
+  const [k, setK] = useState<ConteudoContrato | null>(null);
+  const [aberta, setAberta] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  useEffect(() => {
-    if (!apoio.dados) return;
-    if (!contrato && apoio.dados.fin?.modelo_contratacao && MODELO_DE_OBRA[apoio.dados.fin.modelo_contratacao]) setModelo(MODELO_DE_OBRA[apoio.dados.fin.modelo_contratacao]);
-    if (valorTotal === null) setValorTotal(doBanco(apoio.dados.versao?.valor_total ?? apoio.dados.fin?.valor_contratado ?? 0));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apoio.dados]);
-  if (apoio.carregando || !apoio.dados) return <Modal titulo="Contrato" aoFechar={aoFechar}><Carregando /></Modal>;
+
   const d = apoio.dados;
   const honorarios: Honorarios = {
     ...hon,
@@ -295,21 +309,72 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
     mensalidade: cents.mensalidade != null ? Number(paraBanco(cents.mensalidade)) : null,
     valor_visita_adicional: cents.valor_visita_adicional != null ? Number(paraBanco(cents.valor_visita_adicional)) : null,
   };
-  const cli = d.cliente;
-  const conteudo: ConteudoContrato = montarContrato({
-    modelo,
-    proposta: d.versao ? { codigo: d.versao.proposta.codigo, versao: d.versao.numero, hash: d.versao.hash, conteudo: normalizar(d.versao.conteudo), valor_total: Number(paraBanco(valorTotal ?? 0)) } : null,
-    obra: { nome: obra.nome, endereco: obra.endereco },
-    contratante: { nome: cli?.nome ?? '[contratante]', documento: cli?.documento ?? null, endereco: cli?.endereco ?? null, email: cli?.email ?? null, telefone: cli?.telefone ?? null },
-    contratada: parteEmpresa(d.empresa),
-    honorarios, clausulas: d.clausulas,
-  });
-  // Texto ajustado à mão neste contrato: fica como minuta.
-  conteudo.clausulas = conteudo.clausulas.map((k) => (textos[k.codigo] !== undefined && textos[k.codigo] !== k.texto ? { ...k, texto: textos[k.codigo], revisao_juridica: 'minuta' } : k));
+  /** Sugestão do sistema com os dados de agora (o prazo e as partes que você editou entram nos marcadores). */
+  function sugestao(m: ModeloContrato, base?: ConteudoContrato | null): ConteudoContrato | null {
+    if (!d) return null;
+    const cli = d.cliente;
+    const conteudoProposta = d.versao ? normalizar(d.versao.conteudo) : null;
+    if (conteudoProposta && base) conteudoProposta.prazo_texto = base.prazo;
+    return montarContrato({
+      modelo: m,
+      proposta: d.versao && conteudoProposta ? { codigo: d.versao.proposta.codigo, versao: d.versao.numero, hash: d.versao.hash, conteudo: conteudoProposta, valor_total: Number(paraBanco(valorTotal ?? 0)) } : null,
+      obra: { nome: obra.nome, endereco: obra.endereco },
+      contratante: base?.partes.contratante ?? { nome: cli?.nome ?? '[contratante]', documento: cli?.documento ?? null, endereco: cli?.endereco ?? null, email: cli?.email ?? null, telefone: cli?.telefone ?? null },
+      contratada: base?.partes.contratada ?? parteEmpresa(d.empresa),
+      honorarios, clausulas: d.clausulas,
+    });
+  }
+
+  useEffect(() => {
+    if (!d || k) return;
+    let m = modelo;
+    if (!contrato && d.fin?.modelo_contratacao && MODELO_DE_OBRA[d.fin.modelo_contratacao]) { m = MODELO_DE_OBRA[d.fin.modelo_contratacao]; setModelo(m); }
+    if (valorTotal === null) setValorTotal(doBanco(d.versao?.valor_total ?? d.fin?.valor_contratado ?? 0));
+    const novo = sugestao(m);
+    if (!novo) return;
+    if (!contrato) { setK({ ...novo, edicao: 2 }); return; }
+    // Rascunho salvo: mantém tudo o que está nele. Os de antes do editor completo marcam
+    // como editadas as cláusulas com texto diferente da sugestão (para não perder ajustes).
+    const salvo = contrato.conteudo;
+    const porCodigo = new Map(novo.clausulas.map((x) => [x.codigo, x]));
+    const clausulas = salvo.edicao === 2 ? salvo.clausulas : (salvo.clausulas ?? []).map((x) => ({ ...x, editada: porCodigo.get(x.codigo)?.texto !== x.texto || undefined }));
+    setK({ ...novo, ...salvo, clausulas, removidas: salvo.removidas ?? [], data_inicio: salvo.data_inicio ?? novo.data_inicio, data_entrega: salvo.data_entrega ?? novo.data_entrega, edicao: 2 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d]);
+
+  if (apoio.carregando || !d || !k) return <Modal titulo="Contrato" aoFechar={aoFechar}><Carregando /></Modal>;
+
+  const sug = sugestao(modelo, k)!;
+  const clausulas = mesclarClausulas(k.clausulas, sug.clausulas, k.removidas);
+  const sugPorCodigo = new Map(sug.clausulas.map((x) => [x.codigo, x]));
+  const final: ConteudoContrato = { ...k, clausulas, honorarios, observacoes: hon.condicoes_adicionais ?? k.observacoes ?? '' };
+  final.faltando = pendenciasContrato(final);
+  const somaEscopo = totalEscopo(final);
   const mostra = (campo: 'gestao' | 'visitas' | 'adm') => campo === 'gestao' ? ['gestao', 'combinado'].includes(modelo) : campo === 'visitas' ? ['gestao', 'acompanhamento', 'combinado'].includes(modelo) : ['administracao', 'combinado'].includes(modelo);
+  const mudar = (f: (x: ConteudoContrato) => ConteudoContrato) => setK((x) => (x ? f(x) : x));
+  /** Mexe nas cláusulas a partir da lista que está na tela. */
+  const mudarClausulas = (f: (l: ClausulaContrato[]) => ClausulaContrato[], removidas?: string[]) => mudar((x) => ({ ...x, clausulas: f(clausulas), removidas: removidas ?? x.removidas }));
+  const editarClausula = (codigo: string, m: Partial<ClausulaContrato>) => mudarClausulas((l) => l.map((x) => (x.codigo === codigo ? { ...x, ...m, editada: true, revisao_juridica: m.texto !== undefined && m.texto !== sugPorCodigo.get(codigo)?.texto ? 'minuta' : x.revisao_juridica } : x)));
+  const moverClausula = (i: number, passo: -1 | 1) => mudarClausulas((l) => { const n = [...l]; const j = i + passo; if (j < 0 || j >= n.length) return n; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  const tirarClausula = (x: ClausulaContrato) => mudarClausulas((l) => l.filter((y) => y.codigo !== x.codigo), sugPorCodigo.has(x.codigo) ? [...(k.removidas ?? []), x.codigo] : k.removidas);
+  const daBiblioteca = d.clausulas.filter((x) => !clausulas.some((y) => y.codigo === x.codigo));
+  const mudarItem = (ai: number, ii: number, m: Partial<ConteudoContrato['escopo'][number]['itens'][number]>) => mudar((x) => ({ ...x, escopo: x.escopo.map((a, j) => (j !== ai ? a : { ...a, itens: a.itens.map((it, y) => (y === ii ? { ...it, ...m } : it)) })) }));
+  const mudarParcela = (j: number, m: Partial<ConteudoContrato['pagamento'][number]>) => mudar((x) => ({ ...x, pagamento: x.pagamento.map((p, i) => (i === j ? { ...p, ...m } : p)) }));
+  const somaParcelas = final.pagamento.reduce((t, p) => t + doBanco(p.valor || 0), 0);
+  const parte = (qual: 'contratante' | 'contratada', campo: keyof Parte, v: string) => mudar((x) => ({ ...x, partes: { ...x.partes, [qual]: { ...x.partes[qual], [campo]: v || null } } }));
+
+  function refazer() {
+    if (!window.confirm('Refazer o contrato a partir da proposta aceita e do cadastro? Tudo o que você editou aqui volta à sugestão do sistema.')) return;
+    const novo = sugestao(modelo);
+    if (novo) setK({ ...novo, removidas: [], edicao: 2 });
+    setValorTotal(doBanco(d!.versao?.valor_total ?? d!.fin?.valor_contratado ?? 0));
+    toast('Contrato refeito com a sugestão do sistema.');
+  }
 
   async function salvar() {
     setErro(null);
+    if (final.clausulas.some((x) => !x.titulo.trim())) return setErro('Há uma cláusula sem título.');
+    const conteudo: ConteudoContrato = { ...final, clausulas: final.clausulas.filter((x) => x.texto.trim()) };
     const reg = { obra_id: obra.id, proposta_versao_id: obra.proposta_versao_id, modelo, valor_total: paraBanco(valorTotal ?? 0), conteudo };
     const r = contrato ? await supabase.from('contrato').update(reg).eq('id', contrato.id) : await supabase.from('contrato').insert(reg);
     if (r.error) return setErro(mensagemErro(r.error));
@@ -317,14 +382,22 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
     aoSalvar();
   }
 
+  const secao = (id: string, titulo: string, resumo: string, corpo: React.ReactNode) => (
+    <details className="detalhes-form secao-contrato" open={aberta === id} onToggle={(e) => { const el = e.currentTarget; if (el.open) setAberta(id); else if (aberta === id) setAberta(null); }}>
+      <summary><b>{titulo}</b> <span className="muted small">· {resumo}</span></summary>
+      <div className="stack" style={{ marginTop: 10 }}>{corpo}</div>
+    </details>
+  );
+
   return (
     <Modal titulo={contrato ? `Revisar ${contrato.codigo}` : 'Gerar contrato'} aoFechar={aoFechar} largo
-      rodape={<><button className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" onClick={salvar}>Salvar rascunho</button></>}>
+      rodape={<><button className="btn-link" onClick={refazer}>Refazer pela proposta</button><span className="spacer" /><button className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" onClick={salvar}>Salvar rascunho</button></>}>
       <div className="stack">
-        {!d.versao && <div className="aviso info"><span>Esta obra não tem proposta aprovada ligada. O contrato sai sem escopo detalhado; descreva-o nas condições.</span></div>}
+        <p className="muted small" style={{ margin: 0 }}>O sistema monta uma sugestão com a proposta aceita, o cadastro e as cláusulas do modelo. Tudo aqui pode ser editado, incluído ou tirado antes de emitir. Depois de emitido, o contrato fica congelado; mudanças viram aditivo.</p>
+        {!d.versao && <div className="aviso info"><span>Esta obra não tem proposta aprovada ligada. Monte o escopo abaixo ou descreva nas condições.</span></div>}
         <label className="campo">Modelo de contratação
-          <select value={modelo} onChange={(e) => setModelo(e.target.value as ModeloContrato)}>{Object.entries(MODELO_CONTRATO).map(([k, v]) => <option key={k} value={k}>{v.rotulo}</option>)}</select>
-          <span className="dica">{MODELO_CONTRATO[modelo].ajuda}</span>
+          <select value={modelo} onChange={(e) => setModelo(e.target.value as ModeloContrato)}>{Object.entries(MODELO_CONTRATO).map(([key, v]) => <option key={key} value={key}>{v.rotulo}</option>)}</select>
+          <span className="dica">{MODELO_CONTRATO[modelo].ajuda} Trocar o modelo troca as cláusulas sugeridas; as que você editou ficam.</span>
         </label>
         <div className="grid grid-3">
           <label className="campo">Valor total do contrato<CampoValor valor={valorTotal} aoMudar={setValorTotal} /></label>
@@ -334,18 +407,148 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
           {mostra('visitas') && <label className="campo">Visitas incluídas<input inputMode="numeric" value={hon.visitas_incluidas ?? ''} onChange={(e) => setHon((h) => ({ ...h, visitas_incluidas: e.target.value ? Number(e.target.value) : null }))} /></label>}
           {mostra('visitas') && <label className="campo">Visita adicional<CampoValor valor={cents.valor_visita_adicional} aoMudar={(v) => setCents((c) => ({ ...c, valor_visita_adicional: v }))} /></label>}
         </div>
+        {somaEscopo > 0 && valorTotal !== null && somaEscopo !== valorTotal && (
+          <div className="aviso"><Icone nome="alerta" /><span>Os itens do escopo somam {formatar(somaEscopo)} e o valor do contrato é {formatar(valorTotal)}.</span><button className="btn-link" onClick={() => setValorTotal(somaEscopo)}>Usar a soma dos itens</button></div>
+        )}
         {mostra('adm') && <label className="campo">Remuneração da administração <Ajuda>Escreva a regra combinada (percentual sobre custos comprovados, valor fixo, teto…). O sistema não aplica taxa padrão.</Ajuda><input value={hon.remuneracao_administracao ?? ''} onChange={(e) => setHon((h) => ({ ...h, remuneracao_administracao: e.target.value }))} placeholder="Ex.: 12% sobre os custos comprovados, pagos mensalmente" /></label>}
-        <label className="campo">Condições adicionais<textarea rows={2} value={hon.condicoes_adicionais ?? ''} onChange={(e) => setHon((h) => ({ ...h, condicoes_adicionais: e.target.value }))} /></label>
-        {textoHonorarios(honorarios) && <p className="muted small" style={{ margin: 0 }}>Honorários no texto: {textoHonorarios(honorarios)}.</p>}
-        {conteudo.faltando.length > 0 && <div className="aviso"><Icone nome="alerta" /><span>Sairá “[a definir]” em: {conteudo.faltando.map(ROTULO_FALTANDO).join(', ')}.</span></div>}
-        <details className="detalhes-form"><summary>Cláusulas ({conteudo.clausulas.length}) · ajustar texto deste contrato</summary>
-          <div className="stack" style={{ marginTop: 10 }}>
-            {conteudo.clausulas.map((k) => (
-              <label key={k.codigo} className="campo">{k.titulo} <span className={`selo ${k.revisao_juridica === 'revisada' ? 'ok' : 'alerta'}`}>{k.revisao_juridica === 'revisada' ? `revisada · v${k.versao}` : `minuta · v${k.versao}`}</span>
-                <textarea rows={3} value={textos[k.codigo] ?? k.texto} onChange={(e) => setTextos((t) => ({ ...t, [k.codigo]: e.target.value }))} />
-              </label>
+
+        {secao('prazo', 'Prazo e datas', [final.prazo || 'sem prazo', final.data_inicio && `início ${formatarData(final.data_inicio)}`, final.data_entrega && `entrega ${formatarData(final.data_entrega)}`].filter(Boolean).join(' · '), (
+          <>
+            <label className="campo">Prazo (como sai no contrato)<input value={k.prazo} onChange={(e) => mudar((x) => ({ ...x, prazo: e.target.value }))} placeholder="Ex.: 120 dias corridos a contar da liberação do local" /></label>
+            <div className="grid grid-3">
+              <label className="campo">Início previsto<input type="date" value={k.data_inicio ?? ''} onChange={(e) => mudar((x) => ({ ...x, data_inicio: e.target.value || null }))} /></label>
+              <label className="campo">Entrega prevista<input type="date" value={k.data_entrega ?? ''} min={k.data_inicio ?? undefined} onChange={(e) => mudar((x) => ({ ...x, data_entrega: e.target.value || null }))} /></label>
+              {k.data_inicio && k.data_entrega && <div className="campo"><span>Duração</span><b style={{ padding: '9px 0' }}>{Math.round((Date.parse(k.data_entrega) - Date.parse(k.data_inicio)) / 86_400_000) + 1} dias corridos</b></div>}
+            </div>
+          </>
+        ))}
+
+        {secao('partes', 'Partes e local', `${final.partes.contratante.nome} · ${final.local || 'local a definir'}`, (
+          <>
+            <div className="grid grid-2">
+              <label className="campo">Contratante<input value={k.partes.contratante.nome} onChange={(e) => parte('contratante', 'nome', e.target.value)} /></label>
+              <label className="campo">CPF/CNPJ do contratante<input value={k.partes.contratante.documento ?? ''} onChange={(e) => parte('contratante', 'documento', e.target.value)} /></label>
+              <label className="campo">Endereço do contratante<input value={k.partes.contratante.endereco ?? ''} onChange={(e) => parte('contratante', 'endereco', e.target.value)} /></label>
+              <label className="campo">E-mail do contratante<input value={k.partes.contratante.email ?? ''} onChange={(e) => parte('contratante', 'email', e.target.value)} /></label>
+              <label className="campo">Contratada<input value={k.partes.contratada.nome} onChange={(e) => parte('contratada', 'nome', e.target.value)} /></label>
+              <label className="campo">CNPJ da contratada<input value={k.partes.contratada.documento ?? ''} onChange={(e) => parte('contratada', 'documento', e.target.value)} /></label>
+              <label className="campo">Endereço da contratada<input value={k.partes.contratada.endereco ?? ''} onChange={(e) => parte('contratada', 'endereco', e.target.value)} /></label>
+              <label className="campo">Responsável técnico<input value={k.partes.contratada.extra ?? ''} onChange={(e) => parte('contratada', 'extra', e.target.value)} /></label>
+            </div>
+            <label className="campo">Local da obra<input value={k.local} onChange={(e) => mudar((x) => ({ ...x, local: e.target.value }))} /></label>
+            <p className="muted small" style={{ margin: 0 }}>Mudar aqui vale só para este contrato. Para corrigir o cadastro, use Pessoas ou Configurações.</p>
+          </>
+        ))}
+
+        {secao('escopo', 'Objeto e escopo', `${final.escopo.reduce((t, a) => t + a.itens.length, 0)} serviço(s) · ${formatar(somaEscopo)}`, (
+          <>
+            <label className="campo">Objeto<textarea rows={2} value={k.objeto} onChange={(e) => mudar((x) => ({ ...x, objeto: e.target.value }))} /></label>
+            {k.escopo.map((a, ai) => (
+              <div key={ai} className="bloco-ambiente">
+                <div className="row" style={{ flexWrap: 'nowrap' }}>
+                  <input className="titulo-amb" value={a.ambiente} aria-label="Grupo" onChange={(e) => mudar((x) => ({ ...x, escopo: x.escopo.map((z, j) => (j === ai ? { ...z, ambiente: e.target.value } : z)) }))} />
+                  <button className="btn-link" aria-label="Tirar grupo" title="Tirar este grupo e os serviços dele" onClick={() => window.confirm(`Tirar "${a.ambiente}" e os serviços dele?`) && mudar((x) => ({ ...x, escopo: x.escopo.filter((_, j) => j !== ai) }))}><Icone nome="fechar" /></button>
+                </div>
+                {a.itens.map((it, ii) => (
+                  <div key={ii} className="item-escopo">
+                    <input value={it.titulo} aria-label="Serviço" style={{ fontWeight: 600 }} onChange={(e) => mudarItem(ai, ii, { titulo: e.target.value })} />
+                    <textarea rows={2} value={it.descricao ?? ''} aria-label="Descrição" placeholder="Descrição (opcional)" onChange={(e) => mudarItem(ai, ii, { descricao: e.target.value })} />
+                    <div className="linha-valores">
+                      <label className="campo">Qtd.<input inputMode="decimal" value={String(it.quantidade).replace('.', ',')} onChange={(e) => mudarItem(ai, ii, { quantidade: Number(e.target.value.replace(/\./g, '').replace(',', '.')) || 0 })} /></label>
+                      <label className="campo">Unidade<input value={it.unidade} onChange={(e) => mudarItem(ai, ii, { unidade: e.target.value })} style={{ maxWidth: 90 }} /></label>
+                      <label className="campo">Valor<CampoValor valor={centavosDe(it.total)} aoMudar={(v) => mudarItem(ai, ii, { total: reaisDe(v) })} /></label>
+                      <button className="btn-link" aria-label="Tirar serviço" title="Tirar este serviço" onClick={() => mudar((x) => ({ ...x, escopo: x.escopo.map((z, j) => (j !== ai ? z : { ...z, itens: z.itens.filter((_, y) => y !== ii) })) }))}><Icone nome="fechar" /></button>
+                    </div>
+                  </div>
+                ))}
+                <button className="btn-secundario" onClick={() => mudar((x) => ({ ...x, escopo: x.escopo.map((z, j) => (j !== ai ? z : { ...z, itens: [...z.itens, { titulo: '', descricao: '', quantidade: 1, unidade: 'vb', total: 0 }] })) }))}><Icone nome="mais" /> Serviço</button>
+              </div>
             ))}
-          </div>
+            <div className="row"><button className="btn-secundario" onClick={() => mudar((x) => ({ ...x, escopo: [...x.escopo, { ambiente: x.escopo.length ? 'Novo grupo' : 'Escopo geral', itens: [{ titulo: '', descricao: '', quantidade: 1, unidade: 'vb', total: 0 }] }] }))}><Icone nome="mais" /> Grupo de serviços</button></div>
+          </>
+        ))}
+
+        {secao('obrigacoes', 'Incluso, não incluso e responsabilidades', `${final.inclusoes.length} incluso(s) · ${final.exclusoes.length} não incluso(s) · ${final.responsabilidades.reduce((t, r) => t + r.itens.length, 0)} obrigação(ões)`, (
+          <>
+            <div className="grid grid-2">
+              <ListaContrato rotulo="Incluso" valor={k.inclusoes} aoMudar={(v) => mudar((x) => ({ ...x, inclusoes: v }))} />
+              <ListaContrato rotulo="Não incluso" valor={k.exclusoes} aoMudar={(v) => mudar((x) => ({ ...x, exclusoes: v }))} />
+            </div>
+            <div className="grid grid-3">
+              {k.responsabilidades.map((r, j) => (
+                <div key={j} className="stack" style={{ gap: 4 }}>
+                  <div className="row" style={{ flexWrap: 'nowrap' }}>
+                    <input value={r.parte} aria-label="Parte" style={{ fontWeight: 600 }} onChange={(e) => mudar((x) => ({ ...x, responsabilidades: x.responsabilidades.map((z, i) => (i === j ? { ...z, parte: e.target.value } : z)) }))} />
+                    <button className="btn-link" aria-label="Tirar parte" title="Tirar esta parte" onClick={() => mudar((x) => ({ ...x, responsabilidades: x.responsabilidades.filter((_, i) => i !== j) }))}><Icone nome="fechar" /></button>
+                  </div>
+                  <ListaContrato rotulo="Obrigações" valor={r.itens} aoMudar={(v) => mudar((x) => ({ ...x, responsabilidades: x.responsabilidades.map((z, i) => (i === j ? { ...z, itens: v } : z)) }))} />
+                </div>
+              ))}
+            </div>
+            <div className="row"><button className="btn-secundario" onClick={() => mudar((x) => ({ ...x, responsabilidades: [...x.responsabilidades, { parte: x.responsabilidades.length === 0 ? 'ROSAE' : 'Nova parte', itens: [] }] }))}><Icone nome="mais" /> Parte com obrigações</button></div>
+          </>
+        ))}
+
+        {secao('pagamento', 'Pagamento', final.pagamento.length ? `${final.pagamento.length} parcela(s) · ${formatar(somaParcelas)}` : 'sem parcelas', (
+          <>
+            {k.pagamento.map((p, j) => (
+              <div key={j} className="linha-valores" style={{ alignItems: 'end' }}>
+                <label className="campo" style={{ flex: 2 }}>Descrição<input value={p.descricao} onChange={(e) => mudarParcela(j, { descricao: e.target.value })} /></label>
+                <label className="campo" style={{ flex: 2 }}>Quando<input value={p.quando ?? ''} onChange={(e) => mudarParcela(j, { quando: e.target.value })} placeholder="Na assinatura, ao concluir a etapa…" /></label>
+                <label className="campo" style={{ maxWidth: 160 }}>Vencimento<input type="date" value={p.data ?? ''} onChange={(e) => mudarParcela(j, { data: e.target.value || null })} /></label>
+                <label className="campo" style={{ flex: 1 }}>Valor<CampoValor valor={centavosDe(p.valor)} aoMudar={(v) => mudarParcela(j, { valor: reaisDe(v) })} /></label>
+                <button className="btn-link" aria-label="Tirar parcela" title="Tirar esta parcela" onClick={() => mudar((x) => ({ ...x, pagamento: x.pagamento.filter((_, i) => i !== j) }))}><Icone nome="fechar" /></button>
+              </div>
+            ))}
+            <div className="row">
+              <button className="btn-secundario" onClick={() => mudar((x) => ({ ...x, pagamento: [...x.pagamento, { descricao: `Parcela ${x.pagamento.length + 1}`, valor: 0, quando: '' }] }))}><Icone nome="mais" /> Parcela</button>
+              {k.pagamento.length > 0 && valorTotal !== null && <span className="small" style={{ color: somaParcelas === valorTotal ? 'var(--favoravel)' : 'var(--desfavoravel)' }}>Soma {formatar(somaParcelas)} de {formatar(valorTotal)}{somaParcelas === valorTotal ? ' · confere' : ''}</span>}
+            </div>
+          </>
+        ))}
+
+        {secao('clausulas', `Cláusulas (${clausulas.length})`, `${clausulas.filter((x) => x.editada).length} editada(s) por você${(k.removidas ?? []).length ? ` · ${(k.removidas ?? []).length} tirada(s)` : ''}`, (
+          <>
+            <p className="muted small" style={{ margin: 0 }}>As cláusulas vêm da sua biblioteca, conforme o modelo, com valor, prazo e honorários preenchidos. As que você não mexer acompanham a sugestão; as que você editar ficam como você escreveu (e saem como minuta).</p>
+            {clausulas.map((x, i) => (
+              <div key={x.codigo} className="clausula-ed">
+                <div className="row" style={{ flexWrap: 'nowrap', gap: 6 }}>
+                  <span className="muted small" style={{ minWidth: 28 }}>{i + 1}ª</span>
+                  <input value={x.titulo} aria-label="Título da cláusula" style={{ fontWeight: 600 }} onChange={(e) => editarClausula(x.codigo, { titulo: e.target.value })} />
+                  <span className={`selo ${x.revisao_juridica === 'revisada' ? 'ok' : 'alerta'}`}>{x.revisao_juridica === 'revisada' ? 'revisada' : 'minuta'}</span>
+                  {x.editada && sugPorCodigo.has(x.codigo) && <button className="btn-link small" title="Volta ao texto sugerido pelo modelo" onClick={() => mudarClausulas((l) => l.map((y) => (y.codigo === x.codigo ? sugPorCodigo.get(x.codigo)! : y)))}>sugestão</button>}
+                  <button className="btn-link" aria-label="Subir cláusula" title="Subir" disabled={i === 0} onClick={() => moverClausula(i, -1)}>↑</button>
+                  <button className="btn-link" aria-label="Descer cláusula" title="Descer" disabled={i === clausulas.length - 1} onClick={() => moverClausula(i, 1)}>↓</button>
+                  <button className="btn-link" aria-label="Tirar cláusula" title="Tirar esta cláusula" onClick={() => tirarClausula(x)}><Icone nome="fechar" /></button>
+                </div>
+                <textarea rows={3} value={x.texto} onChange={(e) => editarClausula(x.codigo, { texto: e.target.value })} />
+              </div>
+            ))}
+            <div className="row">
+              <button className="btn-secundario" onClick={() => mudarClausulas((l) => [...l, { codigo: `livre-${Date.now().toString(36)}`, titulo: 'Nova cláusula', texto: '', versao: 1, revisao_juridica: 'minuta', editada: true }])}><Icone nome="mais" /> Cláusula nova</button>
+              {daBiblioteca.length > 0 && (
+                <select value="" aria-label="Incluir cláusula da biblioteca" style={{ maxWidth: 300 }} onChange={(e) => {
+                  const c = d.clausulas.find((y) => y.codigo === e.target.value);
+                  if (!c) return;
+                  const pronta = mesclarClausulas([], montarContrato({ ...{ modelo, proposta: null, obra: { nome: obra.nome, endereco: obra.endereco }, contratante: k.partes.contratante, contratada: k.partes.contratada, honorarios }, clausulas: [{ ...c, aplicavel: ['todos'] }] }).clausulas)[0];
+                  mudarClausulas((l) => [...l, { ...pronta, editada: true }], (k.removidas ?? []).filter((r) => r !== c.codigo));
+                }}>
+                  <option value="">+ Cláusula da biblioteca…</option>
+                  {daBiblioteca.map((y) => <option key={y.codigo} value={y.codigo}>{y.titulo}</option>)}
+                </select>
+              )}
+            </div>
+            {(k.removidas ?? []).length > 0 && (
+              <p className="small" style={{ margin: 0 }}><span className="muted">Tiradas por você: </span>{(k.removidas ?? []).map((r) => <span key={r} className="tirada">{d.clausulas.find((y) => y.codigo === r)?.titulo ?? r} <button className="btn-link small" onClick={() => mudar((x) => ({ ...x, removidas: (x.removidas ?? []).filter((y) => y !== r) }))}>voltar</button></span>)}</p>
+            )}
+          </>
+        ))}
+
+        <label className="campo">Condições adicionais<textarea rows={2} value={hon.condicoes_adicionais ?? k.observacoes ?? ''} onChange={(e) => setHon((h) => ({ ...h, condicoes_adicionais: e.target.value }))} /></label>
+        {textoHonorarios(honorarios) && <p className="muted small" style={{ margin: 0 }}>Honorários no texto: {textoHonorarios(honorarios)}.</p>}
+        {final.faltando.length > 0 && <div className="aviso"><Icone nome="alerta" /><span>Sairá “[a definir]” em: {final.faltando.map(ROTULO_FALTANDO).join(', ')}.</span></div>}
+        <details className="detalhes-form"><summary>Ver como vai ficar</summary>
+          <div className="contrato-previa" style={{ marginTop: 10 }}><ContratoDocumento c={{ codigo: contrato?.codigo ?? 'CTR (novo)', estado: 'rascunho', minuta: true, hash: null, emitido_em: null, valor_total: paraBanco(valorTotal ?? 0), modelo, conteudo: final }} /></div>
         </details>
         <Erro mensagem={erro} />
       </div>
@@ -422,7 +625,10 @@ export function ContratoDocumento({ c }: { c: Pick<Contrato, 'codigo' | 'estado'
       {k.inclusoes.length > 0 && <><h3>Incluso</h3><ul>{k.inclusoes.map((x, i) => <li key={i}>{x}</li>)}</ul></>}
       {k.exclusoes.length > 0 && <><h3>Não incluso</h3><ul>{k.exclusoes.map((x, i) => <li key={i}>{x}</li>)}</ul></>}
       {k.responsabilidades.length > 0 && <><h3>Responsabilidades</h3>{k.responsabilidades.map((r) => <div key={r.parte}><b>{r.parte}</b><ul>{r.itens.map((x, i) => <li key={i}>{x}</li>)}</ul></div>)}</>}
-      {k.pagamento.length > 0 && <><h3>Condições de pagamento</h3><ul>{k.pagamento.map((p, i) => <li key={i}>{p.descricao}: {formatar(doBanco(p.valor))}{p.quando ? ` · ${p.quando}` : ''}</li>)}</ul></>}
+      {(k.prazo || k.data_inicio || k.data_entrega) && (
+        <><h3>Prazo</h3><p>{k.prazo}{k.data_inicio ? `${k.prazo ? ' ' : ''}Início previsto em ${formatarData(k.data_inicio)}.` : ''}{k.data_entrega ? ` Entrega prevista em ${formatarData(k.data_entrega)}.` : ''}</p></>
+      )}
+      {k.pagamento.length > 0 && <><h3>Condições de pagamento</h3><ul>{k.pagamento.map((p, i) => <li key={i}>{p.descricao}: {formatar(doBanco(p.valor))}{p.quando ? ` · ${p.quando}` : ''}{p.data ? ` · vencimento ${formatarData(p.data)}` : ''}</li>)}</ul></>}
       <h2>Cláusulas</h2>
       {k.clausulas.map((x) => <div key={x.codigo} className="clausula"><h3>Cláusula {++n}ª · {x.titulo}</h3><p>{x.texto}</p></div>)}
       {k.observacoes && <><h3>Condições adicionais</h3><p style={{ whiteSpace: 'pre-wrap' }}>{k.observacoes}</p></>}

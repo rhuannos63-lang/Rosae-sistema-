@@ -48,7 +48,9 @@ function novaChave() {
 }
 
 /** Janela de envio: confere destinatário, assunto e mensagem, mostra a prévia e envia uma única vez. */
-export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCliente, aoFechar, aoEnviar, abrirNoAplicativo, anexo }: {
+export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCliente, aoFechar, aoEnviar, abrirNoAplicativo, anexo, aditivo }: {
+  /** Aditivo de contrato: texto próprio, pedindo o aceite para formalizar. */
+  aditivo?: boolean;
   versaoId: string; codigo: string; versao: number; titulo: string; cliente: string; emailCliente: string | null;
   aoFechar: () => void; aoEnviar: () => void; abrirNoAplicativo: () => void;
   /** Gera o PDF da proposta para ir anexado. */
@@ -58,8 +60,10 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
   const status = useConsulta(() => statusEmail(), []);
   const primeiro = cliente.split(' ')[0] ?? '';
   const [dest, setDest] = useState(emailCliente ?? '');
-  const [assunto, setAssunto] = useState(`Proposta ${codigo} · ROSAE Engenharia & Estruturas`);
-  const [mensagem, setMensagem] = useState(anexo
+  const [assunto, setAssunto] = useState(aditivo ? `Aditivo ${codigo} para formalizar · ROSAE Engenharia & Estruturas` : `Proposta ${codigo} · ROSAE Engenharia & Estruturas`);
+  const [mensagem, setMensagem] = useState(aditivo
+    ? `Olá, ${primeiro}!\n\nConforme conversamos, segue${anexo ? ' em anexo' : ''} o aditivo ${codigo}: ${titulo}.\n\nNele estão o que será acrescentado, o valor, o impacto no prazo e a forma de pagamento. O contrato original continua valendo em todas as demais condições.\n\nPara formalizar, é só tocar no botão abaixo${anexo ? ' ou em “Aceitar” dentro do PDF' : ''} e confirmar o aceite.\n\nQualquer dúvida, estou à disposição.`
+    : anexo
     ? `Olá, ${primeiro}!\n\nSegue em anexo a proposta ${codigo} (versão ${versao}): ${titulo}.\n\nNo PDF estão o escopo, o que está e o que não está incluso, prazos e condições. Para aprovar, é só tocar em “Aceitar esta proposta” dentro do arquivo ou no botão abaixo.\n\nQualquer dúvida, estou à disposição.`
     : `Olá, ${primeiro}!\n\nSegue a proposta ${codigo} (versão ${versao}): ${titulo}.\n\nNo botão abaixo estão o escopo, o que está e o que não está incluso, prazos e condições. Por lá você também pode aceitar ou pedir ajustes.\n\nQualquer dúvida, estou à disposição.`);
   const [comPdf, setComPdf] = useState(!!anexo);
@@ -87,7 +91,7 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
 
   const s = status.dados;
   return (
-    <Modal titulo="Enviar a proposta por e-mail" aoFechar={aoFechar} largo
+    <Modal titulo={aditivo ? "Enviar o aditivo por e-mail" : "Enviar a proposta por e-mail"} aoFechar={aoFechar} largo
       rodape={s?.configurado ? (
         <>
           <button className="btn-link" onClick={aoFechar}>Cancelar</button>
