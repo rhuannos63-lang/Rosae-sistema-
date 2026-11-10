@@ -365,3 +365,8 @@ import_map = "./functions/deno.json"
 [functions.avisos]
 verify_jwt = false
 import_map = "./functions/deno.json"
+
+# Arquivo frio (Cloudflare R2): endereços temporários dos arquivos antigos. O login é conferido dentro da função.
+[functions.arquivos]
+verify_jwt = false
+import_map = "./functions/deno.json"

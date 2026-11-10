@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Usuario } from '../lib/tipos';
 import { aoMudarAparencia, definirAparencia, normalizar } from '../lib/aparencia';
+import { inativoDemais, marcarAtividade, minutosInatividade, SAIU_POR_INATIVIDADE } from '../lib/seguranca';
 
 type Estado = {
   carregando: boolean;
@@ -15,6 +16,8 @@ type Estado = {
   senhaDefinida: () => void;
   podeFinanceiro: boolean;
   ehAdmin: boolean;
+  /** Login com senha feito, falta o código do aplicativo autenticador (verificação em 2 etapas). */
+  precisaCodigo: boolean;
 };
 
 const Ctx = createContext<Estado | null>(null);
@@ -36,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [existeAdmin, setExisteAdmin] = useState<boolean | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [precisaCodigo, setPrecisaCodigo] = useState(false);
   // Link de criar/recuperar senha (e-mail do Supabase) abre a tela de nova senha.
   const [definirSenha, setDefinirSenha] = useState(() => /type=(recovery|invite)/.test(window.location.hash));
 
@@ -43,9 +47,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!s) {
       setUsuario(null);
       setExisteAdmin(null);
+      setPrecisaCodigo(false);
       setCarregando(false);
       return;
     }
+    // Quem ativou o código do celular só vê os dados depois de digitá-lo (o banco também exige).
+    const { data: nivel } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (nivel?.nextLevel === 'aal2' && nivel.currentLevel !== 'aal2') {
+      setPrecisaCodigo(true);
+      setCarregando(false);
+      return;
+    }
+    setPrecisaCodigo(false);
     const [{ data: u }, { data: adm }] = await Promise.all([
       supabase.from('usuario').select('*').eq('id', s.user.id).maybeSingle(),
       supabase.rpc('existe_administrador'),
@@ -69,6 +82,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [carregarPerfil]);
 
+  // Saída por inatividade: sem uso pelo tempo escolhido (Configurações › Dados e segurança),
+  // a sessão é encerrada. Vale também ao reabrir o aplicativo no dia seguinte.
+  const logado = Boolean(sessao);
+  useEffect(() => {
+    if (!logado) return;
+    const conferir = () => {
+      if (inativoDemais()) {
+        sessionStorage.setItem(SAIU_POR_INATIVIDADE, String(minutosInatividade()));
+        aoMudarAparencia(null);
+        void supabase.auth.signOut();
+        return true;
+      }
+      return false;
+    };
+    if (conferir()) return;
+    marcarAtividade(true);
+    const ativo = () => marcarAtividade();
+    const visivel = () => { if (document.visibilityState === 'visible' && !conferir()) marcarAtividade(true); };
+    const eventos = ['pointerdown', 'keydown', 'scroll', 'touchstart'] as const;
+    eventos.forEach((e) => window.addEventListener(e, ativo, { passive: true }));
+    document.addEventListener('visibilitychange', visivel);
+    const relogio = window.setInterval(conferir, 60_000);
+    return () => {
+      eventos.forEach((e) => window.removeEventListener(e, ativo));
+      document.removeEventListener('visibilitychange', visivel);
+      window.clearInterval(relogio);
+    };
+  }, [logado]);
+
   const valor: Estado = {
     carregando,
     sessao,
@@ -84,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     senhaDefinida: () => setDefinirSenha(false),
     podeFinanceiro: Boolean(usuario?.ativo && (usuario.papel === 'administrador' || (usuario.papel === 'administrativo' && usuario.acesso_financeiro))),
     ehAdmin: Boolean(usuario?.ativo && usuario.papel === 'administrador'),
+    precisaCodigo,
   };
   return <Ctx.Provider value={valor}>{children}</Ctx.Provider>;
 }

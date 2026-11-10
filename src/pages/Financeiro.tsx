@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
+import { urlAssinada } from '../lib/arquivos';
 import { useConsulta, ok, novaChave, todas, useAosPoucos } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
@@ -449,9 +450,9 @@ export function LancamentoDetalhe() {
   const verbo = lanc.tipo === 'receber' ? 'Receber' : 'Pagar';
 
   async function baixar(a: Arquivo) {
-    const { data, error } = await supabase.storage.from('documentos').createSignedUrl(a.caminho, 120);
-    if (error || !data) return toast(mensagemErro(error));
-    window.open(data.signedUrl, '_blank', 'noopener');
+    const url = await urlAssinada(a.caminho, 120);
+    if (!url) return toast('Não consegui abrir o arquivo.');
+    window.open(url, '_blank', 'noopener');
   }
 
   return (

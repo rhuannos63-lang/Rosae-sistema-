@@ -2,6 +2,7 @@
 // fotos datadas e pendências com responsável e prazo.
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { supabase, mensagemErro } from '../lib/supabase';
+import { urlsAssinadas } from '../lib/arquivos';
 import { useConsulta, ok, novaChave } from '../lib/consulta';
 import { Ajuda, Carregando, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
@@ -60,12 +61,7 @@ export function useUrlsFotos(fotos: Foto[]) {
   useEffect(() => {
     if (!fotos.length) return;
     let vivo = true;
-    supabase.storage.from('documentos').createSignedUrls(fotos.map((f) => f.caminho), 3600).then(({ data }) => {
-      if (!vivo || !data) return;
-      const m: Record<string, string> = {};
-      data.forEach((d) => { if (d.signedUrl && d.path) m[d.path] = d.signedUrl; });
-      setUrls(m);
-    });
+    urlsAssinadas(fotos.map((f) => f.caminho), 3600).then((m) => { if (vivo) setUrls(m); });
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chave]);

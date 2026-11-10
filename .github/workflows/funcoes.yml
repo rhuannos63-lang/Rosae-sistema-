@@ -1,5 +1,5 @@
 name: Publicar assistente
-# Publica as funções do servidor (assistente de IA, WhatsApp e e-mail) no Supabase e copia as
+# Publica as funções do servidor (assistente de IA, WhatsApp, e-mail, avisos e arquivo frio) no Supabase e copia as
 # chaves cadastradas nos segredos do GitHub. Depois de cadastrar ou trocar uma
 # chave, rode este workflow à mão (Actions › Publicar assistente › Run workflow).
 on:
@@ -24,6 +24,10 @@ jobs:
       EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
       GMAIL_USUARIO: ${{ secrets.GMAIL_USUARIO }}
       GMAIL_SENHA_APP: ${{ secrets.GMAIL_SENHA_APP }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
     steps:
       - uses: actions/checkout@v4
       - name: Projeto
@@ -43,7 +47,7 @@ jobs:
         if: steps.p.outputs.ok == 'sim'
         run: |
           : > segredos.env
-          for n in ANTHROPIC_API_KEY GEMINI_API_KEY WHATSAPP_TOKEN WHATSAPP_NUMERO_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN WHATSAPP_NUMERO_EXIBICAO RESEND_API_KEY EMAIL_REMETENTE GMAIL_USUARIO GMAIL_SENHA_APP; do
+          for n in ANTHROPIC_API_KEY GEMINI_API_KEY WHATSAPP_TOKEN WHATSAPP_NUMERO_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN WHATSAPP_NUMERO_EXIBICAO RESEND_API_KEY EMAIL_REMETENTE GMAIL_USUARIO GMAIL_SENHA_APP R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET; do
             v="${!n}"
             if [ -n "$v" ]; then echo "$n=$v" >> segredos.env; echo "• $n cadastrada"; else echo "• $n ainda não cadastrada"; fi
           done

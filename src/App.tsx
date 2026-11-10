@@ -4,7 +4,7 @@ import { configurado } from './lib/supabase';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { ToastProvider, Carregando } from './components/ui';
 import { Layout, Mais } from './components/Layout';
-import { Login, PrimeiroAcesso, NaoConfigurado, SemAcesso, DefinirSenha } from './pages/Acesso';
+import { Login, PrimeiroAcesso, NaoConfigurado, SemAcesso, DefinirSenha, CodigoDuasEtapas } from './pages/Acesso';
 import { Painel } from './pages/Painel';
 import { Introducao } from './pages/Ajuda';
 
@@ -54,9 +54,10 @@ const RelatorioClientePrevia = preguicoso(() => import('./pages/Relatorios'), 'R
 const RelatorioClientePortal = preguicoso(() => import('./pages/Relatorios'), 'RelatorioClientePortal');
 
 function Rotas() {
-  const { carregando, sessao, usuario, existeAdmin, podeFinanceiro, ehAdmin, definirSenha } = useAuth();
+  const { carregando, sessao, usuario, existeAdmin, podeFinanceiro, ehAdmin, definirSenha, precisaCodigo } = useAuth();
   if (carregando) return <Carregando />;
   if (!sessao) return <Login />;
+  if (precisaCodigo) return <CodigoDuasEtapas />;
   if (definirSenha) return <DefinirSenha />;
   if (!usuario) return existeAdmin ? <SemAcesso /> : <PrimeiroAcesso />;
   if (!usuario.ativo || usuario.papel === 'cliente') return <SemAcesso cliente={usuario.papel === 'cliente'} />;
