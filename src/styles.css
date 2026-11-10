@@ -2433,3 +2433,77 @@ td .ed-mais { margin: 0 0 0 .6em; padding: .1em .6em; }
   .ag-dia-num { width: 52px; height: 52px; font-size: 2.1rem; }
   .ag-tempo-item { grid-template-columns: 70px 1fr; }
 }
+
+/* ---------------------------------------------------------------------
+   Funil completo (contato → obra) e menu "⋯"
+   --------------------------------------------------------------------- */
+.menu-acoes { position: relative; display: inline-flex; }
+.menu-acoes-lista[hidden] { display: none !important; }
+.menu-acoes-lista {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 220px;
+  background: var(--papel); border: 1px solid var(--linha); border-radius: 12px; box-shadow: var(--sombra-alta);
+  padding: 6px; display: flex; flex-direction: column; gap: 2px;
+}
+.menu-acoes-lista > a, .menu-acoes-lista > button, .menu-acoes-lista button {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 9px 10px; border-radius: 8px; font-size: 0.9rem; color: var(--grafite);
+}
+.menu-acoes-lista > a:hover, .menu-acoes-lista button:hover, .menu-acoes-lista a:focus-visible, .menu-acoes-lista button:focus-visible { background: var(--verde-tinta); color: var(--verde-escuro); }
+.menu-acoes-lista svg { width: 16px; height: 16px; flex: none; }
+
+.trilha-funil { display: grid; grid-template-columns: repeat(6, minmax(110px, 1fr)); gap: 0; margin-bottom: 14px; overflow-x: auto; border: 1px solid var(--linha); border-radius: 14px; background: var(--papel); box-shadow: var(--sombra); }
+.trilha-funil button {
+  all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 3px; padding: 12px 14px; position: relative;
+  border-right: 1px solid var(--linha);
+}
+.trilha-funil button:last-child { border-right: none; }
+.trilha-funil button:hover { background: var(--verde-tinta); }
+.trilha-funil button:focus-visible { outline: 2px solid var(--verde-claro); outline-offset: -2px; }
+.trilha-funil button.ativo { background: var(--verde); color: #fff; }
+.trilha-funil button.ativo .f-nome, .trilha-funil button.ativo .f-valor { color: rgba(255, 255, 255, 0.85); }
+.trilha-funil .f-nome { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--texto-2); font-weight: 600; white-space: nowrap; }
+.trilha-funil .f-num { font-family: var(--fonte-titulo); font-size: 1.45rem; font-weight: 600; line-height: 1.05; }
+.trilha-funil .f-valor { color: var(--texto-2); white-space: nowrap; }
+.kpi.ativo { border-color: var(--verde); box-shadow: inset 0 0 0 1px var(--verde); }
+
+.funil-quadro { grid-auto-columns: minmax(180px, 1fr); }
+.funil-quadro .coluna { min-width: 0; }
+.negocio { min-width: 0; overflow-wrap: anywhere; background: var(--papel); border: 1px solid var(--linha); border-radius: 10px; box-shadow: var(--sombra); display: grid; overflow: hidden; }
+.negocio.atrasado { border-left: 3px solid var(--alerta); }
+.negocio:hover { border-color: var(--verde-claro); }
+.negocio-abrir { all: unset; box-sizing: border-box; min-width: 0; cursor: pointer; display: grid; gap: 4px; padding: 10px 11px; }
+.negocio-abrir:focus-visible { outline: 2px solid var(--verde-claro); outline-offset: -2px; }
+.negocio-topo { display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 8px; align-items: baseline; }
+.negocio-topo .num { font-size: 0.85rem; color: var(--verde-escuro); font-weight: 600; white-space: nowrap; }
+.negocio-alertas { display: flex; flex-wrap: wrap; gap: 4px; }
+.negocio-passo {
+  all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 8px 11px; border-top: 1px solid var(--linha); background: var(--verde-tinta); color: var(--verde-escuro); font-size: 0.85rem; font-weight: 600;
+}
+.negocio-passo:hover { background: var(--verde); color: #fff; }
+.negocio-passo:disabled { opacity: 0.6; cursor: progress; }
+.negocio-passo svg { width: 15px; height: 15px; }
+.fase-titulo { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--verde-escuro); margin: 0; display: flex; gap: 8px; }
+.grade-negocios { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+
+.jornada-negocio { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.jornada-negocio li { display: grid; justify-items: center; gap: 5px; text-align: center; position: relative; color: var(--texto-2); }
+.jornada-negocio li::before { content: ''; position: absolute; top: 13px; left: calc(-50% + 16px); right: calc(50% + 16px); height: 2px; background: var(--linha); }
+.jornada-negocio li:first-child::before { display: none; }
+.jornada-negocio li.feito::before, .jornada-negocio li.atual::before { background: var(--verde); }
+.jornada-negocio .bolinha { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 0.78rem; font-weight: 600; border: 2px solid var(--linha); background: var(--papel); }
+.jornada-negocio .bolinha svg { width: 14px; height: 14px; }
+.jornada-negocio li.feito .bolinha { background: var(--verde); border-color: var(--verde); color: #fff; }
+.jornada-negocio li.atual .bolinha { border-color: var(--verde); color: var(--verde-escuro); box-shadow: 0 0 0 4px var(--verde-tinta); }
+.jornada-negocio li.atual { color: var(--verde-escuro); font-weight: 600; }
+@media (max-width: 640px) {
+  .jornada-negocio .small { font-size: 0.66rem; }
+  .trilha-funil { grid-template-columns: repeat(3, 1fr); }
+  .trilha-funil button { padding: 10px; border-bottom: 1px solid var(--linha); }
+  .trilha-funil button:nth-child(3n) { border-right: none; }
+  .trilha-funil button:nth-child(n+4) { border-bottom: none; }
+  .trilha-funil .f-num { font-size: 1.2rem; }
+  .trilha-funil .f-valor { font-size: 0.72rem; }
+  .menu-acoes-lista { right: auto; left: 0; }
+}
+.negocio .selo { white-space: normal; max-width: 100%; }

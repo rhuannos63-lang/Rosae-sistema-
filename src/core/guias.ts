@@ -25,7 +25,7 @@ const G: Guia[] = [
     serve: 'Tudo o que acontece antes da obra: o contato que chega, o orçamento, a proposta e o aceite do cliente.',
     passos: [
       { titulo: 'Veja os números do setor', texto: 'No alto ficam as oportunidades abertas, as propostas aguardando resposta e o que foi vendido.' },
-      { titulo: 'Escolha uma subpasta', texto: 'Funil de clientes, Novo orçamento, Propostas, Tabela de preços, Biblioteca e Cláusulas. Cada cartão explica o que tem dentro.', alvo: 'Funil de clientes' },
+      { titulo: 'Escolha uma subpasta', texto: 'Funil, Novo orçamento, Propostas, Tabela de preços, Biblioteca e Cláusulas. Cada cartão explica o que tem dentro.', alvo: 'Funil' },
       { titulo: 'Resolva o que está pendente', texto: 'A lista de atenção mostra propostas sem resposta e contatos com ação atrasada.' },
       { titulo: 'Entenda as ligações', texto: 'Proposta aprovada vira obra e as parcelas vão para o Financeiro, sem digitar de novo.' },
     ],
@@ -58,16 +58,16 @@ const G: Guia[] = [
     ],
   },
   {
-    id: 'comercial', titulo: 'Funil de clientes', manual: 'comercial',
-    serve: 'Registrar cada pessoa que pediu orçamento e conduzir a conversa até a proposta aprovada, sem esquecer ninguém.',
+    id: 'comercial', titulo: 'Funil', manual: 'comercial',
+    serve: 'Ver todos os negócios numa tela só, do primeiro contato à obra, e saber o único próximo passo de cada um.',
     passos: [
-      { titulo: 'Cadastre o contato', texto: 'Toque em Novo contato, escolha ou crie o cliente, descreva o pedido e de onde ele veio.', alvo: 'Novo contato' },
-      { titulo: 'Escolha como ver', texto: 'Quadro mostra as colunas do funil; Lista mostra tudo em linhas, bom para muitos contatos.', alvo: 'Quadro' },
-      { titulo: 'Defina a próxima ação', texto: 'Toda oportunidade precisa de uma próxima ação com data. As atrasadas ficam em vermelho e vão para Pendências.' },
-      { titulo: 'Avance a etapa', texto: 'Abra a oportunidade e troque a etapa conforme a conversa anda. Dali você já cria a proposta.' },
-      { titulo: 'Perdeu? Registre o motivo', texto: 'Arquive como perdida e diga o motivo. Com o tempo isso mostra onde ajustar preço ou prazo.' },
+      { titulo: 'Leia os números de cima', texto: 'Quanto está em negociação, quanto está com o cliente, quanto fechou no mês e quantos negócios precisam de você.' },
+      { titulo: 'Toque numa fase', texto: 'Contato, Orçamento, Enviada, Aceita, Contrato e Em execução. Tocar mostra só aquela fase; tocar de novo volta tudo.' },
+      { titulo: 'Use o botão do cartão', texto: 'Cada cartão tem um botão só, com o próximo passo: fazer orçamento, terminar e enviar, cobrar retorno, gerar contrato, acompanhar a assinatura ou abrir a obra.' },
+      { titulo: 'Comece pelo Novo', texto: 'Novo → Contato para registrar um pedido; Novo → Orçamento para ir direto ao orçamento automático.', alvo: 'Novo' },
+      { titulo: 'Perdeu? Registre o motivo', texto: 'Dentro do negócio, mude a etapa da conversa para Perdida e diga o motivo. Os perdidos e entregues ficam nas abas de baixo.' },
     ],
-    dicas: ['“Formulário do site” traz o código pronto para o site: cada envio vira um contato aqui sozinho.'],
+    dicas: ['O botão ⋯ guarda a lista de propostas e o formulário do site.'],
   },
   {
     id: 'orcamento', titulo: 'Novo orçamento', manual: 'orcamento',

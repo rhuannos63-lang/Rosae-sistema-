@@ -17,7 +17,7 @@ export const DEPARTAMENTOS: Departamento[] = [
     id: 'comercial', nome: 'Comercial e Orçamentos', curto: 'Comercial', icone: 'comercial', acesso: 'comercial',
     resumo: 'Do primeiro contato à proposta aprovada: funil, orçamento automático, propostas e preços.',
     subpastas: [
-      { para: '/comercial', rotulo: 'Funil de clientes', icone: 'comercial', descricao: 'Contatos, oportunidades e próximas ações.' },
+      { para: '/comercial', rotulo: 'Funil', icone: 'comercial', descricao: 'Todos os negócios do contato à obra, com o próximo passo de cada um.' },
       { para: '/orcamento', rotulo: 'Novo orçamento', icone: 'varinha', descricao: 'Orçamento automático por tipo de serviço, em 3 pacotes.' },
       { para: '/propostas', rotulo: 'Propostas', icone: 'documento', descricao: 'Editar, emitir, enviar o link e acompanhar o aceite.' },
       { para: '/orcamento/precos', rotulo: 'Tabela de preços', icone: 'tabela', descricao: 'Valores de referência que o orçamento usa.' },

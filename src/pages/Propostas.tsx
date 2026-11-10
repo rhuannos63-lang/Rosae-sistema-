@@ -8,6 +8,7 @@ import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast }
 import { Icone } from '../components/Icone';
 import { COR_MARCA, PALETAS } from '../lib/aparencia';
 import { BotaoExcluir } from '../components/Excluir';
+import { MenuAcoes } from '../components/MenuAcoes';
 import { PropostaDocumento, type DadosDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
 import { doBanco, formatar, paraBanco, somar, type Centavos } from '../core/dinheiro';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
@@ -60,9 +61,11 @@ export function Propostas() {
   return (
     <>
       <Topo titulo="Propostas" sub="Cada proposta guarda todas as versões. A versão enviada fica congelada; mudanças viram uma nova versão.">
-        <Link className="btn-secundario" to="/comercial"><Icone nome="voltar" /> Comercial</Link>
-        <Link className="btn-secundario" to="/biblioteca">Biblioteca de serviços</Link>
-        <Link className="btn-secundario" to="/orcamento/precos"><Icone nome="tabela" /> Tabela de preços</Link>
+        <Link className="btn-secundario" to="/comercial"><Icone nome="voltar" /> Funil</Link>
+        <MenuAcoes>
+          <Link role="menuitem" to="/biblioteca"><Icone nome="lista" /> Biblioteca de serviços</Link>
+          <Link role="menuitem" to="/orcamento/precos"><Icone nome="tabela" /> Tabela de preços</Link>
+        </MenuAcoes>
         <Link className="btn-primario" to="/orcamento"><Icone nome="varinha" /> Novo orçamento</Link>
       </Topo>
       <div className="card">
