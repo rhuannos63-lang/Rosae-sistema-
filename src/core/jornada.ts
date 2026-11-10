@@ -164,7 +164,8 @@ export function calcularJornada(perfil: Perfil, etapas: EtapaPortal[], executado
     const nome = sem(e.nome);
     const servico = sem(nomeServico(e.servico_id));
     const achar = (texto: string) => def.fases.findIndex((f) => f.palavras.some((p) => (p.length <= 3 ? new RegExp(`\\b${sem(p)}\\b`).test(texto) : texto.includes(sem(p)))));
-    let i = achar(nome);
+    // "... e entrega" é sempre a última fase, mesmo citando outra palavra ("Retirada do escoramento e entrega").
+    let i = /\bentreg/.test(nome) ? def.fases.length - 1 : achar(nome);
     if (i < 0) i = achar(servico);
     if (i < 0) i = ordenadas.length > 1 ? Math.max(ultima, Math.min(def.fases.length - 1, Math.floor((k / ordenadas.length) * def.fases.length))) : ultima;
     grupos[i].push(e);
