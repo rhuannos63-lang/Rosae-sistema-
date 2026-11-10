@@ -29,9 +29,11 @@ const PropostaPublica = preguicoso(() => import('./pages/PropostaPublica'), 'Pro
 const ContratoPublico = preguicoso(() => import('./pages/ContratoPublico'), 'ContratoPublico');
 const NovoOrcamento = preguicoso(() => import('./pages/Orcamento'), 'NovoOrcamento');
 const PrecosOrcamento = preguicoso(() => import('./pages/Orcamento'), 'PrecosOrcamento');
+const Composicoes = preguicoso(() => import('./pages/Composicoes'), 'Composicoes');
 const Agenda = preguicoso(() => import('./pages/Agenda'), 'Agenda');
 const Biblioteca = preguicoso(() => import('./pages/Biblioteca'), 'Biblioteca');
 const Planejador = preguicoso(() => import('./pages/Planejador'), 'Planejador');
+const Recebimentos = preguicoso(() => import('./pages/Recebimentos'), 'Recebimentos');
 const Clausulas = preguicoso(() => import('./pages/ObraContrato'), 'Clausulas');
 const ContratoImprimir = preguicoso(() => import('./pages/ObraContrato'), 'ContratoImprimir');
 const FichaAtual = preguicoso(() => import('./pages/Fichas'), 'FichaAtual');
@@ -91,6 +93,7 @@ function Rotas() {
             {comercial && <Route path="biblioteca" element={<Biblioteca />} />}
             {comercial && <Route path="orcamento" element={<NovoOrcamento />} />}
             {comercial && <Route path="orcamento/precos" element={<PrecosOrcamento />} />}
+            {podeFinanceiro && <Route path="orcamento/composicoes" element={<Composicoes />} />}
             <Route path="agenda" element={<Agenda />} />
             {podeFinanceiro && <Route path="financeiro" element={<Financeiro />} />}
             {podeFinanceiro && <Route path="financeiro/:id" element={<LancamentoDetalhe />} />}
@@ -98,6 +101,7 @@ function Rotas() {
             {podeFinanceiro && <Route path="notas/:id" element={<NotaDetalhe />} />}
             {podeFinanceiro && <Route path="contas" element={<Contas />} />}
             {podeFinanceiro && <Route path="planejador" element={<Planejador />} />}
+            {podeFinanceiro && <Route path="recebimentos" element={<Recebimentos />} />}
             {ehAdmin && <Route path="configuracoes" element={<Configuracoes />} />}
             {ehAdmin && <Route path="lixeira" element={<Lixeira />} />}
             <Route path="*" element={<Navigate to="/" replace />} />

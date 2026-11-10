@@ -15,15 +15,23 @@ import {
   acompanharTotal, ajustarTotal, aplicarModelos, compararVersoes, parcelasAoTotal, itemDoModelo, normalizar, novoId, paraCentavos, pendencias, prepararParaSalvar, rascunhoDoTexto,
   somaParcelas, sugerirPagamento, totalAmbiente, totalConteudo, totalItem, UNIDADES,
   type Ambiente, type Conteudo, type Item, type ModeloServico,
-  forcaDaProposta,
+  forcaDaProposta, CONDICOES_GERAIS_PADRAO, dataEntrega, datasDasEtapas, definirFimEtapa, incluirEtapa, moverEtapa, moverItem, mudarEtapa, selosPadrao, tirarEtapa,
 } from '../core/proposta';
 import { ESTADO_PROPOSTA, EVENTO_PROPOSTA, type EstadoProposta, type Proposta, type PropostaEvento, type PropostaVersao } from '../lib/tipos';
 import { linkWhatsApp } from './Comercial';
 import { estadoInicial, OrcamentoGerador, type EstadoGerador } from '../components/OrcamentoGerador';
+import { EncaixeAgenda, useFila } from '../components/EncaixeAgenda';
 import { carregarPrecos } from '../lib/orcamentoParametros';
 import { EnviarEmail, HistoricoEmails } from '../components/EnvioEmail';
+import { NovoAditivo } from '../components/NovoAditivo';
+import { QuadroRecebido } from '../components/Recebimentos';
 import { baixarArquivo, compartilharArquivo, gerarPdfProposta, nomeDoPdf, paraBase64 } from '../lib/pdfProposta';
 import type { Orcamento } from '../core/orcamento';
+import { ComposicaoProposta } from '../components/ComposicaoProposta';
+import { PADROES, type Padrao, type Uso } from '../core/composicao';
+import { codigosDe } from '../core/condicoes';
+import { carregarCondicoes } from '../lib/composicoes';
+import { definirTotalItem, mudarItem as mudarItemConteudo } from '../core/proposta';
 
 type PropostaLista = Proposta & { versoes: { id: string; numero: number; valor_total: string; emitida: boolean; validade: string | null }[] };
 
@@ -43,6 +51,9 @@ export function Propostas() {
     }
     return (ok(p) as PropostaLista[]).map((x) => ({ ...x, vistas: vistas.get(x.id) }));
   }, []);
+  const codigos = new Map((dados ?? []).map((p) => [p.id, p.codigo]));
+  const nAditivos = new Map<string, number>();
+  for (const p of dados ?? []) if (p.proposta_origem_id && p.estado !== 'arquivada') nAditivos.set(p.proposta_origem_id, (nAditivos.get(p.proposta_origem_id) ?? 0) + 1);
   const lista = (dados ?? []).filter((p) =>
     filtro === 'todas' ? true : filtro === 'ativas' ? ['rascunho', 'enviada', 'em_negociacao'].includes(p.estado) : p.estado === filtro,
   );
@@ -78,7 +89,11 @@ export function Propostas() {
                   const u = [...p.versoes].sort((a, b) => b.numero - a.numero)[0];
                   return (
                     <tr key={p.id} className="clicavel" onClick={() => navegar(`/propostas/${p.id}`)}>
-                      <td><b>{p.titulo}</b><div className="muted small">{p.codigo}</div></td>
+                      <td>
+                        <b>{p.titulo}</b>
+                        <div className="muted small">{p.codigo}{p.proposta_origem_id && codigos.get(p.proposta_origem_id) ? ` · aditivo de ${codigos.get(p.proposta_origem_id)}` : ''}</div>
+                        {nAditivos.get(p.id) ? <span className="selo neutro" style={{ marginTop: 4 }}>+ {nAditivos.get(p.id)} aditivo(s)</span> : null}
+                      </td>
                       <td>{p.pessoa?.nome}</td>
                       <td><span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span></td>
                       <td className="small"><Interesse p={p} validade={u?.emitida ? u.validade : null} /></td>
@@ -121,6 +136,7 @@ type Carga = {
   eventos: PropostaEvento[];
   biblioteca: ModeloServico[];
   empresa: EmpresaPublica | null;
+  origem: { id: string; codigo: string; titulo: string } | null;
 };
 
 const ABAS = [
@@ -136,6 +152,7 @@ export function PropostaEditor() {
   const toast = useToast();
   const { podeFinanceiro } = useAuth();
   const [erro, setErro] = useState<string | null>(null);
+  const [aditivo, setAditivo] = useState(false);
   const { dados, erro: erroCarga, carregando, recarregar } = useConsulta<Carga>(async () => {
     const [p, v, e, b, emp] = await Promise.all([
       supabase.from('proposta').select('*, pessoa:pessoa(nome, telefone, email), oportunidade:oportunidade(resumo, local_obra)').eq('id', id!).maybeSingle(),
@@ -144,9 +161,13 @@ export function PropostaEditor() {
       supabase.from('modelo_servico').select('*').eq('ativo', true).order('ordem'),
       supabase.rpc('empresa_publica'),
     ]);
+    const proposta = ok(p) as Carga['proposta'];
+    const origem = proposta?.proposta_origem_id
+      ? ok(await supabase.from('proposta').select('id, codigo, titulo').eq('id', proposta.proposta_origem_id).maybeSingle()) as Carga['origem']
+      : null;
     return {
-      proposta: ok(p) as Carga['proposta'], versoes: ok(v) as PropostaVersao[], eventos: ok(e) as PropostaEvento[],
-      biblioteca: ok(b) as ModeloServico[], empresa: ok(emp) as EmpresaPublica | null,
+      proposta, versoes: ok(v) as PropostaVersao[], eventos: ok(e) as PropostaEvento[],
+      biblioteca: ok(b) as ModeloServico[], empresa: ok(emp) as EmpresaPublica | null, origem,
     };
   }, [id]);
 
@@ -179,11 +200,15 @@ export function PropostaEditor() {
 
   return (
     <>
-      <Topo titulo={p.titulo} sub={<>{p.codigo} · {p.pessoa?.nome} · <span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span></>}>
+      <Topo titulo={p.titulo} sub={<>{p.codigo} · {p.pessoa?.nome} · <span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span>{dados.origem && <> · aditivo do orçamento <Link to={`/propostas/${dados.origem.id}`}>{dados.origem.codigo}</Link></>}</>}>
         <button className="btn-secundario" onClick={() => (p.oportunidade_id ? navegar(`/comercial/${p.oportunidade_id}`) : navegar('/propostas'))}><Icone nome="voltar" /> Voltar</button>
         <button className="btn-secundario" onClick={duplicar}>Duplicar</button>
         <BotaoExcluir tabela="proposta" id={p.id} nome={p.titulo} aoExcluir={() => navegar('/propostas')} />
+        {p.estado === 'aprovada' && (p.tipo === 'proposta' || dados.origem) && (
+          <button className="btn-primario" onClick={() => setAditivo(true)}><Icone nome="mais" /> Adicionar aditivo</button>
+        )}
       </Topo>
+      {aditivo && <NovoAditivo origemId={p.tipo === 'proposta' ? p.id : dados.origem?.id} codigoOrigem={p.tipo === 'proposta' ? p.codigo : dados.origem?.codigo} aoFechar={() => setAditivo(false)} />}
       <div className="row versoes" style={{ marginBottom: 14 }}>
         <span className="muted small">Versões:</span>
         {versoes.map((x) => (
@@ -241,10 +266,37 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
   const [erro, setErro] = useState<string | null>(null);
   const [custos, setCustos] = useState<Custo[]>([]);
   const [notas, setNotas] = useState('');
+  const [usos, setUsos] = useState<Uso[]>([]);
+  const [bdi, setBdi] = useState(25);
+  const [padrao, setPadrao] = useState<Padrao>('medio');
+  const [condicoes, setCondicoes] = useState<string[]>([]);
+  const [custoComp, setCustoComp] = useState(0);
   const [custoCarregado, setCustoCarregado] = useState(false);
   const [preview, setPreview] = useState(false);
   const [comparar, setComparar] = useState(false);
   const primeira = useRef(true);
+  // Desfazer: guarda as últimas versões do conteúdo (tirar algo por engano volta com um clique).
+  const historico = useRef<Conteudo[]>([]);
+  const [nDesfazer, setNDesfazer] = useState(0);
+  const anteriorC = useRef<Conteudo>(c);
+  const desfazendo = useRef(false);
+  useEffect(() => {
+    if (anteriorC.current !== c) {
+      if (!desfazendo.current) {
+        historico.current = [...historico.current.slice(-39), anteriorC.current];
+        setNDesfazer(historico.current.length);
+      }
+      desfazendo.current = false;
+      anteriorC.current = c;
+    }
+  }, [c]);
+  const desfazer = () => {
+    const ultimo = historico.current.pop();
+    setNDesfazer(historico.current.length);
+    if (!ultimo) return;
+    desfazendo.current = true;
+    setC(ultimo);
+  };
 
   const salvar = useCallback(async (conteudo: Conteudo) => {
     setEstadoSalvo('salvando');
@@ -265,8 +317,13 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
   useEffect(() => {
     if (!podeFinanceiro) return;
     supabase.from('proposta_custo').select('*').eq('versao_id', versao.id).maybeSingle().then(({ data }) => {
-      const d = data as { custos: { linhas?: Custo[] }; notas_internas: string | null } | null;
+      const d = data as { custos: { linhas?: Custo[]; composicoes?: Uso[]; bdi_pct?: number; padrao?: Padrao; condicoes?: string[] }; notas_internas: string | null } | null;
       setCustos(d?.custos?.linhas ?? []);
+      setUsos(Array.isArray(d?.custos?.composicoes) ? d!.custos.composicoes! : []);
+      if (typeof d?.custos?.bdi_pct === 'number') setBdi(d.custos.bdi_pct);
+      if (d?.custos?.padrao && PADROES.includes(d.custos.padrao)) setPadrao(d.custos.padrao);
+      // Sem escolha salva, vem do que foi marcado no orçamento automático.
+      setCondicoes(Array.isArray(d?.custos?.condicoes) ? d!.custos.condicoes! : codigosDe(c.gerador?.respostas?.condicoes));
       setNotas(d?.notas_internas ?? '');
       setCustoCarregado(true);
     });
@@ -274,8 +331,8 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
 
   async function salvarCustos() {
     const linhasValidas = custos.filter((x) => x.descricao.trim() || x.valor);
-    const total = somar(linhasValidas.map((x) => paraCentavos(x.valor)));
-    const { error } = await supabase.from('proposta_custo').upsert({ versao_id: versao.id, custos: { linhas: linhasValidas }, custo_total: paraBanco(total), notas_internas: notas || null });
+    const total = somar(linhasValidas.map((x) => paraCentavos(x.valor))) + Math.round(custoComp * 100);
+    const { error } = await supabase.from('proposta_custo').upsert({ versao_id: versao.id, custos: { linhas: linhasValidas, composicoes: usos.filter((u) => u.quantidade > 0), bdi_pct: bdi, padrao, condicoes }, custo_total: paraBanco(total), notas_internas: notas || null });
     if (error) return setErro(mensagemErro(error));
     toast('Custos internos salvos (não aparecem para o cliente).');
   }
@@ -315,6 +372,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
           <div className="muted small">Total</div>
           <div className="num" style={{ fontSize: '1.3rem', fontWeight: 600 }}>{formatar(total)}</div>
           <div className="small muted">{{ salvo: 'Tudo salvo', pendente: 'Alterações a salvar…', salvando: 'Salvando…', erro: 'Erro ao salvar' }[estadoSalvo]}</div>
+          {nDesfazer > 0 && <button className="btn-link" onClick={desfazer}><Icone nome="voltar" /> Desfazer</button>}
           <button className="btn-secundario" onClick={() => setPreview(true)} style={{ marginTop: 8 }}>Ver como o cliente</button>
           {anterior && <button className="btn-link" onClick={() => setComparar(true)}>Comparar com v{anterior.numero}</button>}
         </div>
@@ -322,11 +380,12 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
       <div className="card">
         <Erro mensagem={erro} />
         {aba === 'auto' && (
-          <AbaAutomatica c={c} biblioteca={carga.biblioteca} podeFinanceiro={podeFinanceiro} aoAplicar={async (o) => {
+          <AbaAutomatica c={c} biblioteca={carga.biblioteca} podeFinanceiro={podeFinanceiro} propostaId={carga.proposta.id} aoAplicar={async (o) => {
             setC(o.conteudo);
             if (podeFinanceiro) {
               setCustos(o.custos);
-              const { error } = await supabase.from('proposta_custo').upsert({ versao_id: versao.id, custos: { linhas: o.custos }, custo_total: paraBanco(Math.round(o.analise.custo * 100)), notas_internas: notas || `Gerado pelo orçamento automático (pacote ${o.principal.nome}).` });
+              setCondicoes(codigosDe(o.conteudo.gerador?.respostas?.condicoes));
+              const { error } = await supabase.from('proposta_custo').upsert({ versao_id: versao.id, custos: { linhas: o.custos, composicoes: usos, bdi_pct: bdi, padrao, condicoes: codigosDe(o.conteudo.gerador?.respostas?.condicoes) }, custo_total: paraBanco(Math.round(o.analise.custo * 100)), notas_internas: notas || `Gerado pelo orçamento automático (pacote ${o.principal.nome}).` });
               if (error) setErro(mensagemErro(error));
             }
             toast('Proposta montada. Confira cada parte e veja como o cliente vai receber.');
@@ -342,7 +401,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
           </div>
         )}
         {aba === 'resp' && <AbaResponsabilidades c={c} setC={setC} />}
-        {aba === 'prazo' && <AbaPrazo c={c} setC={setC} />}
+        {aba === 'prazo' && <AbaPrazo c={c} setC={setC} propostaId={carga.proposta.id} />}
         {aba === 'pagamento' && <AbaPagamento c={c} setC={setC} />}
         {aba === 'condicoes' && (
           <div className="stack">
@@ -350,11 +409,15 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
             <label className="campo">Garantia<textarea value={c.garantia} onChange={(e) => set('garantia', e.target.value)} placeholder="Ex.: Garantia de 12 meses para os serviços executados, conforme o Código Civil e o CDC." /></label>
             <label className="campo">Observações<textarea value={c.observacoes} onChange={(e) => set('observacoes', e.target.value)} /></label>
             <label className="campo" style={{ maxWidth: 220 }}>Validade (dias)<input type="number" min={1} max={180} value={c.validade_dias} onChange={(e) => set('validade_dias', Math.max(1, Number(e.target.value) || 15))} /></label>
-            <p className="muted small">As condições gerais (mudança de escopo por aditivo, ajuste de prazo por pendências do cliente, conferência de qualidade por etapa) entram automaticamente.</p>
+            <ListaTexto rotulo="Condições gerais" valor={c.condicoes_gerais ?? CONDICOES_GERAIS_PADRAO} aoMudar={(v) => set('condicoes_gerais', v)} ajuda="Começa com a sugestão do sistema (aditivo para mudança de escopo, ajuste de prazo por pendências, qualidade por etapa). Edite, inclua ou apague linhas. A validade da proposta entra sempre, sozinha." />
+            {c.condicoes_gerais && <button className="btn-link small" style={{ alignSelf: 'flex-start' }} onClick={() => setC((x) => { const { condicoes_gerais: _c, ...resto } = x; return resto as Conteudo; })}>Voltar às condições sugeridas</button>}
+            <ListaTexto rotulo="Selos da capa" valor={c.selos ?? selosPadrao(c)} aoMudar={(v) => set('selos', v)} ajuda="As frases curtas que aparecem na capa, abaixo do título." />
           </div>
         )}
         {aba === 'custos' && podeFinanceiro && (
-          <AbaCustos custos={custos} setCustos={setCustos} notas={notas} setNotas={setNotas} total={total} carregado={custoCarregado} salvar={salvarCustos} />
+          <AbaCustos custos={custos} setCustos={setCustos} notas={notas} setNotas={setNotas} total={total} carregado={custoCarregado} salvar={salvarCustos} custoComposicao={custoComp}
+            composicao={<ComposicaoProposta c={c} usos={usos} setUsos={setUsos} bdi={bdi} setBdi={setBdi} padrao={padrao} setPadrao={setPadrao} condicoes={condicoes} setCondicoes={setCondicoes} aoCusto={setCustoComp}
+              aoUsarPreco={(ai, ii, v) => { setCValores((x) => mudarItemConteudo(x, ai, ii, (i) => definirTotalItem(i, Math.round(v * 100)))); toast('Preço do item atualizado. As parcelas acompanham o novo total.'); }} />} />
         )}
         {aba === 'revisao' && (
           <div className="stack">
@@ -372,11 +435,12 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
                 <button className={modoPagina === 'cliente' ? 'ativo' : ''} aria-pressed={modoPagina === 'cliente'} onClick={() => setModoPagina('cliente')}><Icone nome="olho" /> Como o cliente vê</button>
               </div>
               <span className="spacer" />
+              {nDesfazer > 0 && <button className="btn-secundario" onClick={desfazer} title="Volta a última mudança"><Icone nome="voltar" /> Desfazer</button>}
               <span className="muted small">{{ salvo: 'Tudo salvo', pendente: 'Salvando em instantes…', salvando: 'Salvando…', erro: 'Erro ao salvar' }[estadoSalvo]}</span>
               <button className="btn-primario" onClick={emitir} disabled={pend.length > 0}>Emitir versão {versao.numero}</button>
             </div>
             {modoPagina === 'editar' && (
-              <p className="dica-pagina"><Icone nome="ajuda" /> Clique em qualquer texto ou valor da folha para mudar. Enter confirma, Esc desfaz. Mudou um preço? As parcelas e o total acompanham. Para tirar uma página, use “Tirar esta página” em cima dela.</p>
+              <p className="dica-pagina"><Icone nome="ajuda" /> Tudo aqui é sugestão do sistema e pode mudar: clique em qualquer texto, valor, quantidade ou prazo para editar (Enter confirma, Esc desfaz). O <b>×</b> tira serviços, linhas, etapas, parcelas e pacotes; o <b>+</b> inclui. Mudou um preço ou tirou um serviço? O total e as parcelas acompanham. Tirou algo por engano? Use “Desfazer”. Para tirar uma página inteira, use “Tirar esta página”.</p>
             )}
             {modoPagina === 'editar' && <ForcaProposta c={c} />}
             {modoPagina === 'editar' && <CorProposta cor={c.cor} aoMudar={(cor) => setC((x) => ({ ...x, cor }))} />}
@@ -416,10 +480,11 @@ function Comparacao({ a, b, na, nb, aoFechar }: { a: Conteudo; b: Conteudo; na: 
 
 type SetC = React.Dispatch<React.SetStateAction<Conteudo>>;
 
-function AbaAutomatica({ c, biblioteca, podeFinanceiro, aoAplicar }: { c: Conteudo; biblioteca: ModeloServico[]; podeFinanceiro: boolean; aoAplicar: (o: Orcamento) => void }) {
+function AbaAutomatica({ c, biblioteca, podeFinanceiro, aoAplicar, propostaId }: { c: Conteudo; biblioteca: ModeloServico[]; podeFinanceiro: boolean; aoAplicar: (o: Orcamento) => void; propostaId?: string }) {
   const precos = useConsulta(() => carregarPrecos(), []);
+  const condicoes = useConsulta(() => carregarCondicoes().catch(() => []), []);
   const [estado, setEstado] = useState<EstadoGerador>(() => estadoInicial(c.gerador));
-  const contexto = useMemo(() => ({ necessidade: c.necessidade, local: c.local, biblioteca, base: c }), [c, biblioteca]);
+  const contexto = useMemo(() => ({ necessidade: c.necessidade, local: c.local, biblioteca, base: c, condicoes: condicoes.dados ?? [] }), [c, biblioteca, condicoes.dados]);
   if (precos.carregando && !precos.dados) return <Carregando />;
   if (precos.erro || !precos.dados) return <Erro mensagem={precos.erro ?? 'Erro ao carregar a tabela de preços.'} />;
   return (
@@ -428,7 +493,7 @@ function AbaAutomatica({ c, biblioteca, podeFinanceiro, aoAplicar }: { c: Conteu
         Escolha o tipo de serviço e responda às perguntas. O sistema monta escopo, pacotes, prazos, pagamento e todos os textos da apresentação com a sua tabela de preços.
         Depois você ajusta o que quiser nas outras abas.
       </p>
-      <OrcamentoGerador estado={estado} setEstado={setEstado} precos={precos.dados} contexto={contexto} podeFinanceiro={podeFinanceiro}
+      <OrcamentoGerador estado={estado} setEstado={setEstado} precos={precos.dados} contexto={contexto} podeFinanceiro={podeFinanceiro} propostaId={propostaId}
         acao={(o) => (
           <button className="btn-primario btn-grande" disabled={o.principal.valor <= 0}
             onClick={() => (c.ambientes.length === 0 || window.confirm('Substituir o escopo, os valores e os textos atuais por este orçamento? A versão em rascunho é sobrescrita.')) && aoAplicar(o)}>
@@ -501,14 +566,14 @@ function AbaEscopo({ c, setC, biblioteca }: { c: Conteudo; setC: SetC; bibliotec
     <div className="stack">
       {c.ambientes.length > 0 && <TotalProposta c={c} setC={setC} />}
       <p className="muted small" style={{ margin: 0 }}>Organize por ambiente (sala, cozinha…) ou use um único bloco “Escopo geral”. Ao escolher um serviço da biblioteca, os textos padrão dele entram nas outras partes.</p>
-      {c.ambientes.map((a) => (
+      {c.ambientes.map((a, ai) => (
         <div key={a.id} className="bloco-ambiente">
           <div className="row" style={{ flexWrap: 'nowrap' }}>
             <input className="titulo-amb" value={a.nome} onChange={(e) => mudarAmb(a.id, (x) => ({ ...x, nome: e.target.value }))} aria-label="Nome do ambiente" />
             <span className="num muted">{formatar(totalAmbiente(a))}</span>
             <button className="btn-link" aria-label="Remover ambiente" onClick={() => window.confirm(`Remover "${a.nome}" e seus itens?`) && setC((x) => ({ ...x, ambientes: x.ambientes.filter((y) => y.id !== a.id) }))}><Icone nome="fechar" /></button>
           </div>
-          {a.itens.map((i) => {
+          {a.itens.map((i, ii) => {
             const m = i.modelo_id ? porId.get(i.modelo_id) : undefined;
             return (
               <div key={i.id} className="item-escopo">
@@ -530,7 +595,11 @@ function AbaEscopo({ c, setC, biblioteca }: { c: Conteudo; setC: SetC; bibliotec
                     </label>
                   )}
                   <div className="campo"><span>Total</span><b className="num" style={{ padding: '9px 0' }}>{formatar(paraCentavos(totalItem(i)))}</b></div>
-                  <button className="btn-link" aria-label="Remover item" onClick={() => mudarAmb(a.id, (x) => ({ ...x, itens: x.itens.filter((y) => y.id !== i.id) }))}><Icone nome="fechar" /></button>
+                  <div className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>
+                    <button className="btn-link" aria-label="Subir serviço" title="Subir" disabled={ii === 0} onClick={() => setC((x) => moverItem(x, ai, ii, -1))}>↑</button>
+                    <button className="btn-link" aria-label="Descer serviço" title="Descer" disabled={ii === a.itens.length - 1} onClick={() => setC((x) => moverItem(x, ai, ii, 1))}>↓</button>
+                    <button className="btn-link" aria-label="Remover item" title="Tirar este serviço" onClick={() => mudarAmb(a.id, (x) => ({ ...x, itens: x.itens.filter((y) => y.id !== i.id) }))}><Icone nome="fechar" /></button>
+                  </div>
                 </div>
                 {m && m.pontos_conferir.length > 0 && <div className="muted small">Conferir: {m.pontos_conferir.join(' · ')}</div>}
                 {m && !(Number(m.preco_base) > 0) && !(paraCentavos(i.preco_unitario) > 0) && <div className="small" style={{ color: 'var(--alerta)' }}>Este serviço ainda não tem preço base na biblioteca. Informe o preço aqui ou cadastre na biblioteca.</div>}
@@ -606,26 +675,45 @@ function AbaResponsabilidades({ c, setC }: { c: Conteudo; setC: SetC }) {
   );
 }
 
-function AbaPrazo({ c, setC }: { c: Conteudo; setC: SetC }) {
+function AbaPrazo({ c, setC, propostaId }: { c: Conteudo; setC: SetC; propostaId: string }) {
   const somaDias = c.etapas.reduce((s, e) => s + (Number(e.prazo_dias) || 0), 0);
-  const mudar = (k: number, m: Partial<Conteudo['etapas'][number]>) => setC((x) => ({ ...x, etapas: x.etapas.map((e, j) => (j === k ? { ...e, ...m } : e)) }));
+  const fila = useFila(propostaId);
+  const datas = datasDasEtapas(c);
+  const entrega = dataEntrega(c);
   return (
     <div className="stack">
+      <p className="muted small" style={{ margin: 0 }}>As etapas e os dias vêm sugeridos pelo orçamento automático. Mude o que quiser: nome, dias, ordem, inclua ou tire etapas. Com a data de início, o sistema calcula a data de cada etapa e da entrega (e você pode mudar o término de qualquer etapa).</p>
+      <div className="grid grid-3">
+        <label className="campo">Início previsto <Ajuda>Opcional. Aparece na capa e no cronograma, com a data de cada etapa e da entrega.</Ajuda>
+          <input type="date" value={c.data_inicio ?? ''} onChange={(e) => setC((x) => ({ ...x, data_inicio: e.target.value || null }))} />
+        </label>
+        <label className="campo">Prazo total (dias corridos) <Ajuda>Acompanha a soma das etapas quando todas têm dias. Pode ser menor que a soma se etapas andam juntas.</Ajuda>
+          <input type="number" min={1} value={c.prazo_total_dias ?? ''} onChange={(e) => setC((x) => ({ ...x, prazo_total_dias: e.target.value ? Math.max(1, Number(e.target.value)) : null }))} placeholder={somaDias ? String(somaDias) : ''} />
+        </label>
+        <div className="campo"><span>Entrega prevista</span><b style={{ padding: '9px 0' }}>{entrega ? formatarData(entrega) : <span className="muted">informe o início</span>}</b></div>
+      </div>
+      <EncaixeAgenda fila={fila} dias={Number(c.prazo_total_dias) || somaDias} inicio={c.data_inicio} aoUsar={(d) => setC((x) => ({ ...x, data_inicio: d }))} />
       {c.etapas.map((e, k) => (
         <div key={k} className="linha-valores" style={{ alignItems: 'end' }}>
-          <label className="campo" style={{ flex: 2 }}>Etapa {k + 1}<input value={e.nome} onChange={(ev) => mudar(k, { nome: ev.target.value })} /></label>
-          <label className="campo" style={{ flex: 3 }}>Descrição<input value={e.descricao ?? ''} onChange={(ev) => mudar(k, { descricao: ev.target.value })} /></label>
-          <label className="campo" style={{ maxWidth: 90 }}>Dias<input type="number" min={0} value={e.prazo_dias ?? ''} onChange={(ev) => mudar(k, { prazo_dias: ev.target.value ? Number(ev.target.value) : null })} /></label>
-          <label className="campo" style={{ maxWidth: 90 }}>% valor<input type="number" min={0} max={100} value={e.percentual ?? ''} onChange={(ev) => mudar(k, { percentual: ev.target.value ? Number(ev.target.value) : null })} /></label>
-          <button className="btn-link" aria-label="Remover etapa" onClick={() => setC((x) => ({ ...x, etapas: x.etapas.filter((_, j) => j !== k) }))}><Icone nome="fechar" /></button>
+          <label className="campo" style={{ flex: 2 }}>Etapa {k + 1}<input value={e.nome} onChange={(ev) => setC((x) => mudarEtapa(x, k, { nome: ev.target.value }))} /></label>
+          <label className="campo" style={{ flex: 3 }}>Descrição<input value={e.descricao ?? ''} onChange={(ev) => setC((x) => mudarEtapa(x, k, { descricao: ev.target.value }))} /></label>
+          <label className="campo" style={{ maxWidth: 90 }}>Dias<input type="number" min={0} value={e.prazo_dias ?? ''} onChange={(ev) => setC((x) => mudarEtapa(x, k, { prazo_dias: ev.target.value ? Number(ev.target.value) : null }))} /></label>
+          {datas && <div className="campo" style={{ maxWidth: 110 }}><span>Início</span><span className="num" style={{ padding: '9px 0' }}>{formatarData(datas[k].inicio)}</span></div>}
+          {datas && <label className="campo" style={{ maxWidth: 160 }}>Término<input type="date" min={datas[k].inicio} value={datas[k].fim} onChange={(ev) => ev.target.value && setC((x) => definirFimEtapa(x, k, ev.target.value))} /></label>}
+          <label className="campo" style={{ maxWidth: 90 }}>% valor<input type="number" min={0} max={100} value={e.percentual ?? ''} onChange={(ev) => setC((x) => mudarEtapa(x, k, { percentual: ev.target.value ? Number(ev.target.value) : null }))} /></label>
+          <div className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>
+            <button className="btn-link" aria-label="Subir etapa" title="Subir" disabled={k === 0} onClick={() => setC((x) => moverEtapa(x, k, -1))}>↑</button>
+            <button className="btn-link" aria-label="Descer etapa" title="Descer" disabled={k === c.etapas.length - 1} onClick={() => setC((x) => moverEtapa(x, k, 1))}>↓</button>
+            <button className="btn-link" aria-label="Remover etapa" title="Tirar esta etapa" onClick={() => setC((x) => tirarEtapa(x, k))}><Icone nome="fechar" /></button>
+          </div>
         </div>
       ))}
       <div className="row">
-        <button className="btn-secundario" onClick={() => setC((x) => ({ ...x, etapas: [...x.etapas, { nome: '', descricao: '', prazo_dias: null, percentual: null }] }))}><Icone nome="mais" /> Etapa</button>
+        <button className="btn-secundario" onClick={() => setC((x) => incluirEtapa(x, ''))}><Icone nome="mais" /> Etapa</button>
         {somaDias > 0 && <span className="muted small">Soma das etapas: {somaDias} dias</span>}
       </div>
       <label className="campo">
-        <span>Prazo total (como o cliente vai ler)</span>
+        <span>Prazo (como o cliente vai ler)</span>
         <input value={c.prazo_texto} onChange={(e) => setC({ ...c, prazo_texto: e.target.value })} placeholder={somaDias ? `${somaDias} dias corridos após a aprovação` : 'Ex.: 30 dias corridos após a aprovação'} />
       </label>
     </div>
@@ -670,14 +758,17 @@ function AbaPagamento({ c, setC }: { c: Conteudo; setC: SetC }) {
   );
 }
 
-function AbaCustos({ custos, setCustos, notas, setNotas, total, carregado, salvar }: { custos: Custo[]; setCustos: (c: Custo[]) => void; notas: string; setNotas: (s: string) => void; total: Centavos; carregado: boolean; salvar: () => void }) {
+function AbaCustos({ custos, setCustos, notas, setNotas, total, carregado, salvar, composicao, custoComposicao }: { custos: Custo[]; setCustos: (c: Custo[]) => void; notas: string; setNotas: (s: string) => void; total: Centavos; carregado: boolean; salvar: () => void; composicao: React.ReactNode; custoComposicao: number }) {
   if (!carregado) return <Carregando />;
-  const custoTotal = somar(custos.map((x) => paraCentavos(x.valor)));
+  const custoTotal = somar(custos.map((x) => paraCentavos(x.valor))) + Math.round(custoComposicao * 100);
   const margem = total - custoTotal;
   const pct = total > 0 ? Math.round((margem / total) * 1000) / 10 : 0;
   return (
     <div className="stack">
       <div className="aviso info"><span>Só você vê esta parte. Custos e margem nunca vão para a proposta, o link ou o PDF.</span></div>
+      {composicao}
+      <h2>Outros custos</h2>
+      <p className="muted small" style={{ margin: 0 }}>Custos que não estão nas composições: deslocamento, empreiteiro por preço fechado, impostos, taxas.</p>
       {custos.map((x, k) => (
         <div key={k} className="linha-valores" style={{ alignItems: 'end' }}>
           <label className="campo" style={{ flex: 3 }}>Custo<input value={x.descricao} onChange={(e) => setCustos(custos.map((y, j) => (j === k ? { ...y, descricao: e.target.value } : y)))} placeholder="Mão de obra parceira, material, deslocamento, impostos…" /></label>
@@ -703,10 +794,17 @@ function AbaCustos({ custos, setCustos, notas, setNotas, total, carregado, salva
 function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }: { carga: Carga; versao: PropostaVersao; anterior?: PropostaVersao; ehUltima: boolean; aoMudar: () => void; aoEditar: () => void }) {
   const toast = useToast();
   const p = carga.proposta;
+  const { podeFinanceiro } = useAuth();
+  const [params, setParams] = useSearchParams();
   const [link, setLink] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [comparar, setComparar] = useState(false);
-  const [email, setEmail] = useState(false);
+  // Aditivo recém-criado chega com ?enviar=email: a janela do e-mail já abre.
+  const [email, setEmail] = useState(() => params.get('enviar') === 'email' && ehUltima && p.estado !== 'aprovada');
+  const ehAditivo = p.tipo === 'aditivo';
+  useEffect(() => {
+    if (params.get('enviar')) { const n = new URLSearchParams(params); n.delete('enviar'); setParams(n, { replace: true }); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [emails, setEmails] = useState(0);
   const [gerando, setGerando] = useState<string | null>(null);
   const [pdf, setPdf] = useState<{ blob: Blob; nome: string } | null>(null);
@@ -815,15 +913,18 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
           )}
           {p.estado === 'aprovada' && p.versao_aprovada_id === versao.id && (
             <div className="aviso info" style={{ marginTop: 10 }}>
-              <span>Já aprovada pelo cliente, então não muda mais. Para inserir ou mudar algo agora, crie um <b>aditivo</b> na obra (aba Contrato): ele tem preço próprio e o cliente aprova pelo link. Para reaproveitar este orçamento em outro cliente, use Duplicar.</span>
+              <span>{p.tipo === 'aditivo'
+                ? 'Aditivo aceito pelo cliente, então não muda mais. Para acrescentar outra coisa, lance um novo aditivo no orçamento original.'
+                : <>Já aprovada pelo cliente, então não muda mais. Serviço a mais entra como <b>aditivo</b> aqui embaixo, com itens e valor próprios. Para reaproveitar este orçamento em outro cliente, use Duplicar.</>}</span>
             </div>
           )}
           <Erro mensagem={erro} />
           {ehUltima && p.estado !== 'aprovada' && (
             <div className="stack" style={{ marginTop: 12 }}>
               <div className="row">
-                <button className="btn-primario" disabled={!!gerando} onClick={async () => { const a = await gerarPdf(); if (a) setPdfAberto(true); }}><Icone nome="mensagem" /> Enviar PDF pelo WhatsApp</button>
-                <button className="btn-secundario" disabled={!!gerando} onClick={() => setEmail(true)}><Icone nome="documento" /> Enviar por e-mail</button>
+                {ehAditivo && <button className="btn-primario" disabled={!!gerando} onClick={() => setEmail(true)}><Icone nome="documento" /> Enviar aditivo por e-mail</button>}
+                <button className={ehAditivo ? 'btn-secundario' : 'btn-primario'} disabled={!!gerando} onClick={async () => { const a = await gerarPdf(); if (a) setPdfAberto(true); }}><Icone nome="mensagem" /> Enviar PDF pelo WhatsApp</button>
+                {!ehAditivo && <button className="btn-secundario" disabled={!!gerando} onClick={() => setEmail(true)}><Icone nome="documento" /> Enviar por e-mail</button>}
               </div>
               {gerando && <div className="aviso info"><span className="girando" aria-hidden="true">◌</span><span>{gerando}</span></div>}
               {link && verLink && (
@@ -842,6 +943,8 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
             {ehUltima && <button className="btn-link" onClick={revogar}>Desativar links</button>}
           </div>
         </div>
+        {p.tipo === 'proposta' && p.estado === 'aprovada' && p.versao_aprovada_id === versao.id && podeFinanceiro && <QuadroRecebido propostaId={p.id} aoMudar={aoMudar} compacto />}
+        {p.tipo === 'proposta' && p.estado === 'aprovada' && p.versao_aprovada_id === versao.id && <AditivosDoOrcamento proposta={p} />}
         <HistoricoEmails key={emails} versaoId={versao.id} versao={versao.numero} />
         {respostas.length > 0 && (
           <div className="card">
@@ -874,7 +977,7 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
       <div className="card"><PropostaDocumento d={doc} /></div>
       {comparar && anterior && <Comparacao a={normalizar(anterior.conteudo as Partial<Conteudo>)} b={c} na={anterior.numero} nb={versao.numero} aoFechar={() => setComparar(false)} />}
       {email && (
-        <EnviarEmail versaoId={versao.id} codigo={p.codigo} versao={versao.numero} titulo={p.titulo} cliente={p.pessoa?.nome ?? ''} emailCliente={p.pessoa?.email ?? null}
+        <EnviarEmail aditivo={ehAditivo} versaoId={versao.id} codigo={p.codigo} versao={versao.numero} titulo={p.titulo} cliente={p.pessoa?.nome ?? ''} emailCliente={p.pessoa?.email ?? null}
           aoFechar={() => setEmail(false)} aoEnviar={() => { setEmails((n) => n + 1); aoMudar(); }} abrirNoAplicativo={() => enviar('email')}
           anexo={async () => { const a = await gerarPdf(); return a ? { nome: a.nome, base64: await paraBase64(a.blob) } : null; }} />
       )}
@@ -908,12 +1011,32 @@ function Converter({ proposta, versaoId }: { proposta: Proposta; versaoId: strin
     setErro(null);
     setRodando(true);
     const r = await supabase.rpc('converter_proposta', { p_versao: versaoId });
+    if (r.error) { setRodando(false); return setErro(mensagemErro(r.error)); }
+    // Aditivos já aceitos deste orçamento entram junto na obra nova.
+    let nAd = 0;
+    if (proposta.tipo === 'proposta') {
+      const ads = await supabase.from('proposta').select('versao_aprovada_id').eq('proposta_origem_id', proposta.id).eq('estado', 'aprovada');
+      for (const a of (ads.data ?? []) as { versao_aprovada_id: string | null }[]) {
+        if (!a.versao_aprovada_id) continue;
+        const x = await supabase.rpc('converter_proposta', { p_versao: a.versao_aprovada_id });
+        if (x.error) { setRodando(false); return setErro(`Obra criada, mas um aditivo não entrou: ${mensagemErro(x.error)}`); }
+        nAd += 1;
+      }
+    }
     setRodando(false);
-    if (r.error) return setErro(mensagemErro(r.error));
-    toast(proposta.tipo === 'aditivo' ? 'Aditivo incorporado à obra.' : 'Obra criada: ambientes, serviços, etapas, materiais sugeridos e previsão de recebimento. Revise cada parte.');
+    // Materiais das composições de custo viram a lista de compras da obra (para conferir).
+    let lista = 0;
+    if (proposta.tipo !== 'aditivo') {
+      const l = await supabase.rpc('gerar_lista_compras', { p_obra: r.data as string });
+      if (!l.error) lista = Number(l.data) || 0;
+    }
+    toast(proposta.tipo === 'aditivo' ? 'Aditivo incorporado à obra.' : `Obra criada: ambientes, serviços, etapas, materiais sugeridos e previsão de recebimento${nAd ? `, com ${nAd} aditivo(s) aceito(s)` : ''}.${lista ? ` Lista de compras com ${lista} materiais em Materiais, para conferir.` : ''} Revise cada parte.`);
     navegar(`/obras/${r.data as string}${proposta.tipo === 'aditivo' ? '?aba=contrato' : ''}`);
   }
   if (existente.carregando && !existente.dados) return null;
+  if (proposta.tipo === 'aditivo' && !proposta.obra_id) {
+    return <p className="muted small" style={{ marginTop: 10, marginBottom: 0 }}>Este aditivo entra na obra junto com o orçamento original: quando você tocar em “Converter em obra” no orçamento, os aditivos aceitos vão juntos.</p>;
+  }
   return (
     <div className="stack" style={{ marginTop: 10 }}>
       {feito ? (
@@ -927,6 +1050,73 @@ function Converter({ proposta, versaoId }: { proposta: Proposta; versaoId: strin
         </>
       )}
       <Erro mensagem={erro} />
+    </div>
+  );
+}
+
+type ResumoOrcamento = {
+  valor_original: number | string | null; aditivos_aprovados: number | string; aditivos_em_aberto: number | string; total_consolidado: number | string;
+  obra_id: string | null;
+  aditivos: { id: string; codigo: string; titulo: string; estado: EstadoProposta; aprovada_em: string | null; valor: number | string; versao: number | null; incorporado: boolean }[];
+};
+
+/** Aditivos lançados direto no orçamento aceito: histórico, total consolidado e botão para lançar outro. */
+function AditivosDoOrcamento({ proposta }: { proposta: Proposta }) {
+  const toast = useToast();
+  const [novo, setNovo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const { dados, recarregar } = useConsulta(async () => ok(await supabase.rpc('resumo_orcamento', { p_proposta: proposta.id })) as ResumoOrcamento | null, [proposta.id]);
+
+  async function incorporar(id: string) {
+    const v = await supabase.from('proposta').select('versao_aprovada_id').eq('id', id).single();
+    const vid = (v.data as { versao_aprovada_id: string | null } | null)?.versao_aprovada_id;
+    if (!vid) return;
+    const r = await supabase.rpc('converter_proposta', { p_versao: vid });
+    if (r.error) return setErro(mensagemErro(r.error));
+    toast('Aditivo incorporado à obra: serviços, etapas e previsão de recebimento criados.');
+    recarregar();
+  }
+
+  const ads = dados?.aditivos ?? [];
+  const aprovados = doBanco(dados?.aditivos_aprovados ?? 0);
+  const abertos = doBanco(dados?.aditivos_em_aberto ?? 0);
+  return (
+    <div className="card">
+      <div className="topo" style={{ marginBottom: 10 }}>
+        <h2>Aditivos deste orçamento <Ajuda>Serviço acrescentado depois do aceite vira um aditivo ligado a este orçamento, com itens, valor, motivo e impacto no prazo próprios. O cliente recebe por e-mail e aceita pelo botão, o que formaliza o aditivo. Este orçamento e o contrato não mudam: o total consolidado soma o original com os aditivos aceitos.</Ajuda></h2>
+        <button className="btn-primario" onClick={() => setNovo(true)}><Icone nome="mais" /> Adicionar aditivo</button>
+      </div>
+      {dados && (
+        <div className="numeros-compactos" style={{ marginBottom: 12 }}>
+          <div className="kpi"><div className="rotulo">Orçamento original</div><div className="valor num">{formatar(doBanco(dados.valor_original ?? 0))}</div><div className="det">Versão aceita, sem mudança</div></div>
+          <div className="kpi"><div className="rotulo">Aditivos aceitos</div><div className="valor num">{formatar(aprovados)}</div><div className="det">{abertos ? `Em aberto: ${formatar(abertos)}` : `${ads.filter((a) => a.estado === 'aprovada').length} aceito(s)`}</div></div>
+          <div className="kpi"><div className="rotulo">Total consolidado</div><div className="valor num">{formatar(doBanco(dados.total_consolidado))}</div><div className="det">Original + aditivos aceitos</div></div>
+        </div>
+      )}
+      {ads.length === 0 ? <p className="muted small" style={{ margin: 0 }}>Nenhum aditivo ainda. Se o cliente pedir algo a mais, toque em “Adicionar aditivo”.</p> : (
+        <div className="tabela-wrap">
+          <table className="tabela">
+            <thead><tr><th>Aditivo</th><th>Situação</th><th className="right">Valor</th><th /></tr></thead>
+            <tbody>
+              {ads.map((a) => (
+                <tr key={a.id}>
+                  <td><Link to={`/propostas/${a.id}`}><b>{a.titulo}</b></Link><div className="muted small">{a.codigo}{a.versao ? ` · v${a.versao}` : ''}{a.aprovada_em ? ` · aceito em ${formatarData(a.aprovada_em)}` : ''}</div></td>
+                  <td><span className={`selo ${ESTADO_PROPOSTA[a.estado].classe}`}>{ESTADO_PROPOSTA[a.estado].rotulo}</span>{a.incorporado && <span className="selo ok" style={{ marginLeft: 6 }}>Na obra</span>}</td>
+                  <td className="right num">{formatar(doBanco(a.valor))}</td>
+                  <td className="right">
+                    {a.estado === 'aprovada' && !a.incorporado && dados?.obra_id
+                      ? <button className="btn-secundario" onClick={() => incorporar(a.id)}>Incorporar à obra</button>
+                      : <Link className="btn-link" to={`/propostas/${a.id}`}>Abrir</Link>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {dados && !dados.obra_id && ads.some((a) => a.estado === 'aprovada') && <p className="muted small" style={{ marginBottom: 0 }}>Os aditivos aceitos entram na obra junto com o orçamento quando você tocar em “Converter em obra”.</p>}
+      <Erro mensagem={erro} />
+      {novo && <NovoAditivo origemId={proposta.id} codigoOrigem={proposta.codigo} aoFechar={() => setNovo(false)} />}
     </div>
   );
 }

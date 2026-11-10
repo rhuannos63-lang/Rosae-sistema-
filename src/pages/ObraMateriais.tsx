@@ -20,6 +20,7 @@ export function Materiais({ obraId, servicos, ambientes, ehAdm, podeFinanceiro }
   const [filtro, setFiltro] = useState<'pendentes' | 'todos' | 'obra' | 'cliente'>('pendentes');
   const [editar, setEditar] = useState<Material | 'novo' | null>(null);
   const [abrir, setAbrir] = useState<Material | null>(null);
+  const toast = useToast();
   const { dados, erro, carregando, recarregar } = useConsulta(async () => {
     const [m, a, e, p] = await Promise.all([
       supabase.from('v_material').select('*').eq('obra_id', obraId).order('necessario_em', { nullsFirst: false }).order('descricao'),
@@ -31,6 +32,13 @@ export function Materiais({ obraId, servicos, ambientes, ehAdm, podeFinanceiro }
     return { materiais: ok(m) as Material[], alertas: ok(a) as { etapa_nome: string; inicio: string | null; material: string; situacao: string; material_id: string }[], etapas: ok(e) as Etapa[], pag };
   }, [obraId, podeFinanceiro]);
 
+  async function gerarLista() {
+    const r = await supabase.rpc('gerar_lista_compras', { p_obra: obraId });
+    if (r.error) return toast(mensagemErro(r.error));
+    const n = Number(r.data) || 0;
+    toast(n ? `${n} materiais incluídos, na embalagem de compra. Confira as quantidades antes de comprar.` : 'A proposta desta obra não tem composições de custo. Ligue os itens às composições em Custos internos da proposta.');
+    recarregar();
+  }
   if (carregando && !dados) return <Carregando />;
   const lista = (dados?.materiais ?? []).filter((m) =>
     filtro === 'todos' ? true : filtro === 'obra' ? m.situacao === 'na_obra' : filtro === 'cliente' ? m.responsavel_compra !== 'rosae' : !['na_obra', 'cancelado', 'substituido'].includes(m.situacao));
@@ -61,6 +69,7 @@ export function Materiais({ obraId, servicos, ambientes, ehAdm, podeFinanceiro }
                 <button key={k} className={filtro === k ? 'ativo' : ''} onClick={() => setFiltro(k)}>{r}</button>
               ))}
             </div>
+            {ehAdm && <button className="btn-secundario" onClick={gerarLista} title="Soma os materiais das composições de custo da proposta aprovada"><Icone nome="lista" /> Lista de compras da proposta</button>}
             {ehAdm && <button className="btn-primario" onClick={() => setEditar('novo')}><Icone nome="mais" /> Material</button>}
           </div>
         </div>
