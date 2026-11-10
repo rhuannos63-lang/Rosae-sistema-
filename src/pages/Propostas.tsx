@@ -15,7 +15,7 @@ import {
   acompanharTotal, ajustarTotal, aplicarModelos, compararVersoes, parcelasAoTotal, itemDoModelo, normalizar, novoId, paraCentavos, pendencias, prepararParaSalvar, rascunhoDoTexto,
   somaParcelas, sugerirPagamento, totalAmbiente, totalConteudo, totalItem, UNIDADES,
   type Ambiente, type Conteudo, type Item, type ModeloServico,
-  forcaDaProposta,
+  forcaDaProposta, CONDICOES_GERAIS_PADRAO, dataEntrega, datasDasEtapas, definirFimEtapa, incluirEtapa, moverEtapa, moverItem, mudarEtapa, selosPadrao, tirarEtapa,
 } from '../core/proposta';
 import { ESTADO_PROPOSTA, EVENTO_PROPOSTA, type EstadoProposta, type Proposta, type PropostaEvento, type PropostaVersao } from '../lib/tipos';
 import { linkWhatsApp } from './Comercial';
@@ -274,6 +274,28 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
   const [preview, setPreview] = useState(false);
   const [comparar, setComparar] = useState(false);
   const primeira = useRef(true);
+  // Desfazer: guarda as últimas versões do conteúdo (tirar algo por engano volta com um clique).
+  const historico = useRef<Conteudo[]>([]);
+  const [nDesfazer, setNDesfazer] = useState(0);
+  const anteriorC = useRef<Conteudo>(c);
+  const desfazendo = useRef(false);
+  useEffect(() => {
+    if (anteriorC.current !== c) {
+      if (!desfazendo.current) {
+        historico.current = [...historico.current.slice(-39), anteriorC.current];
+        setNDesfazer(historico.current.length);
+      }
+      desfazendo.current = false;
+      anteriorC.current = c;
+    }
+  }, [c]);
+  const desfazer = () => {
+    const ultimo = historico.current.pop();
+    setNDesfazer(historico.current.length);
+    if (!ultimo) return;
+    desfazendo.current = true;
+    setC(ultimo);
+  };
 
   const salvar = useCallback(async (conteudo: Conteudo) => {
     setEstadoSalvo('salvando');
@@ -349,6 +371,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
           <div className="muted small">Total</div>
           <div className="num" style={{ fontSize: '1.3rem', fontWeight: 600 }}>{formatar(total)}</div>
           <div className="small muted">{{ salvo: 'Tudo salvo', pendente: 'Alterações a salvar…', salvando: 'Salvando…', erro: 'Erro ao salvar' }[estadoSalvo]}</div>
+          {nDesfazer > 0 && <button className="btn-link" onClick={desfazer}><Icone nome="voltar" /> Desfazer</button>}
           <button className="btn-secundario" onClick={() => setPreview(true)} style={{ marginTop: 8 }}>Ver como o cliente</button>
           {anterior && <button className="btn-link" onClick={() => setComparar(true)}>Comparar com v{anterior.numero}</button>}
         </div>
@@ -385,7 +408,9 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
             <label className="campo">Garantia<textarea value={c.garantia} onChange={(e) => set('garantia', e.target.value)} placeholder="Ex.: Garantia de 12 meses para os serviços executados, conforme o Código Civil e o CDC." /></label>
             <label className="campo">Observações<textarea value={c.observacoes} onChange={(e) => set('observacoes', e.target.value)} /></label>
             <label className="campo" style={{ maxWidth: 220 }}>Validade (dias)<input type="number" min={1} max={180} value={c.validade_dias} onChange={(e) => set('validade_dias', Math.max(1, Number(e.target.value) || 15))} /></label>
-            <p className="muted small">As condições gerais (mudança de escopo por aditivo, ajuste de prazo por pendências do cliente, conferência de qualidade por etapa) entram automaticamente.</p>
+            <ListaTexto rotulo="Condições gerais" valor={c.condicoes_gerais ?? CONDICOES_GERAIS_PADRAO} aoMudar={(v) => set('condicoes_gerais', v)} ajuda="Começa com a sugestão do sistema (aditivo para mudança de escopo, ajuste de prazo por pendências, qualidade por etapa). Edite, inclua ou apague linhas. A validade da proposta entra sempre, sozinha." />
+            {c.condicoes_gerais && <button className="btn-link small" style={{ alignSelf: 'flex-start' }} onClick={() => setC((x) => { const { condicoes_gerais: _c, ...resto } = x; return resto as Conteudo; })}>Voltar às condições sugeridas</button>}
+            <ListaTexto rotulo="Selos da capa" valor={c.selos ?? selosPadrao(c)} aoMudar={(v) => set('selos', v)} ajuda="As frases curtas que aparecem na capa, abaixo do título." />
           </div>
         )}
         {aba === 'custos' && podeFinanceiro && (
@@ -409,11 +434,12 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
                 <button className={modoPagina === 'cliente' ? 'ativo' : ''} aria-pressed={modoPagina === 'cliente'} onClick={() => setModoPagina('cliente')}><Icone nome="olho" /> Como o cliente vê</button>
               </div>
               <span className="spacer" />
+              {nDesfazer > 0 && <button className="btn-secundario" onClick={desfazer} title="Volta a última mudança"><Icone nome="voltar" /> Desfazer</button>}
               <span className="muted small">{{ salvo: 'Tudo salvo', pendente: 'Salvando em instantes…', salvando: 'Salvando…', erro: 'Erro ao salvar' }[estadoSalvo]}</span>
               <button className="btn-primario" onClick={emitir} disabled={pend.length > 0}>Emitir versão {versao.numero}</button>
             </div>
             {modoPagina === 'editar' && (
-              <p className="dica-pagina"><Icone nome="ajuda" /> Clique em qualquer texto ou valor da folha para mudar. Enter confirma, Esc desfaz. Mudou um preço? As parcelas e o total acompanham. Para tirar uma página, use “Tirar esta página” em cima dela.</p>
+              <p className="dica-pagina"><Icone nome="ajuda" /> Tudo aqui é sugestão do sistema e pode mudar: clique em qualquer texto, valor, quantidade ou prazo para editar (Enter confirma, Esc desfaz). O <b>×</b> tira serviços, linhas, etapas, parcelas e pacotes; o <b>+</b> inclui. Mudou um preço ou tirou um serviço? O total e as parcelas acompanham. Tirou algo por engano? Use “Desfazer”. Para tirar uma página inteira, use “Tirar esta página”.</p>
             )}
             {modoPagina === 'editar' && <ForcaProposta c={c} />}
             {modoPagina === 'editar' && <CorProposta cor={c.cor} aoMudar={(cor) => setC((x) => ({ ...x, cor }))} />}
@@ -539,14 +565,14 @@ function AbaEscopo({ c, setC, biblioteca }: { c: Conteudo; setC: SetC; bibliotec
     <div className="stack">
       {c.ambientes.length > 0 && <TotalProposta c={c} setC={setC} />}
       <p className="muted small" style={{ margin: 0 }}>Organize por ambiente (sala, cozinha…) ou use um único bloco “Escopo geral”. Ao escolher um serviço da biblioteca, os textos padrão dele entram nas outras partes.</p>
-      {c.ambientes.map((a) => (
+      {c.ambientes.map((a, ai) => (
         <div key={a.id} className="bloco-ambiente">
           <div className="row" style={{ flexWrap: 'nowrap' }}>
             <input className="titulo-amb" value={a.nome} onChange={(e) => mudarAmb(a.id, (x) => ({ ...x, nome: e.target.value }))} aria-label="Nome do ambiente" />
             <span className="num muted">{formatar(totalAmbiente(a))}</span>
             <button className="btn-link" aria-label="Remover ambiente" onClick={() => window.confirm(`Remover "${a.nome}" e seus itens?`) && setC((x) => ({ ...x, ambientes: x.ambientes.filter((y) => y.id !== a.id) }))}><Icone nome="fechar" /></button>
           </div>
-          {a.itens.map((i) => {
+          {a.itens.map((i, ii) => {
             const m = i.modelo_id ? porId.get(i.modelo_id) : undefined;
             return (
               <div key={i.id} className="item-escopo">
@@ -568,7 +594,11 @@ function AbaEscopo({ c, setC, biblioteca }: { c: Conteudo; setC: SetC; bibliotec
                     </label>
                   )}
                   <div className="campo"><span>Total</span><b className="num" style={{ padding: '9px 0' }}>{formatar(paraCentavos(totalItem(i)))}</b></div>
-                  <button className="btn-link" aria-label="Remover item" onClick={() => mudarAmb(a.id, (x) => ({ ...x, itens: x.itens.filter((y) => y.id !== i.id) }))}><Icone nome="fechar" /></button>
+                  <div className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>
+                    <button className="btn-link" aria-label="Subir serviço" title="Subir" disabled={ii === 0} onClick={() => setC((x) => moverItem(x, ai, ii, -1))}>↑</button>
+                    <button className="btn-link" aria-label="Descer serviço" title="Descer" disabled={ii === a.itens.length - 1} onClick={() => setC((x) => moverItem(x, ai, ii, 1))}>↓</button>
+                    <button className="btn-link" aria-label="Remover item" title="Tirar este serviço" onClick={() => mudarAmb(a.id, (x) => ({ ...x, itens: x.itens.filter((y) => y.id !== i.id) }))}><Icone nome="fechar" /></button>
+                  </div>
                 </div>
                 {m && m.pontos_conferir.length > 0 && <div className="muted small">Conferir: {m.pontos_conferir.join(' · ')}</div>}
                 {m && !(Number(m.preco_base) > 0) && !(paraCentavos(i.preco_unitario) > 0) && <div className="small" style={{ color: 'var(--alerta)' }}>Este serviço ainda não tem preço base na biblioteca. Informe o preço aqui ou cadastre na biblioteca.</div>}
@@ -646,24 +676,41 @@ function AbaResponsabilidades({ c, setC }: { c: Conteudo; setC: SetC }) {
 
 function AbaPrazo({ c, setC }: { c: Conteudo; setC: SetC }) {
   const somaDias = c.etapas.reduce((s, e) => s + (Number(e.prazo_dias) || 0), 0);
-  const mudar = (k: number, m: Partial<Conteudo['etapas'][number]>) => setC((x) => ({ ...x, etapas: x.etapas.map((e, j) => (j === k ? { ...e, ...m } : e)) }));
+  const datas = datasDasEtapas(c);
+  const entrega = dataEntrega(c);
   return (
     <div className="stack">
+      <p className="muted small" style={{ margin: 0 }}>As etapas e os dias vêm sugeridos pelo orçamento automático. Mude o que quiser: nome, dias, ordem, inclua ou tire etapas. Com a data de início, o sistema calcula a data de cada etapa e da entrega (e você pode mudar o término de qualquer etapa).</p>
+      <div className="grid grid-3">
+        <label className="campo">Início previsto <Ajuda>Opcional. Aparece na capa e no cronograma, com a data de cada etapa e da entrega.</Ajuda>
+          <input type="date" value={c.data_inicio ?? ''} onChange={(e) => setC((x) => ({ ...x, data_inicio: e.target.value || null }))} />
+        </label>
+        <label className="campo">Prazo total (dias corridos) <Ajuda>Acompanha a soma das etapas quando todas têm dias. Pode ser menor que a soma se etapas andam juntas.</Ajuda>
+          <input type="number" min={1} value={c.prazo_total_dias ?? ''} onChange={(e) => setC((x) => ({ ...x, prazo_total_dias: e.target.value ? Math.max(1, Number(e.target.value)) : null }))} placeholder={somaDias ? String(somaDias) : ''} />
+        </label>
+        <div className="campo"><span>Entrega prevista</span><b style={{ padding: '9px 0' }}>{entrega ? formatarData(entrega) : <span className="muted">informe o início</span>}</b></div>
+      </div>
       {c.etapas.map((e, k) => (
         <div key={k} className="linha-valores" style={{ alignItems: 'end' }}>
-          <label className="campo" style={{ flex: 2 }}>Etapa {k + 1}<input value={e.nome} onChange={(ev) => mudar(k, { nome: ev.target.value })} /></label>
-          <label className="campo" style={{ flex: 3 }}>Descrição<input value={e.descricao ?? ''} onChange={(ev) => mudar(k, { descricao: ev.target.value })} /></label>
-          <label className="campo" style={{ maxWidth: 90 }}>Dias<input type="number" min={0} value={e.prazo_dias ?? ''} onChange={(ev) => mudar(k, { prazo_dias: ev.target.value ? Number(ev.target.value) : null })} /></label>
-          <label className="campo" style={{ maxWidth: 90 }}>% valor<input type="number" min={0} max={100} value={e.percentual ?? ''} onChange={(ev) => mudar(k, { percentual: ev.target.value ? Number(ev.target.value) : null })} /></label>
-          <button className="btn-link" aria-label="Remover etapa" onClick={() => setC((x) => ({ ...x, etapas: x.etapas.filter((_, j) => j !== k) }))}><Icone nome="fechar" /></button>
+          <label className="campo" style={{ flex: 2 }}>Etapa {k + 1}<input value={e.nome} onChange={(ev) => setC((x) => mudarEtapa(x, k, { nome: ev.target.value }))} /></label>
+          <label className="campo" style={{ flex: 3 }}>Descrição<input value={e.descricao ?? ''} onChange={(ev) => setC((x) => mudarEtapa(x, k, { descricao: ev.target.value }))} /></label>
+          <label className="campo" style={{ maxWidth: 90 }}>Dias<input type="number" min={0} value={e.prazo_dias ?? ''} onChange={(ev) => setC((x) => mudarEtapa(x, k, { prazo_dias: ev.target.value ? Number(ev.target.value) : null }))} /></label>
+          {datas && <div className="campo" style={{ maxWidth: 110 }}><span>Início</span><span className="num" style={{ padding: '9px 0' }}>{formatarData(datas[k].inicio)}</span></div>}
+          {datas && <label className="campo" style={{ maxWidth: 160 }}>Término<input type="date" min={datas[k].inicio} value={datas[k].fim} onChange={(ev) => ev.target.value && setC((x) => definirFimEtapa(x, k, ev.target.value))} /></label>}
+          <label className="campo" style={{ maxWidth: 90 }}>% valor<input type="number" min={0} max={100} value={e.percentual ?? ''} onChange={(ev) => setC((x) => mudarEtapa(x, k, { percentual: ev.target.value ? Number(ev.target.value) : null }))} /></label>
+          <div className="row" style={{ gap: 2, flexWrap: 'nowrap' }}>
+            <button className="btn-link" aria-label="Subir etapa" title="Subir" disabled={k === 0} onClick={() => setC((x) => moverEtapa(x, k, -1))}>↑</button>
+            <button className="btn-link" aria-label="Descer etapa" title="Descer" disabled={k === c.etapas.length - 1} onClick={() => setC((x) => moverEtapa(x, k, 1))}>↓</button>
+            <button className="btn-link" aria-label="Remover etapa" title="Tirar esta etapa" onClick={() => setC((x) => tirarEtapa(x, k))}><Icone nome="fechar" /></button>
+          </div>
         </div>
       ))}
       <div className="row">
-        <button className="btn-secundario" onClick={() => setC((x) => ({ ...x, etapas: [...x.etapas, { nome: '', descricao: '', prazo_dias: null, percentual: null }] }))}><Icone nome="mais" /> Etapa</button>
+        <button className="btn-secundario" onClick={() => setC((x) => incluirEtapa(x, ''))}><Icone nome="mais" /> Etapa</button>
         {somaDias > 0 && <span className="muted small">Soma das etapas: {somaDias} dias</span>}
       </div>
       <label className="campo">
-        <span>Prazo total (como o cliente vai ler)</span>
+        <span>Prazo (como o cliente vai ler)</span>
         <input value={c.prazo_texto} onChange={(e) => setC({ ...c, prazo_texto: e.target.value })} placeholder={somaDias ? `${somaDias} dias corridos após a aprovação` : 'Ex.: 30 dias corridos após a aprovação'} />
       </label>
     </div>

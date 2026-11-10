@@ -2166,3 +2166,33 @@ h1 { font-size: 2.6rem; line-height: 1.02; letter-spacing: -0.012em; }
 .condicoes-card summary::before { content: '▸ '; color: var(--verde); }
 .condicoes-card[open] summary::before { content: '▾ '; }
 .composicao .tabela-wrap .tabela { min-width: 660px; }
+
+/* Editar tudo na página: tirar (×), incluir (+) e datas */
+.ed-x { all: unset; box-sizing: border-box; cursor: pointer; display: inline-grid; place-items: center; width: 1.45em; height: 1.45em; margin-left: .45em; vertical-align: middle; border-radius: 50%; border: 1px solid rgba(180, 50, 40, .35); background: #fff; color: var(--desfavoravel); font-weight: 700; font-size: max(12px, .85em); line-height: 1; opacity: .75; transition: opacity .15s, background .15s; font-family: inherit; text-transform: none; letter-spacing: 0; }
+.ed-x:hover, .ed-x:focus-visible { opacity: 1; background: #fdecea; }
+.opcao-doc { position: relative; }
+.opcao-doc > .ed-x { position: absolute; top: 8px; right: 8px; margin: 0; }
+.ed-mais { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: .3em; margin-top: calc(.6 * var(--cq, 1cqw)); padding: .25em .8em; border: 1px dashed var(--verde); border-radius: 99px; color: var(--verde-escuro); font-weight: 600; font-size: max(12px, calc(1.1 * var(--cq, 1cqw))); background: #fff; font-family: inherit; text-transform: none; letter-spacing: 0; }
+.ed-mais:hover, .ed-mais:focus-visible { background: var(--verde-tinta, #eef2e6); }
+td .ed-mais { margin: 0 0 0 .6em; padding: .1em .6em; }
+.cronograma-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: calc(1.2 * var(--cq, 1cqw)); margin-top: calc(.6 * var(--cq, 1cqw)); }
+.ed-data { font: inherit; font-size: max(12px, calc(1.1 * var(--cq, 1cqw))); padding: .15em .4em; border: 1px solid var(--linha); border-radius: 6px; background: #fff; color: var(--grafite, #222); }
+.ed-data-rotulo { display: inline-flex; align-items: center; gap: .5em; font-size: max(12px, calc(1.1 * var(--cq, 1cqw))); color: var(--texto-2); }
+.etapa-datas { display: block; color: var(--texto-2); font-size: calc(1.05 * var(--cq, 1cqw)); font-variant-numeric: tabular-nums; }
+.ed-aviso { color: var(--desfavoravel); font-size: max(12px, calc(1.05 * var(--cq, 1cqw))); margin: calc(.5 * var(--cq, 1cqw)) 0 0; }
+.gantt-barra .ed { color: #fff; }
+.ficha-dados div .ed-x { flex: none; }
+/* A linha da lista também tem o × sempre visível no celular (sem passar o mouse). */
+@media (hover: none) { .ed-tirar { opacity: .8; } }
+.editando li > .ed-tirar { opacity: .45; }
+.editando li:hover > .ed-tirar { opacity: 1; }
+.editando .ed-tirar { position: static; display: inline-grid; margin-left: .4em; vertical-align: middle; border: 1px solid rgba(180, 50, 40, .3); background: #fff; }
+.lista-tiradas { margin: 4px 0 0; padding-left: 18px; } .lista-tiradas s { color: var(--texto-2); }
+/* Editor do contrato */
+.secao-contrato { border: 1px solid var(--linha); border-radius: 10px; padding: 10px 14px; background: var(--papel); }
+.secao-contrato > summary { cursor: pointer; }
+.clausula-ed { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--linha); }
+.clausula-ed:first-of-type { border-top: 0; }
+.tirada { display: inline-flex; gap: 4px; align-items: baseline; margin-right: 12px; text-decoration: line-through; color: var(--texto-2); }
+.tirada .btn-link { text-decoration: none; }
+.avisos-convite { margin-bottom: 14px; flex-wrap: wrap; align-items: center; }

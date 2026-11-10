@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { AvisosAparelho } from '../components/AvisosAparelho';
+import { conferirAceitesPendentes } from '../lib/avisos';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
@@ -128,6 +130,7 @@ export function Painel() {
   }, [p.inicio, p.fim, podeFinanceiro]);
 
   const primeiroNome = usuario?.nome.split(' ')[0] ?? '';
+  useEffect(() => { conferirAceitesPendentes(); }, []);
   const qs = `inicio=${p.inicio}&fim=${p.fim}`;
 
   return (
@@ -143,6 +146,7 @@ export function Painel() {
         <button className="btn-secundario" aria-label="Período anterior" onClick={() => setRef(deslocarPeriodo(tipo, ref, -1))}>‹</button>
         <button className="btn-secundario" aria-label="Próximo período" onClick={() => setRef(deslocarPeriodo(tipo, ref, 1))}>›</button>
       </Topo>
+      <AvisosAparelho compacto />
       <AtalhosDepartamentos />
       <Erro mensagem={erro} />
       {carregando && !dados && <Carregando />}

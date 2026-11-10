@@ -62,6 +62,11 @@ export type Conteudo = {
   opcoes?: OpcaoProposta[];
   condicao_especial?: string;
   prazo_total_dias?: number | null;
+  // Data prevista para começar (AAAA-MM-DD). Com ela, o cronograma mostra as datas de cada etapa e da entrega.
+  data_inicio?: string | null;
+  // Selos da capa e condições gerais: começam com a sugestão do sistema e podem ser editados, incluídos ou tirados.
+  selos?: string[];
+  condicoes_gerais?: string[];
   // valores: preço que você definiu para um pacote, no lugar do calculado pela tabela (reais, por número do pacote).
   // Páginas da apresentação que você tirou (ids de PAGINAS_OPCIONAIS). As obrigatórias não saem.
   paginas_ocultas?: string[];
@@ -72,6 +77,8 @@ export type Conteudo = {
   cor?: string;
   gerador?: {
     tipo: string; respostas: Record<string, string | number | boolean | null>; pacote: number; valores?: ValoresManuais; em: string;
+    /** Itens sugeridos que você tirou do orçamento automático (pelo nome). */
+    tiradas?: string[];
     /** Outros serviços da mesma proposta (o primeiro é tipo/respostas). */
     extras?: { tipo: string; respostas: Record<string, string | number | boolean | null> }[];
   };
@@ -551,4 +558,160 @@ export function forcaDaProposta(c: Conteudo): { nota: number; itens: ItemForca[]
   ];
   const ok = itens.filter((i) => i.ok).length;
   return { nota: Math.round((ok / itens.length) * 10), itens };
+}
+
+// ---------------------------------------------------------------------
+// Editar tudo: incluir e tirar serviços, etapas, parcelas, pacotes e textos
+// ---------------------------------------------------------------------
+/** Prazo escrito por extenso a partir dos dias corridos. */
+export function textoPrazo(dias: number): string {
+  if (dias <= 45) return `${dias} dias corridos`;
+  if (dias <= 120) return `${dias} dias corridos (cerca de ${Math.round(dias / 7)} semanas)`;
+  return `cerca de ${Math.round(dias / 30)} meses (${dias} dias corridos)`;
+}
+
+/** Tira um serviço (item) do escopo e dos valores. O ambiente que fica vazio sai junto. Parcelas acompanham. */
+export function tirarItem(c: Conteudo, ai: number, ii: number): Conteudo {
+  const ambientes = c.ambientes
+    .map((a, x) => (x !== ai ? a : { ...a, itens: a.itens.filter((_, y) => y !== ii) }))
+    .filter((a, x) => x !== ai || a.itens.length > 0);
+  return acompanharTotal(c, { ...c, ambientes });
+}
+
+/** Inclui um serviço novo (sem preço) no ambiente indicado, ou num "Escopo geral" se não houver nenhum. */
+export function incluirItem(c: Conteudo, ai = c.ambientes.length - 1, titulo = 'Novo serviço'): Conteudo {
+  const item: Item = { id: novoId(), titulo, descricao: '', unidade: 'vb', quantidade: 1, preco_unitario: 0, total: 0 };
+  if (c.ambientes.length === 0 || ai < 0) return { ...c, ambientes: [...c.ambientes, { id: novoId(), nome: 'Escopo geral', itens: [item] }] };
+  return { ...c, ambientes: c.ambientes.map((a, x) => (x === ai ? { ...a, itens: [...a.itens, item] } : a)) };
+}
+
+/** Inclui um grupo (ambiente) novo, já com um serviço para preencher. */
+export function incluirAmbiente(c: Conteudo, nome = 'Novo grupo de serviços'): Conteudo {
+  return incluirItem({ ...c, ambientes: [...c.ambientes, { id: novoId(), nome, itens: [] }] }, c.ambientes.length);
+}
+
+/** Tira um grupo (ambiente) inteiro, com os seus serviços. */
+export function tirarAmbiente(c: Conteudo, ai: number): Conteudo {
+  return acompanharTotal(c, { ...c, ambientes: c.ambientes.filter((_, x) => x !== ai) });
+}
+
+/** Move um serviço uma posição para cima (-1) ou para baixo (+1) dentro do grupo. */
+export function moverItem(c: Conteudo, ai: number, ii: number, passo: -1 | 1): Conteudo {
+  const a = c.ambientes[ai];
+  const j = ii + passo;
+  if (!a || j < 0 || j >= a.itens.length) return c;
+  const itens = [...a.itens];
+  [itens[ii], itens[j]] = [itens[j], itens[ii]];
+  return { ...c, ambientes: c.ambientes.map((x, k) => (k === ai ? { ...x, itens } : x)) };
+}
+
+/** Troca a quantidade de um serviço mantendo o preço unitário (o total e as parcelas acompanham). */
+export function mudarQuantidade(c: Conteudo, ai: number, ii: number, quantidade: number): Conteudo {
+  if (!(quantidade > 0)) return c;
+  return mudarItem(c, ai, ii, (i) => ({ ...i, quantidade }));
+}
+
+const RE_PRAZO = /^(cerca de \d+ meses \(\d+ dias corridos\)|\d+ dias corridos( \(cerca de \d+ semanas\))?)/;
+
+/**
+ * Depois de mudar as etapas: se todas têm dias, o prazo total passa a ser a soma e o texto
+ * do prazo escrito pelo sistema ("120 dias corridos, a contar...") acompanha. Texto seu fica como está.
+ */
+export function acompanharPrazo(c: Conteudo): Conteudo {
+  if (c.etapas.length === 0 || !c.etapas.every((e) => (Number(e.prazo_dias) || 0) > 0)) return c;
+  const dias = c.etapas.reduce((t, e) => t + (Number(e.prazo_dias) || 0), 0);
+  if (dias === c.prazo_total_dias) return c;
+  const prazo_texto = RE_PRAZO.test(c.prazo_texto) ? c.prazo_texto.replace(RE_PRAZO, textoPrazo(dias)) : c.prazo_texto;
+  return { ...c, prazo_total_dias: dias, prazo_texto };
+}
+
+export function mudarEtapa(c: Conteudo, k: number, m: Partial<Etapa>): Conteudo {
+  return acompanharPrazo({ ...c, etapas: c.etapas.map((e, j) => (j === k ? { ...e, ...m } : e)) });
+}
+export function tirarEtapa(c: Conteudo, k: number): Conteudo {
+  return acompanharPrazo({ ...c, etapas: c.etapas.filter((_, j) => j !== k) });
+}
+export function incluirEtapa(c: Conteudo, nome = 'Nova etapa'): Conteudo {
+  const dias = c.etapas.length && c.etapas.every((e) => (e.prazo_dias ?? 0) > 0) ? 7 : null;
+  return acompanharPrazo({ ...c, etapas: [...c.etapas, { nome, descricao: '', prazo_dias: dias, percentual: null }] });
+}
+export function moverEtapa(c: Conteudo, k: number, passo: -1 | 1): Conteudo {
+  const j = k + passo;
+  if (j < 0 || j >= c.etapas.length) return c;
+  const etapas = [...c.etapas];
+  [etapas[k], etapas[j]] = [etapas[j], etapas[k]];
+  return { ...c, etapas };
+}
+
+/** Soma dias a uma data AAAA-MM-DD (sem fuso: conta em dias de calendário). */
+export function somarDias(data: string, dias: number): string {
+  const [a, m, d] = data.split('-').map(Number);
+  const t = new Date(Date.UTC(a, m - 1, d + dias));
+  return t.toISOString().slice(0, 10);
+}
+export function diasEntre(de: string, ate: string): number {
+  const p = (s: string) => { const [a, m, d] = s.split('-').map(Number); return Date.UTC(a, m - 1, d); };
+  return Math.round((p(ate) - p(de)) / 86_400_000);
+}
+
+/** Datas de início e término de cada etapa (em sequência) a partir da data de início, quando houver. */
+export function datasDasEtapas(c: Pick<Conteudo, 'etapas' | 'data_inicio'>): { inicio: string; fim: string }[] | null {
+  if (!c.data_inicio || !/^\d{4}-\d{2}-\d{2}$/.test(c.data_inicio)) return null;
+  let cursor = c.data_inicio;
+  return c.etapas.map((e) => {
+    const dias = Math.max(1, Number(e.prazo_dias) || 1);
+    const r = { inicio: cursor, fim: somarDias(cursor, dias - 1) };
+    cursor = somarDias(cursor, dias);
+    return r;
+  });
+}
+
+/** Data prevista de entrega: início + prazo total (ou a soma das etapas). */
+export function dataEntrega(c: Pick<Conteudo, 'etapas' | 'data_inicio' | 'prazo_total_dias'>): string | null {
+  if (!c.data_inicio || !/^\d{4}-\d{2}-\d{2}$/.test(c.data_inicio)) return null;
+  const soma = c.etapas.reduce((t, e) => t + (Number(e.prazo_dias) || 0), 0);
+  const dias = Number(c.prazo_total_dias) || soma;
+  return dias > 0 ? somarDias(c.data_inicio, dias - 1) : null;
+}
+
+/** Muda o término de uma etapa: vira a duração dela (as seguintes andam junto). */
+export function definirFimEtapa(c: Conteudo, k: number, fim: string): Conteudo {
+  const datas = datasDasEtapas(c);
+  if (!datas?.[k]) return c;
+  const dias = diasEntre(datas[k].inicio, fim) + 1;
+  if (!(dias > 0)) return c;
+  return mudarEtapa(c, k, { prazo_dias: dias });
+}
+
+export function incluirParcela(c: Conteudo): Conteudo {
+  const n = c.pagamento.parcelas.length;
+  return { ...c, pagamento: { ...c.pagamento, parcelas: [...c.pagamento.parcelas, { descricao: n ? `Parcela ${n + 1}` : 'Entrada', valor: 0, quando: '' }] } };
+}
+export function tirarParcela(c: Conteudo, k: number): Conteudo {
+  return { ...c, pagamento: { ...c.pagamento, parcelas: c.pagamento.parcelas.filter((_, j) => j !== k) } };
+}
+
+/** Tira um pacote da comparação. O pacote que é o valor da proposta não sai. */
+export function tirarPacote(c: Conteudo, nome: string): Conteudo {
+  const o = (c.opcoes ?? []).find((x) => x.nome === nome);
+  if (!o || o.principal) return c;
+  return { ...c, opcoes: (c.opcoes ?? []).filter((x) => x.nome !== nome) };
+}
+
+/** Selos da capa sugeridos pelo sistema (quando você ainda não editou). */
+export function selosPadrao(c: Pick<Conteudo, 'garantia'>): string[] {
+  return ['Responsabilidade técnica com ART', 'Acompanhamento pelo portal', c.garantia ? 'Garantia por escrito' : 'Escopo detalhado', 'Normas ABNT'];
+}
+
+/** Condições gerais sugeridas (a validade é sempre a primeira e acompanha a data de emissão). */
+export const CONDICOES_GERAIS_PADRAO = [
+  'Serviços ou alterações fora do escopo descrito serão orçados à parte e só executados após aprovação por escrito (aditivo).',
+  'Prazos contam a partir da aprovação, do pagamento da entrada (quando houver) e da liberação do local e das informações necessárias.',
+  'Atrasos causados por decisões pendentes, mudanças pedidas pelo cliente, chuvas ou falta de acesso ajustam o prazo na mesma proporção.',
+  'A qualidade é conferida por etapa; pendências encontradas são registradas e corrigidas antes da etapa seguinte.',
+];
+
+/** Lista de pares (dados técnicos, metodologia, diferenciais, perguntas): tirar e incluir por posição. */
+export function tirarDaLista<T>(lista: T[] | undefined, k: number): T[] {
+  return (lista ?? []).filter((_, j) => j !== k);
 }

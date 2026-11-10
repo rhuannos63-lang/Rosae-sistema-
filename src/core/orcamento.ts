@@ -3,7 +3,7 @@
 // Tudo aqui é cálculo puro e testável; os preços vêm da tabela editável (parâmetros).
 import { ratear, type Centavos } from './dinheiro';
 import {
-  APRESENTACAO_PADRAO, conteudoVazio, novoId, parcelasPorPercentual,
+  APRESENTACAO_PADRAO, conteudoVazio, novoId, parcelasPorPercentual, textoPrazo,
   type Conteudo, type Etapa, type Item, type ModeloServico, type OpcaoProposta, type ParcelaProposta, type Pergunta as PerguntaFaq, type Responsabilidade, type Topico, type ValoresManuais,
 } from './proposta';
 import { acrescimoDas, codigosDe, CONDICAO_OCUPADO, type Acrescimo, type CondicaoObra } from './condicoes';
@@ -1252,11 +1252,6 @@ function pagamento(forma: FormaPagamento, total: Centavos, nParc: number, etapas
   ]);
 }
 
-function textoPrazo(dias: number): string {
-  if (dias <= 45) return `${dias} dias corridos`;
-  if (dias <= 120) return `${dias} dias corridos (cerca de ${Math.round(dias / 7)} semanas)`;
-  return `cerca de ${Math.round(dias / 30)} meses (${dias} dias corridos)`;
-}
 
 const reaisFmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -1269,6 +1264,8 @@ const DIFERENCIAIS: Topico[] = [
 
 export type Contexto = {
   necessidade?: string; local?: string; biblioteca?: ModeloServico[]; base?: Conteudo; valores?: ValoresManuais;
+  /** Itens sugeridos que você tirou do orçamento (pelo nome). Não entram no preço, no escopo nem no incluso. */
+  tiradas?: string[];
   /** Base de condições da obra e logística (escada, aclive, condomínio...), para os serviços de execução. */
   condicoes?: CondicaoObra[];
 };
@@ -1307,14 +1304,16 @@ function itensDasLinhas(linhas: Linha[], etapas: Etapa[], biblioteca: ModeloServ
 export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, pacoteEscolhido: 1 | 2 | 3 = 2, ctx: Contexto = {}): Orcamento {
   const def = DEFINICOES[tipo];
   const pp = { ...parametrosPadrao(tipo), ...p };
-  const base = def.calcular(r, pp);
+  const tiradas = new Set(ctx.tiradas ?? []);
+  const calculada = def.calcular(r, pp);
+  const base = tiradas.size ? { ...calculada, linhas: calculada.linhas.filter((l) => !tiradas.has(l.titulo)) } : calculada;
   const urg = b(r, 'urgencia');
   // Imóvel ocupado já é pergunta própria em reforço e reforma: não soma duas vezes.
   const perguntaOcupado = def.campos.some((c) => c.id === 'ocupado');
   const acr = usaCondicoes(tipo) && ctx.condicoes?.length ? acrescimoDas(codigosDe(r.condicoes).filter((x) => !(perguntaOcupado && x === CONDICAO_OCUPADO)), ctx.condicoes) : null;
   const pacotes: Pacote[] = base.pacotes.map((pc, i) => {
     const k = (i + 1) as 1 | 2 | 3;
-    const calc = linhasDoPacote(base, base.pacotes.length === 1 ? 3 : k, r, pp, acr);
+    const calc = linhasDoPacote(base, base.pacotes.length === 1 ? 3 : k, r, pp, acr).filter((l) => !tiradas.has(l.titulo));
     const ls = aplicarValor(calc, ctx.valores?.[k]);
     const novos = base.pacotes.length === 1 ? [] : base.linhas.filter((l) => l.pacote === k && l.valor > 0).map((l) => l.titulo);
     return {
@@ -1376,7 +1375,7 @@ export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, p
     opcoes,
     condicao_especial: avista ? `Pagamento à vista com ${fmtN(desc, 1)}% de desconto: ${reaisFmt(avista)}, para aceite dentro da validade.` : '',
     prazo_total_dias: prazoTotal,
-    gerador: { tipo, respostas: r, pacote: principal.numero, ...(ctx.valores && Object.keys(ctx.valores).length ? { valores: ctx.valores } : {}), em: new Date().toISOString() },
+    gerador: { tipo, respostas: r, pacote: principal.numero, ...(ctx.valores && Object.keys(ctx.valores).length ? { valores: ctx.valores } : {}), ...(tiradas.size ? { tiradas: [...tiradas] } : {}), em: new Date().toISOString() },
   };
 
   const custos = principal.linhas.filter((l) => l.custo > 0).map((l) => ({ descricao: l.titulo, valor: Math.round(l.custo) }));
@@ -1518,6 +1517,7 @@ export function gerarOrcamentoServicos(servicos: Servico[], precos: Partial<Reco
     gerador: {
       tipo: primeiro.tipo, respostas: primeiro.respostas, pacote: principal.numero,
       ...(ctx.valores && Object.keys(ctx.valores).length ? { valores: ctx.valores } : {}),
+      ...(ctx.tiradas?.length ? { tiradas: [...ctx.tiradas] } : {}),
       extras: lista.slice(1).map((sv) => ({ tipo: sv.tipo, respostas: sv.respostas })), em: new Date().toISOString(),
     },
   };

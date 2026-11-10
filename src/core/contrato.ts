@@ -1,7 +1,7 @@
 // Montagem do contrato a partir da proposta aprovada, das partes e das cláusulas.
 // Puro: a tela grava o resultado como rascunho; emitir congela no banco.
 import { formatar, doBanco } from './dinheiro';
-import { UNIDADES, type Conteudo, type ParcelaProposta, type Responsabilidade } from './proposta';
+import { dataEntrega, UNIDADES, type Conteudo, type ParcelaProposta, type Responsabilidade } from './proposta';
 
 export type ModeloContrato = 'preco_fechado' | 'gestao' | 'acompanhamento' | 'administracao' | 'projeto' | 'combinado';
 
@@ -25,7 +25,11 @@ export type Honorarios = {
 };
 
 export type Clausula = { id?: string; codigo: string; titulo: string; texto: string; aplicavel: string[]; versao: number; revisao_juridica: 'minuta' | 'revisada'; ativo?: boolean; ordem?: number };
-export type ClausulaContrato = { codigo: string; titulo: string; texto: string; versao: number; revisao_juridica: 'minuta' | 'revisada' };
+/** editada: você mudou esta cláusula neste contrato (ela não acompanha mais a sugestão do modelo). */
+export type ClausulaContrato = { codigo: string; titulo: string; texto: string; versao: number; revisao_juridica: 'minuta' | 'revisada'; editada?: boolean };
+/** Parcela do contrato: a da proposta, com data de vencimento opcional. */
+export type ParcelaContrato = ParcelaProposta & { data?: string | null };
+export type ItemContrato = { titulo: string; descricao?: string; quantidade: number; unidade: string; total: number };
 
 export type Parte = { nome: string; documento: string | null; endereco: string | null; email: string | null; telefone: string | null; extra?: string | null };
 
@@ -34,16 +38,23 @@ export type ConteudoContrato = {
   proposta: { codigo: string; versao: number; hash: string | null } | null;
   objeto: string;
   local: string;
-  escopo: { ambiente: string; itens: { titulo: string; descricao?: string; quantidade: number; unidade: string; total: number }[] }[];
+  escopo: { ambiente: string; itens: ItemContrato[] }[];
   inclusoes: string[];
   exclusoes: string[];
   responsabilidades: Responsabilidade[];
   prazo: string;
-  pagamento: ParcelaProposta[];
+  /** Datas previstas (AAAA-MM-DD). Começam da proposta e podem ser mudadas. */
+  data_inicio?: string | null;
+  data_entrega?: string | null;
+  pagamento: ParcelaContrato[];
   honorarios: Honorarios;
   clausulas: ClausulaContrato[];
+  /** Cláusulas sugeridas que você tirou deste contrato (pelo código). */
+  removidas?: string[];
   observacoes: string;
   faltando: string[];
+  /** 2 = editor completo (cláusulas editadas marcadas). */
+  edicao?: number;
 };
 
 const A_DEFINIR = '[a definir]';
@@ -124,6 +135,8 @@ export function montarContrato(e: {
     exclusoes: c?.exclusoes ?? [],
     responsabilidades: c?.responsabilidades ?? [],
     prazo: c?.prazo_texto ?? '',
+    data_inicio: c?.data_inicio ?? null,
+    data_entrega: c ? dataEntrega(c) : null,
     pagamento: c?.pagamento.parcelas ?? [],
     honorarios: e.honorarios,
     clausulas,
@@ -132,4 +145,40 @@ export function montarContrato(e: {
   };
 }
 
-export const ROTULO_FALTANDO = (k: string) => (k === 'clausulas_minuta' ? 'Cláusulas de rescisão/foro ainda em minuta' : ROTULO_MARCADOR[k] ?? k);
+export const ROTULO_FALTANDO = (k: string) => (k === 'clausulas_minuta' ? 'Cláusulas de rescisão/foro ainda em minuta' : k === 'clausulas_a_definir' ? 'Trechos “[a definir]” nas cláusulas' : ROTULO_MARCADOR[k] ?? k);
+
+/**
+ * Junta as cláusulas do contrato com as sugeridas pelo modelo: as que você editou ficam
+ * como estão; as outras acompanham a sugestão (valor, prazo, honorários); sugestões novas
+ * entram no fim, menos as que você tirou. A ordem é a sua.
+ */
+export function mesclarClausulas(atuais: ClausulaContrato[], sugeridas: ClausulaContrato[], removidas: string[] = []): ClausulaContrato[] {
+  const sug = new Map(sugeridas.map((x) => [x.codigo, x]));
+  const vistos = new Set<string>();
+  const r: ClausulaContrato[] = [];
+  for (const a of atuais) {
+    vistos.add(a.codigo);
+    if (a.editada) r.push(a);
+    else if (sug.has(a.codigo)) r.push(sug.get(a.codigo)!);
+  }
+  for (const x of sugeridas) if (!vistos.has(x.codigo) && !removidas.includes(x.codigo)) r.push(x);
+  return r;
+}
+
+/** O que ainda falta no contrato editado (vai como "[a definir]"). */
+export function pendenciasContrato(k: ConteudoContrato): string[] {
+  const f = new Set<string>();
+  if (!k.partes.contratante.documento?.trim()) f.add('contratante_documento');
+  if (!k.partes.contratante.endereco?.trim()) f.add('contratante_endereco');
+  if (!k.partes.contratada.documento?.trim()) f.add('contratada_cnpj');
+  if (!k.partes.contratada.endereco?.trim()) f.add('contratada_endereco');
+  if (!k.local.trim()) f.add('local');
+  if (k.clausulas.some((x) => x.texto.includes('[a definir]'))) f.add('clausulas_a_definir');
+  if (k.clausulas.some((x) => x.texto.includes('[Minuta'))) f.add('clausulas_minuta');
+  return [...f];
+}
+
+/** Soma dos itens do escopo do contrato, em centavos. */
+export function totalEscopo(k: Pick<ConteudoContrato, 'escopo'>): number {
+  return k.escopo.reduce((t, a) => t + a.itens.reduce((s, i) => s + doBanco(i.total || 0), 0), 0);
+}

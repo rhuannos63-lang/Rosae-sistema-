@@ -23,14 +23,14 @@ const IDS_GERAIS = CAMPOS_GERAIS.map((c) => c.id);
  * tipo/respostas: o serviço principal (as respostas dele guardam também prazo, deslocamento e pagamento).
  * extras: os outros serviços da mesma proposta. valores: o preço que você definiu para cada pacote.
  */
-export type EstadoGerador = { tipo: TipoServico | null; respostas: Respostas; pacote: 1 | 2 | 3; valores?: ValoresManuais; extras?: Servico[] };
+export type EstadoGerador = { tipo: TipoServico | null; respostas: Respostas; pacote: 1 | 2 | 3; valores?: ValoresManuais; extras?: Servico[]; tiradas?: string[] };
 
-type GeradorSalvo = { tipo: string; respostas: Respostas; pacote: number; valores?: ValoresManuais; extras?: { tipo: string; respostas: Respostas }[] };
+type GeradorSalvo = { tipo: string; respostas: Respostas; pacote: number; valores?: ValoresManuais; extras?: { tipo: string; respostas: Respostas }[]; tiradas?: string[] };
 export function estadoInicial(g?: GeradorSalvo | null): EstadoGerador {
   if (g && ehTipo(g.tipo)) {
     const tipo = g.tipo;
     const extras = (g.extras ?? []).filter((x) => ehTipo(x.tipo) && x.tipo !== tipo).map((x) => ({ tipo: x.tipo as TipoServico, respostas: { ...respostasPadrao(x.tipo as TipoServico), ...x.respostas } }));
-    return { tipo, respostas: { ...respostasPadrao(tipo), ...g.respostas }, pacote: (Math.min(3, Math.max(1, g.pacote)) as 1 | 2 | 3), valores: g.valores ?? {}, extras };
+    return { tipo, respostas: { ...respostasPadrao(tipo), ...g.respostas }, pacote: (Math.min(3, Math.max(1, g.pacote)) as 1 | 2 | 3), valores: g.valores ?? {}, extras, tiradas: g.tiradas ?? [] };
   }
   return { tipo: null, respostas: {}, pacote: 2 };
 }
@@ -58,10 +58,13 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
   estado: EstadoGerador; setEstado: (e: EstadoGerador) => void; precos: TabelaPrecos; contexto: Contexto; podeFinanceiro: boolean;
   acao: (o: Orcamento) => React.ReactNode;
 }) {
-  const { tipo, respostas, pacote, valores } = estado;
+  const { tipo, respostas, pacote, valores, tiradas } = estado;
   const servicos = useMemo(() => servicosDo(estado), [estado]);
-  const orc = useMemo(() => (servicos.length ? gerarOrcamentoServicos(servicos, precos, pacote, { ...contexto, valores }) : null), [servicos, pacote, precos, contexto, valores]);
-  const [verLinhas, setVerLinhas] = useState(false);
+  const orc = useMemo(() => (servicos.length ? gerarOrcamentoServicos(servicos, precos, pacote, { ...contexto, valores, tiradas }) : null), [servicos, pacote, precos, contexto, valores, tiradas]);
+  const [verLinhas, setVerLinhas] = useState(!!tiradas?.length);
+  // Tirar um item sugerido: sai do preço, do escopo e do incluso. O preço que você definiu volta à tabela.
+  const tirarLinha = (titulo: string) => setEstado({ ...estado, tiradas: [...(tiradas ?? []), titulo], valores: {} });
+  const voltarLinha = (titulo: string) => setEstado({ ...estado, tiradas: (tiradas ?? []).filter((t) => t !== titulo), valores: {} });
   const varios = servicos.length > 1;
 
   /** Muda uma resposta: do principal (k = 0, onde ficam também as condições gerais) ou de um serviço extra. */
@@ -166,14 +169,29 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
                 <ul className="avisos-gerador">{orc.avisos.map((a) => <li key={a}><Icone nome="alerta" />{a}</li>)}</ul>
               )}
               <div className="stack" style={{ marginTop: 12 }}>{acao(orc)}</div>
-              <button type="button" className="btn-link small" onClick={() => setVerLinhas((v) => !v)}>{verLinhas ? 'Esconder' : 'Ver'} a composição do preço</button>
+              <button type="button" className="btn-link small" onClick={() => setVerLinhas((v) => !v)}>{verLinhas ? 'Esconder' : 'Ver e ajustar'} os itens do preço</button>
               {verLinhas && (
-                <table className="tabela" style={{ marginTop: 6 }}>
-                  <tbody>
-                    {orc.principal.linhas.map((l, k) => <tr key={k}><td className="small">{varios ? <span className="muted">{DEFINICOES[orc.tipos[l.servico ?? 0]].nome} · </span> : null}{l.titulo}</td><td className="right num small">{reais(l.valor)}</td></tr>)}
-                    <tr className="total"><td>Total</td><td className="right num">{reais(orc.principal.valor)}</td></tr>
-                  </tbody>
-                </table>
+                <>
+                  <p className="muted small" style={{ margin: '6px 0 0' }}>Itens sugeridos pelo sistema. Toque no × para tirar um item do orçamento (sai do preço, do escopo e do incluso).</p>
+                  <table className="tabela" style={{ marginTop: 6 }}>
+                    <tbody>
+                      {orc.principal.linhas.map((l, k) => (
+                        <tr key={k}>
+                          <td className="small">{varios ? <span className="muted">{DEFINICOES[orc.tipos[l.servico ?? 0]].nome} · </span> : null}{l.titulo}</td>
+                          <td className="right num small">{reais(l.valor)}</td>
+                          <td className="right" style={{ width: 28 }}><button type="button" className="btn-link" aria-label={`Tirar "${l.titulo}"`} title="Tirar este item" onClick={() => tirarLinha(l.titulo)}><Icone nome="fechar" /></button></td>
+                        </tr>
+                      ))}
+                      <tr className="total"><td>Total</td><td className="right num">{reais(orc.principal.valor)}</td><td /></tr>
+                    </tbody>
+                  </table>
+                  {(tiradas?.length ?? 0) > 0 && (
+                    <div className="small" style={{ marginTop: 8 }}>
+                      <span className="muted">Tirados por você:</span>
+                      <ul className="lista-tiradas">{tiradas!.map((t) => <li key={t}><s>{t}</s> <button type="button" className="btn-link small" onClick={() => voltarLinha(t)}>voltar</button></li>)}</ul>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </aside>
