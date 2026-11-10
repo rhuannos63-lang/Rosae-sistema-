@@ -20,6 +20,8 @@ import { ContratoObra } from './ObraContrato';
 import { FichasObra } from './Fichas';
 import { PortalObra } from './ObraPortal';
 import { MedicoesObra } from './ObraMedicoes';
+import { QuadroRecebido } from '../components/Recebimentos';
+import { NovoAditivo } from '../components/NovoAditivo';
 
 const ATIVAS: StatusObra[] = ['contratada', 'em_execucao'];
 
@@ -271,6 +273,7 @@ export function ObraDetalhe() {
   const [editar, setEditar] = useState(false);
   const [novoLanc, setNovoLanc] = useState<'receber' | 'pagar' | null>(null);
   const [versaoFin, setVersaoFin] = useState(0);
+  const [aditivo, setAditivo] = useState(false);
   const navegar = useNavigate();
   const { dados, erro, carregando, recarregar } = useConsulta(async () => {
     const obra = ok(await supabase.from('obra').select('*, cliente:pessoa(nome, telefone, email)').eq('id', id!).maybeSingle()) as (Obra & { cliente: { nome: string; telefone: string | null; email: string | null } | null }) | null;
@@ -306,6 +309,7 @@ export function ObraDetalhe() {
         <button className="btn-secundario" onClick={() => navegar('/obras')}><Icone nome="voltar" /> Obras</button>
         {ehAdm && <a className="btn-secundario" href={`/obras/${obra.id}/relatorio`} target="_blank" rel="noreferrer"><Icone nome="imprimir" /> Relatório</a>}
         {ehAdm && <button className="btn-secundario" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar</button>}
+        {ehAdm && obra.cliente_id && <button className="btn-secundario" onClick={() => setAditivo(true)}><Icone nome="mais" /> Aditivo</button>}
         <BotaoExcluir tabela="obra" id={obra.id} nome={obra.nome} aoExcluir={() => navegar('/obras')} />
       </Topo>
 
@@ -349,10 +353,11 @@ export function ObraDetalhe() {
           <div className="topo" style={{ marginBottom: 12 }}>
             <h2>Financeiro da obra <Ajuda>Números gerenciais desta obra, a partir dos lançamentos ligados a ela. Saldo de caixa = recebido − pago nesta obra.</Ajuda></h2>
             <div className="row">
-              <button className="btn-secundario" onClick={() => setNovoLanc('receber')}><Icone nome="mais" /> A receber</button>
+              <button className="btn-secundario" onClick={() => setNovoLanc('receber')}><Icone nome="mais" /> Previsão a receber</button>
               <button className="btn-secundario" onClick={() => setNovoLanc('pagar')}><Icone nome="mais" /> A pagar</button>
             </div>
           </div>
+          <div style={{ marginBottom: 14 }}><QuadroRecebido key={`q-${versaoFin}`} obraId={obra.id} aoMudar={() => { setVersaoFin((v) => v + 1); recarregar(); }} /></div>
           <div className="grid grid-kpi">
             <div className="kpi"><div className="rotulo">Contratado</div><div className="valor">{formatar(r('valor_contratado'))}</div>{r('aditivos') !== 0 && <div className="det">+ aditivos aprovados {formatar(r('aditivos'))}</div>}</div>
             <div className="kpi"><div className="rotulo">Recebido</div><div className="valor">{formatar(r('recebido'))}</div><div className="det">Lançado a receber: {formatar(r('a_receber_total'))}</div></div>
@@ -394,6 +399,7 @@ export function ObraDetalhe() {
         </div>
       )}
 
+      {aditivo && <NovoAditivo obraId={obra.id} aoFechar={() => setAditivo(false)} />}
       {editar && <ObraForm obra={obra} financeiro={dados.financeiro} aoFechar={() => setEditar(false)} aoSalvar={() => { setEditar(false); recarregar(); }} />}
       {novoLanc && (
         <LancamentoForm

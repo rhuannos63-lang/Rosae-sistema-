@@ -54,7 +54,7 @@ select pg_temp.deve_falhar($$update public.oportunidade set estado_id = public.e
 select pg_temp.deve_falhar($$insert into public.interacao (oportunidade_id, tipo, texto) values ((select v::uuid from t where k = 'op'), 'sistema', 'falso')$$, 'interação de sistema forjada');
 insert into public.interacao (oportunidade_id, tipo, texto) values ((select v::uuid from t where k = 'op'), 'ligacao', 'Liguei e marquei visita');
 select pg_temp.igual((select count(*) from public.interacao where tipo = 'sistema' and texto like 'Etapa:%'), 1::bigint, 'mudança de estado registrada');
-select pg_temp.igual((select count(*) from public.modelo_servico), 9::bigint, 'biblioteca inicial (8 serviços + perícia)');
+select pg_temp.igual((select count(*) from public.modelo_servico), 11::bigint, 'biblioteca inicial (8 serviços + perícia + arquitetônico + regularização)');
 select pg_temp.igual((select count(*) from public.modelo_servico_custo), 0::bigint, 'sem financeiro não vê custos');
 reset role;
 select pg_temp.como('00000000-0000-0000-0000-00000000000d'); -- campo

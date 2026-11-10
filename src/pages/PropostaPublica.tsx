@@ -48,6 +48,8 @@ export function PropostaPublica() {
     });
     setEnviando(false);
     if (r.error) return setErro(mensagemErro(r.error));
+    // Aceite: avisa a ROSAE no celular e no computador (sem esperar a resposta).
+    if (acao === 'aceitar') void supabase.functions.invoke('avisos', { body: { acao: 'aceites' } }).catch(() => undefined);
     setResposta((r.data as { mensagem: string }).mensagem);
     setAcao(null);
     carregar(false);

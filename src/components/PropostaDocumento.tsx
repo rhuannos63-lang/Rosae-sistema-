@@ -7,8 +7,10 @@ import { RosaTopografica } from './RosaTopografica';
 import { formatar, lerDigitado } from '../core/dinheiro';
 import { formatarData } from '../core/datas';
 import {
-  ajustarTotal, alternarPagina, areaDaProposta, compromissosPadrao, definirTotalItem, mudarItem, paginaOculta, paraCentavos, textoParcelamento,
-  totalAmbiente, totalConteudo, totalItem, valorPorMetro, PAGINAS_OPCIONAIS, UNIDADES, type Conteudo, type Item,
+  ajustarTotal, alternarPagina, areaDaProposta, compromissosPadrao, CONDICOES_GERAIS_PADRAO, dataEntrega, datasDasEtapas, definirTotalItem,
+  incluirAmbiente, incluirEtapa, incluirItem, incluirParcela, mudarEtapa, mudarItem, mudarQuantidade, paginaOculta, paraCentavos, selosPadrao,
+  textoParcelamento, tirarAmbiente, tirarDaLista, tirarEtapa, tirarItem, tirarPacote, tirarParcela, totalAmbiente, totalConteudo, totalItem,
+  valorPorMetro, PAGINAS_OPCIONAIS, UNIDADES, type Conteudo, type Item,
 } from '../core/proposta';
 
 export type EmpresaPublica = {
@@ -113,6 +115,58 @@ function L({ itens, set, className, ph, ordenada, padrao }: { itens: string[]; s
   );
 }
 
+/** Número editável na página (quantidade, dias). */
+function N({ v, set, sufixo, className }: { v: number | null | undefined; set?: (n: number) => void; sufixo?: string; className?: string }) {
+  const ed = useContext(Ed);
+  const texto = v == null ? '' : Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+  if (!ed || !set) return <span className={className}>{texto}{sufixo}</span>;
+  return (
+    <span className={className}>
+      <span
+        key={texto}
+        className="ed ed-valor"
+        contentEditable
+        suppressContentEditableWarning
+        role="textbox"
+        aria-label="Número"
+        inputMode="decimal"
+        data-ph="0"
+        onBlur={(e) => {
+          const t = e.currentTarget.innerText.trim().replace(/\./g, '').replace(',', '.');
+          const n = Number(t);
+          if (!t || !Number.isFinite(n) || n <= 0) { e.currentTarget.innerText = texto; return; }
+          if (n !== v) set(n);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+          if (e.key === 'Escape') { e.currentTarget.innerText = texto; e.currentTarget.blur(); }
+        }}
+      >{texto}</span>{sufixo}
+    </span>
+  );
+}
+
+/** Botão de tirar (só aparece no modo de edição). */
+function X({ rotulo, aoClicar }: { rotulo: string; aoClicar: () => void }) {
+  const ed = useContext(Ed);
+  if (!ed) return null;
+  return <button type="button" className="ed-x" aria-label={rotulo} title={rotulo} onClick={aoClicar}>×</button>;
+}
+
+/** Botão de incluir (só aparece no modo de edição). */
+function Mais({ children, aoClicar }: { children: ReactNode; aoClicar: () => void }) {
+  const ed = useContext(Ed);
+  if (!ed) return null;
+  return <button type="button" className="ed-mais" onClick={aoClicar}>+ {children}</button>;
+}
+
+/** Data editável na página (campo de data só no modo de edição). */
+function D({ v, set, rotulo }: { v: string | null | undefined; set: (s: string | null) => void; rotulo: string }) {
+  const ed = useContext(Ed);
+  if (!ed) return v ? <>{formatarData(v)}</> : null;
+  return <input type="date" className="ed-data" aria-label={rotulo} value={v ?? ''} onChange={(e) => set(e.target.value || null)} />;
+}
+
 // ---------------------------------------------------------------------
 // Folha
 // ---------------------------------------------------------------------
@@ -123,19 +177,34 @@ function useCaberNaFolha() {
     const el = ref.current;
     if (!el) return;
     let quadro = 0;
-    const ajustar = () => {
+    // Cada medida força o navegador a recalcular a página: começa pela proporção que falta
+    // (um passo só, quase sempre) e só refaz quando o texto ou a largura da folha mudam.
+    const ajustar = (forcar = false) => {
+      const assinatura = `${el.textContent?.length ?? 0}|${el.childElementCount}|${el.clientWidth}`;
+      if (!forcar && el.dataset.ajuste === assinatura) return;
+      el.dataset.ajuste = assinatura;
       el.style.removeProperty('--fator');
-      let f = 1;
-      for (let i = 0; i < 14 && el.scrollHeight > el.clientHeight + 1 && f > 0.6; i++) {
+      const sobra = () => el.scrollHeight > el.clientHeight + 1;
+      if (!sobra()) { el.classList.remove('transborda'); return; }
+      let f = Math.max(0.6, Math.floor((el.clientHeight / el.scrollHeight) * 100) / 100);
+      el.style.setProperty('--fator', String(f));
+      for (let i = 0; i < 6 && f > 0.6 && sobra(); i++) {
         f = Math.max(0.6, Math.round((f - 0.03) * 100) / 100);
         el.style.setProperty('--fator', String(f));
       }
-      el.classList.toggle('transborda', el.scrollHeight > el.clientHeight + 1);
+      el.classList.toggle('transborda', sobra());
     };
     ajustar();
-    const ro = new ResizeObserver(() => { cancelAnimationFrame(quadro); quadro = requestAnimationFrame(ajustar); });
+    // Só reajusta quando a folha muda de tamanho de verdade: o próprio ajuste não pode disparar outro (laço sem fim).
+    let ultimo = '';
+    const ro = new ResizeObserver(([e]) => {
+      const tam = `${Math.round(e.contentRect.width)}x${Math.round(e.contentRect.height)}`;
+      if (tam === ultimo) return;
+      ultimo = tam;
+      cancelAnimationFrame(quadro); quadro = requestAnimationFrame(() => ajustar(true));
+    });
     ro.observe(el.parentElement!);
-    document.fonts?.ready.then(() => { quadro = requestAnimationFrame(ajustar); });
+    document.fonts?.ready.then(() => { quadro = requestAnimationFrame(() => ajustar(true)); });
     return () => { ro.disconnect(); cancelAnimationFrame(quadro); };
   });
   return ref;
@@ -188,16 +257,14 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
   const itensEscopo = c.ambientes.flatMap((a, ai) => a.itens.map((item, ii) => ({ amb: a.nome, ai, item, ii })));
   const paginasEscopo = partes(itensEscopo, itensEscopo.length <= 5 ? 5 : 4);
   const parcelas = c.pagamento.parcelas;
+  const somaParc = parcelas.reduce((t, p) => t + paraCentavos(p.valor), 0);
   // Pagamento ao lado da tabela só quando os dois cabem com folga; senão ganha página própria.
   const pagamentoJunto = parcelas.length > 0 && parcelas.length <= 4 && linhas.length <= 9 && !c.condicao_especial;
   const paginasValores = partes(linhas, 12);
-  const condicoes = [
-    `Esta proposta é válida até ${d.validade ? formatarData(d.validade) : `${c.validade_dias} dias após a emissão`}.`,
-    'Serviços ou alterações fora do escopo descrito serão orçados à parte e só executados após aprovação por escrito (aditivo).',
-    'Prazos contam a partir da aprovação, do pagamento da entrada (quando houver) e da liberação do local e das informações necessárias.',
-    'Atrasos causados por decisões pendentes, mudanças pedidas pelo cliente, chuvas ou falta de acesso ajustam o prazo na mesma proporção.',
-    'A qualidade é conferida por etapa; pendências encontradas são registradas e corrigidas antes da etapa seguinte.',
-  ];
+  const validadeTexto = `Esta proposta é válida até ${d.validade ? formatarData(d.validade) : `${c.validade_dias} dias após a emissão`}.`;
+  const condicoesGerais = c.condicoes_gerais ?? CONDICOES_GERAIS_PADRAO;
+  const datasEtapas = datasDasEtapas(c);
+  const entrega = dataEntrega(c);
   const mudarValor = (ai: number, ii: number) => (centavos: number) => mudar((x) => mudarItem(x, ai, ii, (i) => definirTotalItem(i, centavos)));
 
   const paginas: Pagina[] = [];
@@ -214,17 +281,14 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
           <p className="capa-tipo">{d.tipo === 'aditivo' ? 'Aditivo de escopo' : 'Proposta técnica e comercial'}</p>
           <h1>{d.titulo}</h1>
           <p className="capa-cliente">Preparada exclusivamente para <b>{d.cliente}</b></p>
-          <ul className="capa-selos">
-            <li>Responsabilidade técnica com ART</li>
-            <li>Acompanhamento pelo portal</li>
-            {c.garantia ? <li>Garantia por escrito</li> : <li>Escopo detalhado</li>}
-            <li>Normas ABNT</li>
-          </ul>
+          <L className="capa-selos" itens={c.selos ?? selosPadrao(c)} set={set('selos')} ph="Selo da capa" />
           {pdf?.aceite && <a className="pdf-botao capa-pdf-botao" href={pdf.aceite}>Ver online e aceitar →</a>}
         </div>
         <dl className="capa-dados">
           {(c.local || ed) && <div><dt>Local</dt><T tag="dd" v={c.local} set={set('local')} ph="Endereço da obra" /></div>}
           {prazoCapa && <div><dt>Prazo</dt><dd>{prazoCapa}</dd></div>}
+          {(c.data_inicio || ed) && <div><dt>Início previsto</dt><dd><D v={c.data_inicio} set={(v) => mudar((x) => ({ ...x, data_inicio: v }))} rotulo="Data prevista de início" />{ed && !c.data_inicio && <small className="muted"> opcional</small>}</dd></div>}
+          {entrega && <div><dt>Entrega prevista</dt><dd>{formatarData(entrega)}</dd></div>}
           <div><dt>Emissão</dt><dd>{d.emitida_em ? formatarData(d.emitida_em.slice(0, 10)) : 'rascunho'}</dd></div>
           <div><dt>Válida até</dt><dd>{d.validade ? formatarData(d.validade) : `${c.validade_dias} dias após a emissão`}</dd></div>
           <div><dt>Referência</dt><dd>{d.codigo} · v{d.versao}</dd></div>
@@ -266,9 +330,14 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
               <h3>Dados considerados</h3>
               <dl className="ficha-dados">
                 {c.dados_tecnicos!.map((x, k) => (
-                  <div key={x.rotulo}><dt>{x.rotulo}</dt><T tag="dd" v={x.valor} set={(s) => mudar((y) => ({ ...y, dados_tecnicos: (y.dados_tecnicos ?? []).map((z, j) => (j === k ? { ...z, valor: s } : z)) }))} ph="Valor" /></div>
+                  <div key={k}>
+                    <T tag="dt" v={x.rotulo} set={(s) => mudar((y) => ({ ...y, dados_tecnicos: (y.dados_tecnicos ?? []).map((z, j) => (j === k ? { ...z, rotulo: s } : z)) }))} ph="Dado" />
+                    <T tag="dd" v={x.valor} set={(s) => mudar((y) => ({ ...y, dados_tecnicos: (y.dados_tecnicos ?? []).map((z, j) => (j === k ? { ...z, valor: s } : z)) }))} ph="Valor" />
+                    <X rotulo={`Tirar "${x.rotulo}"`} aoClicar={() => mudar((y) => ({ ...y, dados_tecnicos: tirarDaLista(y.dados_tecnicos, k) }))} />
+                  </div>
                 ))}
               </dl>
+              <Mais aoClicar={() => mudar((y) => ({ ...y, dados_tecnicos: [...(y.dados_tecnicos ?? []), { rotulo: 'Novo dado', valor: '' }] }))}>Incluir dado</Mais>
             </>
           ) : (
             <>
@@ -292,7 +361,9 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
           )}
           {d.tipo === 'aditivo' && (c.motivo || ed) && <p><b>Motivo:</b> <T v={c.motivo ?? ''} set={set('motivo')} ph="Por que o escopo mudou" /></p>}
           {d.tipo === 'aditivo' && c.impacto_prazo_dias != null && <p><b>Impacto no prazo:</b> {c.impacto_prazo_dias === 0 ? 'sem alteração' : `${c.impacto_prazo_dias > 0 ? '+' : ''}${c.impacto_prazo_dias} dia(s)`}</p>}
-          {d.tipo === 'aditivo' && <p className="small">Este aditivo complementa o contrato original, que permanece válido nas demais condições.</p>}
+          {d.tipo === 'aditivo' && (c.aditivo_de
+            ? <p className="small">Aditivo nº {c.aditivo_de.numero} ao orçamento <b>{c.aditivo_de.codigo}</b> ({c.aditivo_de.titulo}){c.aditivo_de.aprovada_em ? `, aceito em ${new Date(c.aditivo_de.aprovada_em).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}` : ''}. O orçamento original e o contrato continuam válidos nas demais condições; este documento trata só do que é acrescentado.</p>
+            : <p className="small">Este aditivo complementa o contrato original, que permanece válido nas demais condições.</p>)}
         </div>
       </div>
     ),
@@ -302,17 +373,20 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
     paginas.push({
       id: 'escopo', nome: 'Escopo dos serviços',
       titulo: paginasEscopo.length > 1 ? `Escopo dos serviços (${k + 1}/${paginasEscopo.length})` : 'Escopo dos serviços',
-      conteudo: pg.length === 0 ? <p>Escopo a definir.</p> : (
-        <div className="escopo">
-          {pg.map(({ amb, item, ai, ii }) => (
-            <div key={item.id} className="escopo-item">
-              <span className="escopo-amb">{amb}</span>
-              <T tag="h3" v={item.titulo} set={(s) => s && mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, titulo: s })))} ph="Nome do serviço" />
-              <T tag="p" v={item.descricao ?? ''} set={(s) => mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, descricao: s })))} multi ph="O que está incluído neste serviço" />
-              <span className="escopo-qtd">{qtd(item)}{item.complexidade ? ` · complexidade ${item.complexidade.toLowerCase()}` : ''}</span>
-            </div>
-          ))}
-        </div>
+      conteudo: pg.length === 0 ? <><p>Escopo a definir.</p><Mais aoClicar={() => mudar((x) => incluirItem(x))}>Incluir serviço</Mais></> : (
+        <>
+          <div className="escopo">
+            {pg.map(({ amb, item, ai, ii }) => (
+              <div key={item.id} className="escopo-item">
+                <span className="escopo-amb">{amb}<X rotulo={`Tirar "${item.titulo}" da proposta`} aoClicar={() => mudar((x) => tirarItem(x, ai, ii))} /></span>
+                <T tag="h3" v={item.titulo} set={(s) => s && mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, titulo: s })))} ph="Nome do serviço" />
+                <T tag="p" v={item.descricao ?? ''} set={(s) => mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, descricao: s })))} multi ph="O que está incluído neste serviço" />
+                <span className="escopo-qtd"><N v={item.quantidade} set={(n) => mudar((x) => mudarQuantidade(x, ai, ii, n))} sufixo={` ${UNIDADES[item.unidade] ?? item.unidade}`} />{item.complexidade ? ` · complexidade ${item.complexidade.toLowerCase()}` : ''}</span>
+              </div>
+            ))}
+          </div>
+          {k === paginasEscopo.length - 1 && <Mais aoClicar={() => mudar((x) => incluirItem(x))}>Incluir serviço</Mais>}
+        </>
       ),
     });
   });
@@ -379,7 +453,8 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
       titulo: 'Como trabalhamos',
       conteudo: (
         <ol className="metodo">
-          {c.metodologia!.map((m, k) => <li key={k}><span className="etapa-n">{k + 1}</span><T tag="b" v={m.titulo} set={setM(k, 'titulo')} ph="Passo" /><T v={m.texto} set={setM(k, 'texto')} multi ph="Como é feito" /></li>)}
+          {c.metodologia!.map((m, k) => <li key={k}><span className="etapa-n">{k + 1}</span><T tag="b" v={m.titulo} set={setM(k, 'titulo')} ph="Passo" /><T v={m.texto} set={setM(k, 'texto')} multi ph="Como é feito" /><X rotulo={`Tirar "${m.titulo}"`} aoClicar={() => mudar((x) => ({ ...x, metodologia: tirarDaLista(x.metodologia, k) }))} /></li>)}
+          {ed && <li className="ed-add"><Mais aoClicar={() => mudar((x) => ({ ...x, metodologia: [...(x.metodologia ?? []), { titulo: 'Novo passo', texto: '' }] }))}>Incluir passo</Mais></li>}
         </ol>
       ),
     });
@@ -388,6 +463,9 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
   const comPrazo = c.etapas.length > 0 && c.etapas.every((e) => (e.prazo_dias ?? 0) > 0);
   const diasTotal = comPrazo ? c.etapas.reduce((t, e) => t + (e.prazo_dias ?? 0), 0) : 0;
   const setEtapa = (k: number, campo: 'nome' | 'descricao') => (s: string) => mudar((x) => ({ ...x, etapas: x.etapas.map((e, j) => (j === k ? { ...e, [campo]: s } : e)) }));
+  const setDias = (k: number) => (n: number) => mudar((x) => mudarEtapa(x, k, { prazo_dias: Math.max(1, Math.round(n)) }));
+  const tirarE = (k: number) => () => mudar((x) => tirarEtapa(x, k));
+  const periodo = (k: number) => datasEtapas?.[k] ? <span className="etapa-datas">{formatarData(datasEtapas[k].inicio)} a {formatarData(datasEtapas[k].fim)}</span> : null;
   let acumulado = 0;
   paginas.push({
     id: 'cronograma', nome: comPrazo ? 'Cronograma' : 'Etapas e prazo',
@@ -401,14 +479,14 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
               acumulado += e.prazo_dias ?? 0;
               return (
                 <div key={k} className="gantt-linha">
-                  <div className="gantt-nome"><b>{k + 1}. <T v={e.nome} set={setEtapa(k, 'nome')} ph="Etapa" /></b><T v={e.descricao ?? ''} set={setEtapa(k, 'descricao')} ph="Descrição" /></div>
+                  <div className="gantt-nome"><b>{k + 1}. <T v={e.nome} set={setEtapa(k, 'nome')} ph="Etapa" /><X rotulo={`Tirar a etapa "${e.nome}"`} aoClicar={tirarE(k)} /></b><T v={e.descricao ?? ''} set={setEtapa(k, 'descricao')} ph="Descrição" />{periodo(k)}</div>
                   <div className="gantt-trilho">
-                    <div className="gantt-barra" style={{ left: `${(ini / diasTotal) * 100}%`, width: `${((e.prazo_dias ?? 0) / diasTotal) * 100}%` }}><span>{e.prazo_dias} d</span></div>
+                    <div className="gantt-barra" style={{ left: `${(ini / diasTotal) * 100}%`, width: `${((e.prazo_dias ?? 0) / diasTotal) * 100}%` }}><N v={e.prazo_dias} set={setDias(k)} sufixo=" d" /></div>
                   </div>
                 </div>
               );
             })}
-            <div className="gantt-regua"><span>Aceite</span><span>dia {Math.round(diasTotal / 2)}</span><span>dia {diasTotal} · entrega</span></div>
+            <div className="gantt-regua"><span>{datasEtapas?.[0] ? formatarData(datasEtapas[0].inicio) : 'Aceite'}</span><span>dia {Math.round(diasTotal / 2)}</span><span>{entrega ? `${formatarData(entrega)} · entrega` : `dia ${diasTotal} · entrega`}</span></div>
           </div>
         ) : c.etapas.length > 0 && (
           <ol className="linha-etapas">
@@ -417,12 +495,18 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
                 <span className="etapa-n">{k + 1}</span>
                 <T tag="b" v={e.nome} set={setEtapa(k, 'nome')} ph="Etapa" />
                 <T v={e.descricao ?? ''} set={setEtapa(k, 'descricao')} ph="Descrição" />
-                {e.prazo_dias ? <span className="etapa-prazo">{e.prazo_dias} dias</span> : null}
+                {e.prazo_dias || ed ? <span className="etapa-prazo"><N v={e.prazo_dias} set={setDias(k)} sufixo=" dias" /></span> : null}
+                {periodo(k)}
+                <X rotulo={`Tirar a etapa "${e.nome}"`} aoClicar={tirarE(k)} />
               </li>
             ))}
           </ol>
         )}
-        {(c.prazo_texto || ed) && <p className="destaque">Prazo: <T v={c.prazo_texto} set={set('prazo_texto')} ph="Ex.: 120 dias corridos a partir do aceite" /></p>}
+        <div className="cronograma-acoes">
+          <Mais aoClicar={() => mudar((x) => incluirEtapa(x))}>Incluir etapa</Mais>
+          {ed && <label className="ed-data-rotulo">Início previsto <D v={c.data_inicio} set={(v) => mudar((x) => ({ ...x, data_inicio: v }))} rotulo="Data prevista de início" /></label>}
+        </div>
+        {(c.prazo_texto || ed) && <p className="destaque">Prazo: <T v={c.prazo_texto} set={set('prazo_texto')} ph="Ex.: 120 dias corridos a partir do aceite" />{entrega && !ed ? <> · entrega prevista em <b>{formatarData(entrega)}</b></> : null}</p>}
       </div>
     ),
   });
@@ -444,6 +528,7 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
             const corpo = (
               <>
                 {o.recomendado && <span className="opcao-selo">Mais escolhido</span>}
+                {!o.principal && !escolha && <X rotulo={`Tirar o pacote ${o.nome}`} aoClicar={() => mudar((x) => tirarPacote(x, o.nome))} />}
                 <T tag="h3" v={o.nome} set={setO(o.nome, 'nome')} ph="Nome do pacote" />
                 <T tag="p" className="opcao-sub" v={o.subtitulo} set={setO(o.nome, 'subtitulo')} ph="Para quem é" />
                 <V tag="p" className="opcao-valor num" v={o.valor} set={o.principal ? (cent) => mudar((x) => ajustarTotal(x, cent)) : (cent) => mudar((x) => ({ ...x, opcoes: (x.opcoes ?? []).map((z, j) => (j === idx(o.nome) ? { ...z, valor: cent / 100 } : z)) }))} />
@@ -474,10 +559,13 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
             <li key={j}>
               <span><T v={p.descricao} set={setP('descricao')} ph="Parcela" />{(p.quando || ed) ? <span className="muted"> · <T v={p.quando ?? ''} set={setP('quando')} ph="quando" /></span> : null}</span>
               <V tag="b" className="num" v={p.valor} set={(cent) => mudar((x) => ({ ...x, pagamento: { ...x.pagamento, parcelas: x.pagamento.parcelas.map((z, i) => (i === j ? { ...z, valor: cent / 100 } : z)) } }))} />
+              <X rotulo={`Tirar "${p.descricao}"`} aoClicar={() => mudar((x) => tirarParcela(x, j))} />
             </li>
           );
         })}
+        {ed && <li className="ed-add"><Mais aoClicar={() => mudar((x) => incluirParcela(x))}>Incluir parcela</Mais></li>}
       </ul>
+      {ed && parcelas.length > 0 && somaParc !== total && <p className="ed-aviso">As parcelas somam {formatar(somaParc)} e o total é {formatar(total)}. Ajuste uma delas ou use “Ajustar as parcelas ao total” na aba Pagamento.</p>}
     </div>
   );
 
@@ -493,11 +581,11 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
             <tbody>
               {pg.map(({ amb, item, ai, ii }, ix) =>
                 item === null ? (
-                  <tr key={`a-${amb.id ?? ix}`} className="amb"><td>{amb.nome}</td><td /><td className="num">{formatar(totalAmbiente(amb))}</td></tr>
+                  <tr key={`a-${amb.id ?? ix}`} className="amb"><td><T v={amb.nome} set={(s) => s && mudar((x) => ({ ...x, ambientes: x.ambientes.map((a, j) => (j === ai ? { ...a, nome: s } : a)) }))} ph="Grupo" /><X rotulo={`Tirar o grupo "${amb.nome}" e todos os seus serviços`} aoClicar={() => { if (window.confirm(`Tirar "${amb.nome}" e todos os serviços dele?`)) mudar((x) => tirarAmbiente(x, ai)); }} /></td><td />{ed ? <td className="num">{formatar(totalAmbiente(amb))}<Mais aoClicar={() => mudar((x) => incluirItem(x, ai))}>serviço</Mais></td> : <td className="num">{formatar(totalAmbiente(amb))}</td>}</tr>
                 ) : (
                   <tr key={item.id ?? `i-${ix}`}>
-                    <td><T v={item.titulo} set={(s) => s && mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, titulo: s })))} ph="Serviço" /></td>
-                    <td className="muted">{qtd(item)}</td>
+                    <td><T v={item.titulo} set={(s) => s && mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, titulo: s })))} ph="Serviço" /><X rotulo={`Tirar "${item.titulo}"`} aoClicar={() => mudar((x) => tirarItem(x, ai, ii))} /></td>
+                    <td className="muted">{ed ? <N v={item.quantidade} set={(n) => mudar((x) => mudarQuantidade(x, ai, ii, n))} sufixo={` ${UNIDADES[item.unidade] ?? item.unidade}`} /> : qtd(item)}</td>
                     <td className="num"><V v={totalItem(item)} set={mudarValor(ai, ii)} /></td>
                   </tr>
                 ),
@@ -505,6 +593,7 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
             </tbody>
             {ultima && <tfoot><tr><td>Total</td><td /><td className="num"><V v={total / 100} set={(cent) => mudar((x) => ajustarTotal(x, cent))} /></td></tr></tfoot>}
           </table>
+          {ultima && ed && <div className="cronograma-acoes"><Mais aoClicar={() => mudar((x) => incluirItem(x))}>Incluir serviço</Mais><Mais aoClicar={() => mudar((x) => incluirAmbiente(x))}>Incluir grupo</Mais></div>}
           {junto && blocoPagamento(true)}
         </div>
       ),
@@ -545,8 +634,9 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
       conteudo: (
         <div className="porque">
           <div className="porque-grade">
-            {c.diferenciais!.map((x, k) => <div key={k}><T tag="b" v={x.titulo} set={setD(k, 'titulo')} ph="Diferencial" /><T v={x.texto} set={setD(k, 'texto')} multi ph="Explicação" /></div>)}
+            {c.diferenciais!.map((x, k) => <div key={k}><T tag="b" v={x.titulo} set={setD(k, 'titulo')} ph="Diferencial" /><X rotulo={`Tirar "${x.titulo}"`} aoClicar={() => mudar((y) => ({ ...y, diferenciais: tirarDaLista(y.diferenciais, k) }))} /><T v={x.texto} set={setD(k, 'texto')} multi ph="Explicação" /></div>)}
           </div>
+          <Mais aoClicar={() => mudar((y) => ({ ...y, diferenciais: [...(y.diferenciais ?? []), { titulo: 'Novo diferencial', texto: '' }] }))}>Incluir diferencial</Mais>
           {(c.normas ?? []).length > 0 && (
             <div className="normas"><h3>Normas técnicas que seguimos</h3><L itens={c.normas!} set={set('normas')} ph="Norma" /></div>
           )}
@@ -583,7 +673,8 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
       titulo: 'Perguntas frequentes',
       conteudo: (
         <div className="faq">
-          {c.faq!.slice(0, 6).map((x, k) => <div key={k}><T tag="b" v={x.pergunta} set={setF(k, 'pergunta')} ph="Pergunta" /><T tag="p" v={x.resposta} set={setF(k, 'resposta')} multi ph="Resposta" /></div>)}
+          {c.faq!.slice(0, ed ? undefined : 6).map((x, k) => <div key={k}><T tag="b" v={x.pergunta} set={setF(k, 'pergunta')} ph="Pergunta" /><X rotulo={`Tirar a pergunta "${x.pergunta}"`} aoClicar={() => mudar((y) => ({ ...y, faq: tirarDaLista(y.faq, k) }))} /><T tag="p" v={x.resposta} set={setF(k, 'resposta')} multi ph="Resposta" /></div>)}
+          <Mais aoClicar={() => mudar((y) => ({ ...y, faq: [...(y.faq ?? []), { pergunta: 'Nova pergunta', resposta: '' }] }))}>Incluir pergunta</Mais>
         </div>
       ),
     });
@@ -601,7 +692,8 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
         </div>
         <div>
           <h3>Condições gerais</h3>
-          <ul>{condicoes.map((x) => <li key={x}>{x}</li>)}</ul>
+          <ul><li>{validadeTexto}</li></ul>
+          <L itens={condicoesGerais} set={set('condicoes_gerais')} ph="Condição geral" />
           {(c.observacoes || ed) && <T tag="p" className="pre" v={c.observacoes} set={set('observacoes')} multi ph="Observações (opcional)" />}
         </div>
       </div>

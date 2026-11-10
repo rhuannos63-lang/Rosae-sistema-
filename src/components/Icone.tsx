@@ -1,5 +1,6 @@
 // Ícones em traço fino (desenhados aqui para não depender de biblioteca).
 const P: Record<string, string> = {
+  sino: 'M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0',
   inicio: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
   obras: 'M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6',
   financeiro: 'M3 7h18v12H3zM3 11h18M7 15h3',

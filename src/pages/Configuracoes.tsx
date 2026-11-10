@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AvisosAparelho } from '../components/AvisosAparelho';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
@@ -24,7 +25,7 @@ export function Configuracoes() {
           <button key={a} role="tab" aria-selected={aba === a} className={aba === a ? 'ativo' : ''} onClick={() => setAba(a)}>{abas[a]}</button>
         ))}
       </div>
-      {aba === 'empresa' && <AbaEmpresa />}
+      {aba === 'empresa' && <><AvisosAparelho /><div style={{ height: 16 }} /><AbaEmpresa /></>}
       {aba === 'metas' && <AbaMetas />}
       {aba === 'contas' && <AbaContas />}
       {aba === 'categorias' && <AbaCategorias />}
