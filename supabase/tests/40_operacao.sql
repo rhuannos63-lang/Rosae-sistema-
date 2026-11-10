@@ -65,7 +65,7 @@ insert into t select 's2', id::text from public.servico where obra_id = (select 
 -- ---------------------------------------------------------------------
 with x as (insert into public.contrato (obra_id, proposta_versao_id, modelo, valor_total, conteudo)
   values ((select v::uuid from t where k = 'o'), (select v::uuid from t where k = 'v'), 'preco_fechado', 3000,
-          jsonb_build_object('clausulas', (select jsonb_agg(jsonb_build_object('codigo', codigo, 'titulo', titulo, 'texto', texto, 'versao', versao, 'revisao_juridica', revisao_juridica)) from public.clausula)))
+          jsonb_build_object('clausulas', (select jsonb_agg(jsonb_build_object('codigo', codigo, 'titulo', titulo, 'texto', texto, 'versao', versao, 'revisao_juridica', 'minuta')) from public.clausula)))
   returning id) insert into t select 'c', id::text from x;
 select pg_temp.deve_falhar($$insert into public.contrato (obra_id, modelo) values ((select v::uuid from t where k = 'o'), 'gestao')$$, 'dois contratos ativos na mesma obra');
 select pg_temp.deve_falhar($$update public.contrato set estado = 'assinado' where id = (select v::uuid from t where k = 'c')$$, 'assinar sem emitir');
@@ -79,12 +79,12 @@ select pg_temp.igual((select status from public.obra where id = (select v::uuid 
 select public.liberar_obra((select v::uuid from t where k = 'o'));
 select pg_temp.igual((select status from public.obra where id = (select v::uuid from t where k = 'o')), 'em_execucao', 'obra liberada');
 
--- Cláusula: mudar texto cria versão nova e volta a minuta; revisada exige quem e quando.
+-- Cláusula: mudar texto cria versão nova; a revisada deixa de ser revisada (fica com base legal); revisada exige quem e quando.
 select pg_temp.deve_falhar($$update public.clausula set revisao_juridica = 'revisada' where codigo = 'foro'$$, 'revisada sem responsável');
 update public.clausula set revisao_juridica = 'revisada', revisado_por = 'Advogado fictício', revisado_em = '2026-10-22' where codigo = 'objeto';
 update public.clausula set texto = texto || ' (ajuste)' where codigo = 'objeto';
-select pg_temp.igual((select versao || revisao_juridica from public.clausula where codigo = 'objeto'), '2minuta', 'texto novo = versão 2 em minuta');
-select pg_temp.igual((select count(*) from public.clausula_versao where clausula_id = (select id from public.clausula where codigo = 'objeto')), 1::bigint, 'versão anterior guardada');
+select pg_temp.igual((select versao || revisao_juridica from public.clausula where codigo = 'objeto'), '3fundamentada', 'texto novo = nova versão, sem a revisão');
+select pg_temp.igual((select count(*) from public.clausula_versao where clausula_id = (select id from public.clausula where codigo = 'objeto')), 2::bigint, 'versão anterior guardada');
 
 -- ---------------------------------------------------------------------
 -- Aditivo: preserva o contrato, entra como serviço novo, exige motivo

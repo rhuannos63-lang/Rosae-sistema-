@@ -1,7 +1,7 @@
 // Contrato da obra (gerado da proposta aprovada, congelado ao emitir), aditivos e
 // biblioteca de cláusulas. Modelos sem revisão jurídica saem marcados como MINUTA.
 import { Fragment, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { Topo } from '../components/Layout';
@@ -12,9 +12,10 @@ import { doBanco, formatar, paraBanco, type Centavos } from '../core/dinheiro';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
 import { normalizar, type Conteudo } from '../core/proposta';
 import {
-  MODELO_CONTRATO, mesclarClausulas, montarContrato, pendenciasContrato, ROTULO_FALTANDO, textoHonorarios, totalEscopo,
-  type Clausula, type ClausulaContrato, type ConteudoContrato, type Honorarios, type ModeloContrato, type Parte,
+  MODELO_CONTRATO, mesclarClausulas, modeloSugerido, montarContrato, pendenciasContrato, ROTULO_FALTANDO, SERVICO_CONTRATO, SERVICOS_CONTRATO,
+  servicosDoContrato, textoHonorarios, tituloContrato, totalEscopo, type Clausula, type RevisaoJuridica, type ClausulaContrato, type ConteudoContrato, type Honorarios, type ModeloContrato, type Parte,
 } from '../core/contrato';
+import type { Perfil } from '../core/jornada';
 import { ESTADO_PROPOSTA, type Contrato, type Empresa, type EstadoProposta, type Obra, type Pessoa } from '../lib/tipos';
 
 const ESTADO_CONTRATO: Record<Contrato['estado'], { rotulo: string; classe: string }> = {
@@ -22,6 +23,13 @@ const ESTADO_CONTRATO: Record<Contrato['estado'], { rotulo: string; classe: stri
   assinado: { rotulo: 'Assinado', classe: 'ok' }, cancelado: { rotulo: 'Cancelado', classe: 'neutro' },
 };
 const MODELO_DE_OBRA: Record<string, ModeloContrato> = { preco_fechado: 'preco_fechado', administracao: 'administracao', projeto: 'projeto' };
+export const SELO_REVISAO: Record<RevisaoJuridica, { rotulo: string; classe: string; ajuda: string }> = {
+  minuta: { rotulo: 'minuta', classe: 'alerta', ajuda: 'Texto de partida, sem base legal citada. O contrato sai marcado como MINUTA.' },
+  fundamentada: { rotulo: 'com base legal', classe: 'info', ajuda: 'Texto com a lei e a norma citadas, pronto para uso.' },
+  revisada: { rotulo: 'revisada', classe: 'ok', ajuda: 'Revisão registrada por advogado.' },
+};
+/** Ao mudar o texto: o revisado por advogado deixa de ser "revisado"; o resto mantém o estado. */
+const aposEditar = (r: RevisaoJuridica): RevisaoJuridica => (r === 'revisada' ? 'fundamentada' : r);
 
 type AditivoLista = { id: string; codigo: string; titulo: string; estado: EstadoProposta; versao_aprovada_id: string | null; aprovada_em: string | null; versoes: { id: string; numero: number; valor_total: string; emitida: boolean }[] };
 
@@ -39,6 +47,7 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
   const [assinar, setAssinar] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aditivo, setAditivo] = useState(false);
+  const [params, setParams] = useSearchParams();
   const { dados, erro: erroCarga, carregando, recarregar } = useConsulta(async () => {
     const [c, a, s] = await Promise.all([
       supabase.from('contrato').select('*').eq('obra_id', obra.id).order('criado_em', { ascending: false }),
@@ -48,8 +57,20 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
     return { contratos: ok(c) as Contrato[], aditivos: ok(a) as AditivoLista[], incorporados: new Set((ok(s) as { origem_versao_id: string }[]).map((x) => x.origem_versao_id)) };
   }, [obra.id]);
 
-  if (carregando && !dados) return <Carregando />;
   const atual = dados?.contratos.find((c) => c.estado !== 'cancelado') ?? null;
+  // Proposta aceita e ainda sem contrato (vindo da proposta, do funil ou da aba): o gerador
+  // abre sozinho. Com ?gerar=1, abre também o rascunho já salvo.
+  const [abriuSozinho, setAbriuSozinho] = useState(false);
+  useEffect(() => {
+    if (!dados || abriuSozinho) return;
+    setAbriuSozinho(true);
+    const pediu = params.get('gerar') === '1';
+    if (pediu) { const p = new URLSearchParams(params); p.delete('gerar'); setParams(p, { replace: true }); }
+    if (!atual && (pediu || (obra.proposta_versao_id && dados.contratos.length === 0))) setGerar('novo');
+    else if (pediu && atual?.estado === 'rascunho') setGerar(atual);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dados]);
+  if (carregando && !dados) return <Carregando />;
   const cancelados = dados?.contratos.filter((c) => c.estado === 'cancelado') ?? [];
 
   async function exec(p: PromiseLike<{ error: unknown }>, msg: string) {
@@ -109,11 +130,11 @@ export function ContratoObra({ obra, aoMudar }: { obra: Obra & { cliente: { nome
         </div>
         <Erro mensagem={erro ?? erroCarga} />
         {!atual ? (
-          <Vazio titulo="Nenhum contrato ativo"><p>O contrato é montado a partir da proposta aprovada, dos dados do cliente e da ROSAE e das cláusulas do modelo escolhido. Você revisa antes de emitir.</p></Vazio>
+          <Vazio titulo="Nenhum contrato ativo"><p>O contrato é montado com a proposta aceita, os dados do cliente e da ROSAE e as cláusulas próprias do tipo de serviço, com a base legal citada (Código Civil, Código de Defesa do Consumidor, ART e normas ABNT). Você revisa e edita tudo antes de emitir.</p></Vazio>
         ) : (
           <div className="stack">
             <div className="row" style={{ justifyContent: 'space-between' }}>
-              <div><b>{atual.codigo}</b> · {MODELO_CONTRATO[atual.modelo].rotulo} · <span className={`selo ${ESTADO_CONTRATO[atual.estado].classe}`}>{ESTADO_CONTRATO[atual.estado].rotulo}</span>
+              <div><b>{atual.codigo}</b> · {atual.conteudo.titulo ?? MODELO_CONTRATO[atual.modelo].rotulo} · <span className={`selo ${ESTADO_CONTRATO[atual.estado].classe}`}>{ESTADO_CONTRATO[atual.estado].rotulo}</span>
                 {atual.estado !== 'rascunho' && atual.minuta && <span className="selo alerta" style={{ marginLeft: 6 }}>Minuta (cláusulas sem revisão jurídica)</span>}
               </div>
               <div className="row">
@@ -291,6 +312,7 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
     };
   }, [obra.id]);
   const [modelo, setModelo] = useState<ModeloContrato>(contrato?.modelo ?? 'preco_fechado');
+  const [servicos, setServicos] = useState<Perfil[]>(contrato?.conteudo.servicos ?? []);
   const h0 = contrato?.conteudo.honorarios ?? {};
   const [hon, setHon] = useState<Honorarios>(h0);
   const [cents, setCents] = useState<Record<string, Centavos | null>>({
@@ -310,7 +332,7 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
     valor_visita_adicional: cents.valor_visita_adicional != null ? Number(paraBanco(cents.valor_visita_adicional)) : null,
   };
   /** Sugestão do sistema com os dados de agora (o prazo e as partes que você editou entram nos marcadores). */
-  function sugestao(m: ModeloContrato, base?: ConteudoContrato | null): ConteudoContrato | null {
+  function sugestao(m: ModeloContrato, base?: ConteudoContrato | null, sv?: Perfil[]): ConteudoContrato | null {
     if (!d) return null;
     const cli = d.cliente;
     const conteudoProposta = d.versao ? normalizar(d.versao.conteudo) : null;
@@ -321,16 +343,23 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
       obra: { nome: obra.nome, endereco: obra.endereco },
       contratante: base?.partes.contratante ?? { nome: cli?.nome ?? '[contratante]', documento: cli?.documento ?? null, endereco: cli?.endereco ?? null, email: cli?.email ?? null, telefone: cli?.telefone ?? null },
       contratada: base?.partes.contratada ?? parteEmpresa(d.empresa),
-      honorarios, clausulas: d.clausulas,
+      honorarios, clausulas: d.clausulas, servicos: sv ?? servicos, tipoObra: obra.tipo_servico,
     });
   }
+  const servicosIniciais = () => (d ? servicosDoContrato(d.versao ? normalizar(d.versao.conteudo) : null, obra.tipo_servico) : []);
 
   useEffect(() => {
     if (!d || k) return;
     let m = modelo;
-    if (!contrato && d.fin?.modelo_contratacao && MODELO_DE_OBRA[d.fin.modelo_contratacao]) { m = MODELO_DE_OBRA[d.fin.modelo_contratacao]; setModelo(m); }
+    const sv = servicos.length ? servicos : servicosIniciais();
+    if (!servicos.length) setServicos(sv);
+    if (!contrato) {
+      m = d.fin?.modelo_contratacao && MODELO_DE_OBRA[d.fin.modelo_contratacao] && !(d.fin.modelo_contratacao === 'preco_fechado' && !SERVICO_CONTRATO[sv[0]]?.obra)
+        ? MODELO_DE_OBRA[d.fin.modelo_contratacao] : modeloSugerido(sv);
+      setModelo(m);
+    }
     if (valorTotal === null) setValorTotal(doBanco(d.versao?.valor_total ?? d.fin?.valor_contratado ?? 0));
-    const novo = sugestao(m);
+    const novo = sugestao(m, null, sv);
     if (!novo) return;
     if (!contrato) { setK({ ...novo, edicao: 2 }); return; }
     // Rascunho salvo: mantém tudo o que está nele. Os de antes do editor completo marcam
@@ -347,14 +376,22 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
   const sug = sugestao(modelo, k)!;
   const clausulas = mesclarClausulas(k.clausulas, sug.clausulas, k.removidas);
   const sugPorCodigo = new Map(sug.clausulas.map((x) => [x.codigo, x]));
-  const final: ConteudoContrato = { ...k, clausulas, honorarios, observacoes: hon.condicoes_adicionais ?? k.observacoes ?? '' };
+  const tituloAuto = tituloContrato(servicos, modelo);
+  const final: ConteudoContrato = { ...k, clausulas, honorarios, observacoes: hon.condicoes_adicionais ?? k.observacoes ?? '', servicos, titulo: k.titulo?.trim() ? k.titulo : tituloAuto };
   final.faltando = pendenciasContrato(final);
   const somaEscopo = totalEscopo(final);
   const mostra = (campo: 'gestao' | 'visitas' | 'adm') => campo === 'gestao' ? ['gestao', 'combinado'].includes(modelo) : campo === 'visitas' ? ['gestao', 'acompanhamento', 'combinado'].includes(modelo) : ['administracao', 'combinado'].includes(modelo);
   const mudar = (f: (x: ConteudoContrato) => ConteudoContrato) => setK((x) => (x ? f(x) : x));
   /** Mexe nas cláusulas a partir da lista que está na tela. */
   const mudarClausulas = (f: (l: ClausulaContrato[]) => ClausulaContrato[], removidas?: string[]) => mudar((x) => ({ ...x, clausulas: f(clausulas), removidas: removidas ?? x.removidas }));
-  const editarClausula = (codigo: string, m: Partial<ClausulaContrato>) => mudarClausulas((l) => l.map((x) => (x.codigo === codigo ? { ...x, ...m, editada: true, revisao_juridica: m.texto !== undefined && m.texto !== sugPorCodigo.get(codigo)?.texto ? 'minuta' : x.revisao_juridica } : x)));
+  const editarClausula = (codigo: string, m: Partial<ClausulaContrato>) => mudarClausulas((l) => l.map((x) => (x.codigo === codigo ? { ...x, ...m, editada: true, revisao_juridica: m.texto !== undefined && m.texto !== sugPorCodigo.get(codigo)?.texto ? aposEditar(sugPorCodigo.get(codigo)?.revisao_juridica ?? x.revisao_juridica) : x.revisao_juridica } : x)));
+  /** Liga ou desliga um tipo de serviço: troca as cláusulas específicas e o título (as editadas ficam). */
+  const alternarServico = (p: Perfil) => {
+    const n = servicos.includes(p) ? servicos.filter((x) => x !== p) : [...servicos, p];
+    if (!n.length) return;
+    setServicos(n);
+    mudar((x) => ({ ...x, titulo: undefined }));
+  };
   const moverClausula = (i: number, passo: -1 | 1) => mudarClausulas((l) => { const n = [...l]; const j = i + passo; if (j < 0 || j >= n.length) return n; [n[i], n[j]] = [n[j], n[i]]; return n; });
   const tirarClausula = (x: ClausulaContrato) => mudarClausulas((l) => l.filter((y) => y.codigo !== x.codigo), sugPorCodigo.has(x.codigo) ? [...(k.removidas ?? []), x.codigo] : k.removidas);
   const daBiblioteca = d.clausulas.filter((x) => !clausulas.some((y) => y.codigo === x.codigo));
@@ -365,7 +402,9 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
 
   function refazer() {
     if (!window.confirm('Refazer o contrato a partir da proposta aceita e do cadastro? Tudo o que você editou aqui volta à sugestão do sistema.')) return;
-    const novo = sugestao(modelo);
+    const sv = servicosIniciais();
+    setServicos(sv);
+    const novo = sugestao(modelo, null, sv);
     if (novo) setK({ ...novo, removidas: [], edicao: 2 });
     setValorTotal(doBanco(d!.versao?.valor_total ?? d!.fin?.valor_contratado ?? 0));
     toast('Contrato refeito com a sugestão do sistema.');
@@ -393,10 +432,16 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
     <Modal titulo={contrato ? `Revisar ${contrato.codigo}` : 'Gerar contrato'} aoFechar={aoFechar} largo
       rodape={<><button className="btn-link" onClick={refazer}>Refazer pela proposta</button><span className="spacer" /><button className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" onClick={salvar}>Salvar rascunho</button></>}>
       <div className="stack">
-        <p className="muted small" style={{ margin: 0 }}>O sistema monta uma sugestão com a proposta aceita, o cadastro e as cláusulas do modelo. Tudo aqui pode ser editado, incluído ou tirado antes de emitir. Depois de emitido, o contrato fica congelado; mudanças viram aditivo.</p>
+        <p className="muted small" style={{ margin: 0 }}>O sistema monta o contrato com a proposta aceita, o cadastro e as cláusulas próprias de cada tipo de serviço, com a lei e a norma citadas (Código Civil, Código de Defesa do Consumidor, ART e ABNT). As cláusulas que limitam direitos saem em destaque, como pede o CDC. Tudo aqui pode ser editado, incluído ou tirado antes de emitir. Depois de emitido, o contrato fica congelado; mudanças viram aditivo.</p>
+        <fieldset className="campo"><legend>Tipo de serviço <Ajuda>Cada tipo traz as cláusulas dele: autoria e revisões no projeto, plano de reforma (NBR 16280) na reforma, garantia de 5 anos (Código Civil, art. 618) na execução, alcance do laudo, órgãos públicos na regularização. Pode marcar mais de um.</Ajuda></legend>
+          <div className="row" style={{ gap: 6 }}>{SERVICOS_CONTRATO.map((p) => (
+            <button key={p} type="button" className={`chip-link${servicos.includes(p) ? ' ativo' : ''}`} aria-pressed={servicos.includes(p)} onClick={() => alternarServico(p)}>{SERVICO_CONTRATO[p].rotulo}</button>
+          ))}</div>
+        </fieldset>
+        <label className="campo">Título do contrato<input value={final.titulo} onChange={(e) => mudar((x) => ({ ...x, titulo: e.target.value }))} /></label>
         {!d.versao && <div className="aviso info"><span>Esta obra não tem proposta aprovada ligada. Monte o escopo abaixo ou descreva nas condições.</span></div>}
         <label className="campo">Modelo de contratação
-          <select value={modelo} onChange={(e) => setModelo(e.target.value as ModeloContrato)}>{Object.entries(MODELO_CONTRATO).map(([key, v]) => <option key={key} value={key}>{v.rotulo}</option>)}</select>
+          <select value={modelo} onChange={(e) => { setModelo(e.target.value as ModeloContrato); mudar((x) => ({ ...x, titulo: undefined })); }}>{Object.entries(MODELO_CONTRATO).map(([key, v]) => <option key={key} value={key}>{v.rotulo}</option>)}</select>
           <span className="dica">{MODELO_CONTRATO[modelo].ajuda} Trocar o modelo troca as cláusulas sugeridas; as que você editou ficam.</span>
         </label>
         <div className="grid grid-3">
@@ -509,13 +554,14 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
 
         {secao('clausulas', `Cláusulas (${clausulas.length})`, `${clausulas.filter((x) => x.editada).length} editada(s) por você${(k.removidas ?? []).length ? ` · ${(k.removidas ?? []).length} tirada(s)` : ''}`, (
           <>
-            <p className="muted small" style={{ margin: 0 }}>As cláusulas vêm da sua biblioteca, conforme o modelo, com valor, prazo e honorários preenchidos. As que você não mexer acompanham a sugestão; as que você editar ficam como você escreveu (e saem como minuta).</p>
+            <p className="muted small" style={{ margin: 0 }}>As cláusulas vêm da sua biblioteca, conforme o tipo de serviço e o modelo, com valor, prazo, honorários e normas preenchidos. As que você não mexer acompanham a sugestão; as que você editar ficam como você escreveu. “Destaque” imprime a cláusula em negrito, como o CDC exige para as que limitam direitos.</p>
             {clausulas.map((x, i) => (
               <div key={x.codigo} className="clausula-ed">
                 <div className="row" style={{ flexWrap: 'nowrap', gap: 6 }}>
                   <span className="muted small" style={{ minWidth: 28 }}>{i + 1}ª</span>
                   <input value={x.titulo} aria-label="Título da cláusula" style={{ fontWeight: 600 }} onChange={(e) => editarClausula(x.codigo, { titulo: e.target.value })} />
-                  <span className={`selo ${x.revisao_juridica === 'revisada' ? 'ok' : 'alerta'}`}>{x.revisao_juridica === 'revisada' ? 'revisada' : 'minuta'}</span>
+                  <span className={`selo ${SELO_REVISAO[x.revisao_juridica]?.classe ?? 'alerta'}`} title={SELO_REVISAO[x.revisao_juridica]?.ajuda}>{SELO_REVISAO[x.revisao_juridica]?.rotulo ?? 'minuta'}</span>
+                  <label className="check small" title="Imprime em negrito (CDC, art. 54, § 4º)"><input type="checkbox" checked={!!x.destaque} onChange={(e) => editarClausula(x.codigo, { destaque: e.target.checked || undefined })} /> destaque</label>
                   {x.editada && sugPorCodigo.has(x.codigo) && <button className="btn-link small" title="Volta ao texto sugerido pelo modelo" onClick={() => mudarClausulas((l) => l.map((y) => (y.codigo === x.codigo ? sugPorCodigo.get(x.codigo)! : y)))}>sugestão</button>}
                   <button className="btn-link" aria-label="Subir cláusula" title="Subir" disabled={i === 0} onClick={() => moverClausula(i, -1)}>↑</button>
                   <button className="btn-link" aria-label="Descer cláusula" title="Descer" disabled={i === clausulas.length - 1} onClick={() => moverClausula(i, 1)}>↓</button>
@@ -530,7 +576,7 @@ function GerarContrato({ obra, contrato, aoFechar, aoSalvar }: { obra: Obra; con
                 <select value="" aria-label="Incluir cláusula da biblioteca" style={{ maxWidth: 300 }} onChange={(e) => {
                   const c = d.clausulas.find((y) => y.codigo === e.target.value);
                   if (!c) return;
-                  const pronta = mesclarClausulas([], montarContrato({ ...{ modelo, proposta: null, obra: { nome: obra.nome, endereco: obra.endereco }, contratante: k.partes.contratante, contratada: k.partes.contratada, honorarios }, clausulas: [{ ...c, aplicavel: ['todos'] }] }).clausulas)[0];
+                  const pronta = mesclarClausulas([], montarContrato({ ...{ modelo, proposta: null, obra: { nome: obra.nome, endereco: obra.endereco }, contratante: k.partes.contratante, contratada: k.partes.contratada, honorarios }, clausulas: [{ ...c, aplicavel: ['todos'] }], servicos }).clausulas)[0];
                   mudarClausulas((l) => [...l, { ...pronta, editada: true }], (k.removidas ?? []).filter((r) => r !== c.codigo));
                 }}>
                   <option value="">+ Cláusula da biblioteca…</option>
@@ -597,16 +643,17 @@ export function ContratoDocumento({ c }: { c: Pick<Contrato, 'codigo' | 'estado'
   const minuta = c.estado === 'rascunho' || c.minuta;
   let n = 0;
   return (
-    <article className="doc-a4">
+    <article className="doc-a4 doc-contrato">
       {minuta && <div className="marca-minuta" aria-hidden="true">{c.estado === 'rascunho' ? 'RASCUNHO' : 'MINUTA'}</div>}
       <header className="doc-cab">
         <img src="/marca/rosae-logo-horizontal.svg" alt="ROSAE Engenharia & Estruturas" onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
         <div className="right small"><b>{c.codigo}</b><br />{MODELO_CONTRATO[c.modelo].rotulo}</div>
       </header>
-      <h1>Contrato de prestação de serviços de engenharia</h1>
-      {minuta && <p className="doc-aviso">Documento em minuta: cláusulas ainda sem revisão jurídica. Não substitui orientação de advogado.</p>}
+      <h1>{k.titulo || 'Contrato de prestação de serviços de engenharia'}</h1>
+      {minuta && <p className="doc-aviso">{c.estado === 'rascunho' ? 'Rascunho: confira os dados antes de emitir.' : 'Documento em minuta: há cláusulas sem base legal conferida. Não substitui orientação de advogado.'}</p>}
       <ParteBloco titulo="CONTRATADA" p={k.partes.contratada} />
       <ParteBloco titulo="CONTRATANTE" p={k.partes.contratante} />
+      <p>As partes acima qualificadas celebram este contrato, que se rege pelas cláusulas a seguir e pela legislação nelas indicada.</p>
       <p><b>Local da obra:</b> {k.local || '[a definir]'}. {k.proposta && <><b>Proposta de referência:</b> {k.proposta.codigo}, versão {k.proposta.versao}.</>}</p>
       <h2>Escopo</h2>
       {k.objeto && <p>{k.objeto}</p>}
@@ -630,11 +677,15 @@ export function ContratoDocumento({ c }: { c: Pick<Contrato, 'codigo' | 'estado'
       )}
       {k.pagamento.length > 0 && <><h3>Condições de pagamento</h3><ul>{k.pagamento.map((p, i) => <li key={i}>{p.descricao}: {formatar(doBanco(p.valor))}{p.quando ? ` · ${p.quando}` : ''}{p.data ? ` · vencimento ${formatarData(p.data)}` : ''}</li>)}</ul></>}
       <h2>Cláusulas</h2>
-      {k.clausulas.map((x) => <div key={x.codigo} className="clausula"><h3>Cláusula {++n}ª · {x.titulo}</h3><p>{x.texto}</p></div>)}
+      {k.clausulas.map((x) => <div key={x.codigo} className={`clausula${x.destaque ? ' destaque' : ''}`}><h3>Cláusula {++n}ª · {x.titulo}</h3><p>{x.texto}</p></div>)}
       {k.observacoes && <><h3>Condições adicionais</h3><p style={{ whiteSpace: 'pre-wrap' }}>{k.observacoes}</p></>}
       <div className="assinaturas">
         <div><span />{k.partes.contratada.nome}<small>CONTRATADA</small></div>
         <div><span />{k.partes.contratante.nome}<small>CONTRATANTE</small></div>
+      </div>
+      <div className="assinaturas testemunhas">
+        <div><span />Nome e CPF<small>TESTEMUNHA 1</small></div>
+        <div><span />Nome e CPF<small>TESTEMUNHA 2</small></div>
       </div>
       <footer className="doc-rodape small">{c.hash ? `Emitido em ${formatarDataHora(c.emitido_em)} · código de verificação ${c.hash.slice(0, 16).toUpperCase()}` : 'Rascunho não emitido'}</footer>
     </article>
@@ -659,17 +710,23 @@ export function ContratoImprimir() {
 // Biblioteca de cláusulas
 // ---------------------------------------------------------------------
 const APLICAVEL: Record<string, string> = { todos: 'Todos', ...Object.fromEntries(Object.entries(MODELO_CONTRATO).map(([k, v]) => [k, v.rotulo])) };
+const APLICAVEL_SERVICO: Record<string, string> = Object.fromEntries(SERVICOS_CONTRATO.map((p) => [`s:${p}`, SERVICO_CONTRATO[p].rotulo]));
+const rotuloAplicavel = (a: string[]) => {
+  const m = a.filter((x) => !x.startsWith('s:')).map((x) => APLICAVEL[x] ?? x);
+  const s = a.filter((x) => x.startsWith('s:')).map((x) => APLICAVEL_SERVICO[x] ?? x);
+  return `${m.length ? m.join(', ') : 'Todos os modelos'} · ${s.length ? s.join(', ') : 'todos os serviços'}`;
+};
 
 export function Clausulas() {
   const [editar, setEditar] = useState<Clausula | 'nova' | null>(null);
   const { dados, erro, carregando, recarregar } = useConsulta(async () => ok(await supabase.from('clausula').select('*').order('ordem')) as (Clausula & { id: string; revisado_por: string | null; revisado_em: string | null; referencias: string | null })[], []);
   return (
     <>
-      <Topo titulo="Cláusulas de contrato" sub="Modelos com versão e estado de revisão jurídica. Sem revisão, o contrato sai como minuta.">
+      <Topo titulo="Cláusulas de contrato" sub="Cláusulas por tipo de serviço, com versão e base legal. As sem base legal saem como minuta.">
         <Link className="btn-secundario" to="/biblioteca"><Icone nome="voltar" /> Biblioteca</Link>
         <button className="btn-primario" onClick={() => setEditar('nova')}><Icone nome="mais" /> Cláusula</button>
       </Topo>
-      <div className="aviso info" style={{ marginBottom: 14 }}><span>As cláusulas iniciais são minutas de partida, sem citação de lei. Peça a revisão a um advogado e registre aqui quem revisou e quando. Mudar o texto cria nova versão e volta a minuta; contratos já emitidos guardam o texto da época.</span></div>
+      <div className="aviso info" style={{ marginBottom: 14 }}><span>As cláusulas citam a base legal (Código Civil, Código de Defesa do Consumidor, Leis 5.194/66 e 6.496/77, LGPD e normas ABNT) e cada tipo de serviço tem as suas. Elas seguem o CDC: multa de atraso de 2%, arrependimento em 7 dias, foro do cliente, multa também para a ROSAE e destaque nas cláusulas que limitam direitos. Se quiser, peça a um advogado para revisar e registre aqui quem revisou e quando. Mudar o texto cria nova versão; contratos já emitidos guardam o texto da época.</span></div>
       <Erro mensagem={erro} />
       {carregando && !dados ? <Carregando /> : (
         <div className="stack">
@@ -677,9 +734,10 @@ export function Clausulas() {
             <button key={c.id} className="card item-clausula" onClick={() => setEditar(c)}>
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <b>{c.titulo}</b>
-                <span className={`selo ${c.revisao_juridica === 'revisada' ? 'ok' : 'alerta'}`}>{c.revisao_juridica === 'revisada' ? `Revisada por ${c.revisado_por} em ${formatarData(c.revisado_em)}` : 'Minuta'} · v{c.versao}</span>
+                <span className={`selo ${SELO_REVISAO[c.revisao_juridica]?.classe ?? 'alerta'}`}>{c.revisao_juridica === 'revisada' ? `Revisada por ${c.revisado_por} em ${formatarData(c.revisado_em)}` : c.revisao_juridica === 'fundamentada' ? 'Com base legal' : 'Minuta'} · v{c.versao}</span>
               </div>
-              <p className="muted small" style={{ margin: '6px 0 0' }}>{c.aplicavel.map((a) => APLICAVEL[a] ?? a).join(', ')}{c.ativo === false ? ' · inativa' : ''}</p>
+              <p className="muted small" style={{ margin: '6px 0 0' }}>{rotuloAplicavel(c.aplicavel)}{c.destaque ? ' · em destaque' : ''}{c.ativo === false ? ' · inativa' : ''}</p>
+              {c.referencias && <p className="muted small" style={{ margin: '4px 0 0' }}>Base: {c.referencias}</p>}
               <p className="small" style={{ margin: '6px 0 0' }}>{c.texto.slice(0, 220)}{c.texto.length > 220 ? '…' : ''}</p>
             </button>
           ))}
@@ -692,7 +750,7 @@ export function Clausulas() {
 
 function ClausulaForm({ c, aoFechar, aoSalvar }: { c: (Clausula & { id?: string; revisado_por?: string | null; revisado_em?: string | null; referencias?: string | null }) | null; aoFechar: () => void; aoSalvar: () => void }) {
   const [f, setF] = useState({
-    codigo: c?.codigo ?? '', titulo: c?.titulo ?? '', texto: c?.texto ?? '', aplicavel: c?.aplicavel ?? ['todos'], ordem: c?.ordem ?? 50, ativo: c?.ativo ?? true,
+    codigo: c?.codigo ?? '', titulo: c?.titulo ?? '', texto: c?.texto ?? '', aplicavel: c?.aplicavel ?? ['todos'], ordem: c?.ordem ?? 50, ativo: c?.ativo ?? true, destaque: c?.destaque ?? false,
     revisada: c?.revisao_juridica === 'revisada', revisado_por: c?.revisado_por ?? '', revisado_em: c?.revisado_em ?? '', referencias: c?.referencias ?? '',
   });
   const [erro, setErro] = useState<string | null>(null);
@@ -702,7 +760,8 @@ function ClausulaForm({ c, aoFechar, aoSalvar }: { c: (Clausula & { id?: string;
     const reg = {
       codigo: f.codigo.trim() || f.titulo.trim().toLowerCase().normalize('NFD').replace(/[^\w]+/g, '_').slice(0, 40), titulo: f.titulo.trim(), texto: f.texto.trim(),
       aplicavel: f.aplicavel.length ? f.aplicavel : ['todos'], ordem: Number(f.ordem) || 0, ativo: f.ativo,
-      revisao_juridica: f.revisada ? 'revisada' : 'minuta', revisado_por: f.revisado_por.trim() || null, revisado_em: f.revisado_em || null, referencias: f.referencias.trim() || null,
+      destaque: f.destaque,
+      revisao_juridica: f.revisada ? 'revisada' : c?.revisao_juridica === 'revisada' || c?.revisao_juridica === 'fundamentada' ? 'fundamentada' : 'minuta', revisado_por: f.revisado_por.trim() || null, revisado_em: f.revisado_em || null, referencias: f.referencias.trim() || null,
     };
     const r = c?.id ? await supabase.from('clausula').update(reg).eq('id', c.id) : await supabase.from('clausula').insert(reg);
     if (r.error) return setErro(mensagemErro(r.error));
@@ -713,13 +772,19 @@ function ClausulaForm({ c, aoFechar, aoSalvar }: { c: (Clausula & { id?: string;
       rodape={<><button type="button" className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" form="form-cl">Salvar</button></>}>
       <form id="form-cl" className="stack" onSubmit={salvar}>
         <label className="campo">Título<input value={f.titulo} onChange={(e) => set('titulo', e.target.value)} required /></label>
-        <label className="campo">Texto <Ajuda>Marcadores preenchidos automaticamente: {'{proposta} {valor_total} {honorarios} {visitas_incluidas} {visita_adicional} {remuneracao_administracao} {prazo}'}.</Ajuda>
+        <label className="campo">Texto <Ajuda>Marcadores preenchidos automaticamente: {'{proposta} {valor_total} {honorarios} {visitas_incluidas} {visita_adicional} {remuneracao_administracao} {prazo} {servicos} {normas}'}.</Ajuda>
           <textarea rows={7} value={f.texto} onChange={(e) => set('texto', e.target.value)} required /></label>
         <fieldset className="campo"><legend>Entra nos modelos</legend>
           <div className="lista-check">{Object.entries(APLICAVEL).map(([k, v]) => (
             <label key={k} className="check"><input type="checkbox" checked={f.aplicavel.includes(k)} onChange={(e) => set('aplicavel', e.target.checked ? [...f.aplicavel, k] : f.aplicavel.filter((x) => x !== k))} /> {v}</label>
           ))}</div>
         </fieldset>
+        <fieldset className="campo"><legend>Tipos de serviço <Ajuda>Sem nenhum marcado, a cláusula entra em todos os serviços.</Ajuda></legend>
+          <div className="lista-check">{Object.entries(APLICAVEL_SERVICO).map(([k, v]) => (
+            <label key={k} className="check"><input type="checkbox" checked={f.aplicavel.includes(k)} onChange={(e) => set('aplicavel', e.target.checked ? [...f.aplicavel, k] : f.aplicavel.filter((x) => x !== k))} /> {v}</label>
+          ))}</div>
+        </fieldset>
+        <label className="check"><input type="checkbox" checked={f.destaque} onChange={(e) => set('destaque', e.target.checked)} /> Imprimir em destaque (cláusula que limita direito do cliente; CDC, art. 54, § 4º)</label>
         <div className="grid grid-3">
           <label className="check"><input type="checkbox" checked={f.revisada} onChange={(e) => set('revisada', e.target.checked)} /> Revisada juridicamente</label>
           {f.revisada && <label className="campo">Revisada por<input value={f.revisado_por} onChange={(e) => set('revisado_por', e.target.value)} required /></label>}
