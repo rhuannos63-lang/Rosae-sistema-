@@ -20,6 +20,7 @@ import {
 import { ESTADO_PROPOSTA, EVENTO_PROPOSTA, type EstadoProposta, type Proposta, type PropostaEvento, type PropostaVersao } from '../lib/tipos';
 import { linkWhatsApp } from './Comercial';
 import { estadoInicial, OrcamentoGerador, type EstadoGerador } from '../components/OrcamentoGerador';
+import { EncaixeAgenda, useFila } from '../components/EncaixeAgenda';
 import { carregarPrecos } from '../lib/orcamentoParametros';
 import { EnviarEmail, HistoricoEmails } from '../components/EnvioEmail';
 import { NovoAditivo } from '../components/NovoAditivo';
@@ -379,7 +380,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
       <div className="card">
         <Erro mensagem={erro} />
         {aba === 'auto' && (
-          <AbaAutomatica c={c} biblioteca={carga.biblioteca} podeFinanceiro={podeFinanceiro} aoAplicar={async (o) => {
+          <AbaAutomatica c={c} biblioteca={carga.biblioteca} podeFinanceiro={podeFinanceiro} propostaId={carga.proposta.id} aoAplicar={async (o) => {
             setC(o.conteudo);
             if (podeFinanceiro) {
               setCustos(o.custos);
@@ -400,7 +401,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
           </div>
         )}
         {aba === 'resp' && <AbaResponsabilidades c={c} setC={setC} />}
-        {aba === 'prazo' && <AbaPrazo c={c} setC={setC} />}
+        {aba === 'prazo' && <AbaPrazo c={c} setC={setC} propostaId={carga.proposta.id} />}
         {aba === 'pagamento' && <AbaPagamento c={c} setC={setC} />}
         {aba === 'condicoes' && (
           <div className="stack">
@@ -479,7 +480,7 @@ function Comparacao({ a, b, na, nb, aoFechar }: { a: Conteudo; b: Conteudo; na: 
 
 type SetC = React.Dispatch<React.SetStateAction<Conteudo>>;
 
-function AbaAutomatica({ c, biblioteca, podeFinanceiro, aoAplicar }: { c: Conteudo; biblioteca: ModeloServico[]; podeFinanceiro: boolean; aoAplicar: (o: Orcamento) => void }) {
+function AbaAutomatica({ c, biblioteca, podeFinanceiro, aoAplicar, propostaId }: { c: Conteudo; biblioteca: ModeloServico[]; podeFinanceiro: boolean; aoAplicar: (o: Orcamento) => void; propostaId?: string }) {
   const precos = useConsulta(() => carregarPrecos(), []);
   const condicoes = useConsulta(() => carregarCondicoes().catch(() => []), []);
   const [estado, setEstado] = useState<EstadoGerador>(() => estadoInicial(c.gerador));
@@ -492,7 +493,7 @@ function AbaAutomatica({ c, biblioteca, podeFinanceiro, aoAplicar }: { c: Conteu
         Escolha o tipo de serviço e responda às perguntas. O sistema monta escopo, pacotes, prazos, pagamento e todos os textos da apresentação com a sua tabela de preços.
         Depois você ajusta o que quiser nas outras abas.
       </p>
-      <OrcamentoGerador estado={estado} setEstado={setEstado} precos={precos.dados} contexto={contexto} podeFinanceiro={podeFinanceiro}
+      <OrcamentoGerador estado={estado} setEstado={setEstado} precos={precos.dados} contexto={contexto} podeFinanceiro={podeFinanceiro} propostaId={propostaId}
         acao={(o) => (
           <button className="btn-primario btn-grande" disabled={o.principal.valor <= 0}
             onClick={() => (c.ambientes.length === 0 || window.confirm('Substituir o escopo, os valores e os textos atuais por este orçamento? A versão em rascunho é sobrescrita.')) && aoAplicar(o)}>
@@ -674,8 +675,9 @@ function AbaResponsabilidades({ c, setC }: { c: Conteudo; setC: SetC }) {
   );
 }
 
-function AbaPrazo({ c, setC }: { c: Conteudo; setC: SetC }) {
+function AbaPrazo({ c, setC, propostaId }: { c: Conteudo; setC: SetC; propostaId: string }) {
   const somaDias = c.etapas.reduce((s, e) => s + (Number(e.prazo_dias) || 0), 0);
+  const fila = useFila(propostaId);
   const datas = datasDasEtapas(c);
   const entrega = dataEntrega(c);
   return (
@@ -690,6 +692,7 @@ function AbaPrazo({ c, setC }: { c: Conteudo; setC: SetC }) {
         </label>
         <div className="campo"><span>Entrega prevista</span><b style={{ padding: '9px 0' }}>{entrega ? formatarData(entrega) : <span className="muted">informe o início</span>}</b></div>
       </div>
+      <EncaixeAgenda fila={fila} dias={Number(c.prazo_total_dias) || somaDias} inicio={c.data_inicio} aoUsar={(d) => setC((x) => ({ ...x, data_inicio: d }))} />
       {c.etapas.map((e, k) => (
         <div key={k} className="linha-valores" style={{ alignItems: 'end' }}>
           <label className="campo" style={{ flex: 2 }}>Etapa {k + 1}<input value={e.nome} onChange={(ev) => setC((x) => mudarEtapa(x, k, { nome: ev.target.value }))} /></label>

@@ -158,10 +158,15 @@ export const MANUAL: Capitulo[] = [
     dicas: ['A leitura por foto precisa da IA ligada (Empresa e Sistema › Assistente IA). Sem ela, use “Nota manual” e anexe o arquivo.'],
   },
   {
-    id: 'agenda', titulo: 'Agenda e pendências', icone: 'calendario', link: { para: '/pendencias', rotulo: 'Ver pendências' },
-    resumo: 'Tudo que tem data num só lugar e a lista do que precisa de ação.',
+    id: 'agenda', titulo: 'Agenda e pendências', icone: 'calendario', link: { para: '/agenda', rotulo: 'Abrir a agenda' },
+    resumo: 'Seu dia de trabalho num calendário: suas tarefas e tudo o que tem data no sistema, com avisos no celular.',
     passos: [
-      { titulo: 'Veja a agenda', texto: 'A Agenda junta etapas de obra, materiais com data, contas a receber e a pagar, propostas e ações do comercial, de todas as obras e em ordem. Escolha 7, 30 ou 60 dias e filtre por área.' },
+      { titulo: 'Abra a agenda todo dia', texto: 'A Agenda junta suas tarefas, as etapas das obras, materiais com data, contas a receber e a pagar, propostas e ações do comercial. Veja por mês, semana, dia ou em lista, e filtre pelas cores. O painel mostra hoje, amanhã e depois.' },
+      { titulo: 'Anote as tarefas do dia a dia', texto: 'Toque em “Nova tarefa” (ou no + de um dia): visita, reunião, ligação, prazo ou pessoal, com hora, vários dias, repetição (todo dia, dias úteis, semanal, mensal) e aviso no celular antes da hora. Na visão Dia, escreva e aperte Enter para anotar rápido.' },
+      { titulo: 'Arraste para mudar a data', texto: 'No computador, arraste uma tarefa, etapa ou conta para outro dia. Ou abra o item e use “+1 dia”, “+1 semana” ou escolha a data. Etapas com planejamento original guardado pedem o motivo.' },
+      { titulo: 'Proposta aceita entra sozinha', texto: 'Quando o cliente aceita, a agenda reserva o período do trabalho depois dos que já estão na fila (uma faixa por etapa) e cria as tarefas: converter em obra e confirmar o início com o cliente. Ao converter, as etapas da obra recebem essas datas.' },
+      { titulo: 'Prazo das propostas novas sem conflito', texto: 'O orçamento automático já sugere o início no primeiro dia livre, depois das obras em andamento, das propostas aceitas e das em aberto. Em “Avisos e encaixe” você escolhe quantos trabalhos andam ao mesmo tempo, a folga entre eles e a antecedência mínima.' },
+      { titulo: 'Avisos no celular', texto: 'Com os avisos ligados, chegam o resumo do dia de manhã, os lembretes das tarefas com hora, o que atrasou e as propostas aceitas. No iPhone, instale o app na tela de início.' },
       { titulo: 'Resolva as pendências', texto: 'A central de Pendências lista, da mais urgente para a menos, contas vencidas, ações atrasadas, propostas sem resposta e obras paradas. Cada item leva direto à tela para resolver.' },
       { titulo: 'Adie ou dispense', texto: 'Se algo pode esperar, adie por 3 ou 7 dias, ou dispense. A dispensa vale só para você.' },
     ],

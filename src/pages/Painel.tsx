@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AvisosAparelho } from '../components/AvisosAparelho';
+import { AgendaPainel } from '../components/AgendaPainel';
 import { conferirAceitesPendentes } from '../lib/avisos';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -147,6 +148,7 @@ export function Painel() {
         <button className="btn-secundario" aria-label="Próximo período" onClick={() => setRef(deslocarPeriodo(tipo, ref, 1))}>›</button>
       </Topo>
       <AvisosAparelho compacto />
+      <AgendaPainel />
       <AtalhosDepartamentos />
       <Erro mensagem={erro} />
       {carregando && !dados && <Carregando />}

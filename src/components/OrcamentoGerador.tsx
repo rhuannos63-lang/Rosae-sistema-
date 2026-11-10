@@ -13,6 +13,7 @@ import {
 import { codigosDe, CONDICAO_OCUPADO } from '../core/condicoes';
 import { SeletorCondicoes } from './SeletorCondicoes';
 import type { TabelaPrecos } from '../lib/orcamentoParametros';
+import { EncaixeAgenda, useFila } from './EncaixeAgenda';
 
 const reais = (v: number) => formatar(Math.round(v * 100));
 const SIGLA: Record<TipoServico, string> = { projeto_estrutural: 'PE', projeto_arquitetonico: 'PA', reforco: 'RE', reforma: 'RF', construcao: 'CO', regularizacao: 'RI', laudo: 'LT', pericia: 'PT' };
@@ -54,13 +55,22 @@ export function alternarServico(e: EstadoGerador, t: TipoServico): EstadoGerador
   return { ...e, extras: [...extras, { tipo: t, respostas: respostasPadrao(t) }], valores: {} };
 }
 
-export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFinanceiro, acao }: {
+export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFinanceiro, acao, propostaId }: {
   estado: EstadoGerador; setEstado: (e: EstadoGerador) => void; precos: TabelaPrecos; contexto: Contexto; podeFinanceiro: boolean;
   acao: (o: Orcamento) => React.ReactNode;
+  /** Proposta sendo editada (não conta como trabalho na fila da agenda). */
+  propostaId?: string | null;
 }) {
   const { tipo, respostas, pacote, valores, tiradas } = estado;
   const servicos = useMemo(() => servicosDo(estado), [estado]);
-  const orc = useMemo(() => (servicos.length ? gerarOrcamentoServicos(servicos, precos, pacote, { ...contexto, valores, tiradas }) : null), [servicos, pacote, precos, contexto, valores, tiradas]);
+  const fila = useFila(propostaId);
+  // O início previsto vem da agenda: o primeiro dia livre depois dos trabalhos já aceitos e em aberto.
+  const inicio = contexto.base?.data_inicio || fila?.livre || null;
+  const orc = useMemo(() => {
+    if (!servicos.length) return null;
+    const o = gerarOrcamentoServicos(servicos, precos, pacote, { ...contexto, valores, tiradas });
+    return inicio ? { ...o, conteudo: { ...o.conteudo, data_inicio: inicio } } : o;
+  }, [servicos, pacote, precos, contexto, valores, tiradas, inicio]);
   const [verLinhas, setVerLinhas] = useState(!!tiradas?.length);
   // Tirar um item sugerido: sai do preço, do escopo e do incluso. O preço que você definiu volta à tabela.
   const tirarLinha = (titulo: string) => setEstado({ ...estado, tiradas: [...(tiradas ?? []), titulo], valores: {} });
@@ -157,6 +167,7 @@ export function OrcamentoGerador({ estado, setEstado, precos, contexto, podeFina
                 <dt>Prazo</dt><dd><b>{orc.conteudo.prazo_total_dias} dias</b> em {orc.conteudo.etapas.length} etapas</dd>
                 <dt>Pagamento</dt><dd>{orc.conteudo.pagamento.parcelas.length} parcela(s)</dd>
               </dl>
+              {!contexto.base?.data_inicio && <div style={{ marginTop: 10 }}><EncaixeAgenda fila={fila} dias={orc.conteudo.prazo_total_dias ?? 0} inicio={fila?.livre} /></div>}
               {podeFinanceiro && orc.analise.preco > 0 && (
                 <div className="analise-interna">
                   <div className="small muted">Só você vê · não vai para o cliente</div>

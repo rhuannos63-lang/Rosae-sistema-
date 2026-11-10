@@ -1,0 +1,25 @@
+name: Avisos da agenda
+# A cada 15 minutos, pede à função "avisos" para mandar ao celular o que estiver na hora:
+# o resumo do dia (a partir das 7h), os lembretes das tarefas com hora e os atrasos novos.
+# O banco controla o que já foi avisado: rodar de novo não repete aviso. Não precisa de segredo.
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+concurrency: avisos-agenda
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: src/config.publico.json
+          sparse-checkout-cone-mode: false
+      - name: Mandar avisos
+        run: |
+          URL=$(jq -r .supabase_url src/config.publico.json)
+          CHAVE=$(jq -r .supabase_chave_publica src/config.publico.json)
+          if [ "$URL" = "null" ] || [ -z "$URL" ]; then echo "Supabase ainda não configurado."; exit 0; fi
+          curl -sS --fail-with-body --max-time 60 -X POST "$URL/functions/v1/avisos" \
+            -H "apikey: $CHAVE" -H "content-type: application/json" -d '{"acao":"agenda"}'

@@ -36,7 +36,7 @@ export const DEPARTAMENTOS: Departamento[] = [
     resumo: 'Execução e acompanhamento: obras, cronograma, medições, contratos, agenda e pendências.',
     subpastas: [
       { para: '/obras', rotulo: 'Obras', icone: 'obras', descricao: 'Cronograma, materiais, diário, medições, contrato e portal de cada obra.' },
-      { para: '/agenda', rotulo: 'Agenda', icone: 'calendario', descricao: 'Visitas, prazos de etapas e vencimentos no calendário.' },
+      { para: '/agenda', rotulo: 'Agenda', icone: 'calendario', descricao: 'Calendário do dia a dia: tarefas, etapas, propostas aceitas e vencimentos, com avisos.' },
       { para: '/pendencias', rotulo: 'Central de pendências', icone: 'alerta', descricao: 'Tudo que precisa de ação, de todos os departamentos.' },
     ],
     ligacoes: [

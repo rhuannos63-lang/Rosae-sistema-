@@ -51,7 +51,7 @@ export function AvisosAparelho({ compacto }: { compacto?: boolean }) {
     return (
       <div className="aviso info avisos-convite">
         <Icone nome="sino" />
-        <span><b>Saiba na hora quando um cliente aceitar uma proposta.</b> Ligue os avisos neste aparelho (vale para o celular e o computador).</span>
+        <span><b>Receba a agenda do dia, os lembretes, os atrasos e os aceites de proposta.</b> Ligue os avisos neste aparelho (vale para o celular e o computador).</span>
         <span className="spacer" />
         <button className="btn-primario" disabled={ocupado} onClick={ligar}>Ligar avisos</button>
         <button className="btn-link" onClick={() => { localStorage.setItem(DISPENSA, '1'); setDispensado(true); }}>Agora não</button>
@@ -62,7 +62,7 @@ export function AvisosAparelho({ compacto }: { compacto?: boolean }) {
   return (
     <div className="card">
       <h2>Avisos no celular e no computador</h2>
-      <p className="muted small" style={{ marginTop: 4 }}>Quando um cliente aceitar uma proposta (ou um aditivo), chega uma notificação do app ROSAE neste aparelho, mesmo com o sistema fechado. Ligue em cada aparelho que você usa.</p>
+      <p className="muted small" style={{ marginTop: 4 }}>Chega uma notificação do app ROSAE neste aparelho, mesmo com o sistema fechado: o resumo da agenda de cada manhã, o lembrete das tarefas com hora, o que atrasou (etapas, tarefas, contas e recebimentos) e quando um cliente aceita uma proposta ou um aditivo. Ligue em cada aparelho que você usa.</p>
       {sit === 'ligado' && <div className="aviso ok"><Icone nome="check" /><span>Avisos ligados neste aparelho.</span></div>}
       {sit === 'bloqueado' && <div className="aviso"><Icone nome="alerta" /><span>As notificações deste site estão bloqueadas no navegador. Libere em Configurações do navegador › Notificações e volte aqui.</span></div>}
       {sit === 'instalar_iphone' && <div className="aviso info"><span>No iPhone, os avisos funcionam com o app instalado: no Safari, toque em Compartilhar › Adicionar à Tela de Início, abra o ROSAE por lá e ligue os avisos.</span></div>}

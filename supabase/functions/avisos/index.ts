@@ -3,6 +3,8 @@
 // - aceites: avisa todos os aparelhos cadastrados sobre propostas aceitas que ainda não foram
 //   avisadas. Pode ser chamada por qualquer um (a página do cliente chama logo após o aceite):
 //   só avisa aceites reais do banco, uma vez cada.
+// - agenda: chamada a cada 15 minutos (GitHub Actions). Manda o resumo do dia, os lembretes das
+//   tarefas com hora e os atrasos novos. O banco decide o que é novo: cada aviso sai uma vez só.
 // - teste: manda um aviso de teste para os aparelhos de quem está logado.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { enviarAviso, gerarChavesVapid, type Aviso, type ChavesVapid } from '../_shared/webpush.ts';
@@ -53,6 +55,7 @@ async function enviarPara(adm: SupabaseClient, lista: Inscr[], aviso: Aviso): Pr
   return ok;
 }
 
+const dataBR = (iso: string) => iso.slice(0, 10).split('-').reverse().slice(0, 2).join('/');
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 async function avisarAceites(adm: SupabaseClient): Promise<Response> {
@@ -75,9 +78,12 @@ async function avisarAceites(adm: SupabaseClient): Promise<Response> {
     ]);
     const valor = v ? Number(v.valor_total) : 0;
     const quem = (e.nome as string | null)?.trim() || 'O cliente';
+    const { data: reserva } = await adm.rpc('agenda_reserva', { p_proposta: e.proposta_id });
+    const r = reserva as { inicio: string | null; fim: string | null } | null;
+    const naAgenda = r?.inicio && r.fim ? ` Entrou na agenda de ${dataBR(r.inicio)} a ${dataBR(r.fim)}.` : '';
     const aviso: Aviso = {
       titulo: p?.tipo === 'aditivo' ? 'Aditivo aceito' : 'Proposta aceita',
-      corpo: `${quem} aceitou ${p ? `${p.codigo} · ${p.titulo}` : 'uma proposta'}${valor > 0 ? ` (${brl(valor)})` : ''}.`,
+      corpo: `${quem} aceitou ${p ? `${p.codigo} · ${p.titulo}` : 'uma proposta'}${valor > 0 ? ` (${brl(valor)})` : ''}.${naAgenda}`,
       url: p ? `/propostas/${p.id}` : '/propostas',
       tag: `aceite-${e.id}`,
     };
@@ -88,6 +94,19 @@ async function avisarAceites(adm: SupabaseClient): Promise<Response> {
   return json({ avisados });
 }
 
+async function avisarAgenda(adm: SupabaseClient): Promise<Response> {
+  const { data: inscr } = await adm.from('push_assinatura').select('id, endpoint, p256dh, auth, falhas');
+  // Sem aparelho com avisos ligados: não gasta os avisos do dia (saem quando alguém ligar).
+  if (!inscr?.length) return json({ avisos: 0, aparelhos: 0 });
+  const { data, error } = await adm.rpc('agenda_avisos_a_enviar');
+  if (error) throw new Error(error.message);
+  const avisos = (data ?? []) as { chave: string; titulo: string; corpo: string; url: string }[];
+  for (const a of avisos) {
+    await enviarPara(adm, inscr as Inscr[], { titulo: a.titulo, corpo: a.corpo, url: a.url, tag: a.chave.startsWith('resumo:') ? 'resumo' : a.chave });
+  }
+  return json({ avisos: avisos.length, aparelhos: inscr.length });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return json({ erro: 'Use POST.' }, 405);
@@ -96,6 +115,7 @@ Deno.serve(async (req) => {
     const corpo = await req.json().catch(() => ({}));
     if (corpo.acao === 'chave') return json({ publica: (await chaves(adm)).publica });
     if (corpo.acao === 'aceites') return await avisarAceites(adm);
+    if (corpo.acao === 'agenda') return await avisarAgenda(adm);
     if (corpo.acao === 'teste') {
       const auth = req.headers.get('authorization') ?? '';
       if (!auth.startsWith('Bearer ')) return json({ erro: 'Faça login.' }, 401);
@@ -103,7 +123,7 @@ Deno.serve(async (req) => {
       const { data: u } = await db.auth.getUser(auth.slice(7));
       if (!u?.user) return json({ erro: 'Sessão expirada. Entre de novo.' }, 401);
       const { data: inscr } = await adm.from('push_assinatura').select('id, endpoint, p256dh, auth, falhas').eq('usuario_id', u.user.id);
-      const n = await enviarPara(adm, (inscr ?? []) as Inscr[], { titulo: 'Avisos ligados', corpo: 'Tudo certo: quando um cliente aceitar uma proposta, o aviso chega aqui.', url: '/', tag: 'teste' });
+      const n = await enviarPara(adm, (inscr ?? []) as Inscr[], { titulo: 'Avisos ligados', corpo: 'Tudo certo: o resumo do dia, os lembretes, os atrasos e os aceites de proposta chegam aqui.', url: '/', tag: 'teste' });
       return json({ enviados: n, aparelhos: inscr?.length ?? 0 });
     }
     return json({ erro: 'Ação desconhecida.' }, 400);
