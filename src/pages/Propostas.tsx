@@ -26,6 +26,11 @@ import { NovoAditivo } from '../components/NovoAditivo';
 import { QuadroRecebido } from '../components/Recebimentos';
 import { baixarArquivo, compartilharArquivo, gerarPdfProposta, nomeDoPdf, paraBase64 } from '../lib/pdfProposta';
 import type { Orcamento } from '../core/orcamento';
+import { ComposicaoProposta } from '../components/ComposicaoProposta';
+import { PADROES, type Padrao, type Uso } from '../core/composicao';
+import { codigosDe } from '../core/condicoes';
+import { carregarCondicoes } from '../lib/composicoes';
+import { definirTotalItem, mudarItem as mudarItemConteudo } from '../core/proposta';
 
 type PropostaLista = Proposta & { versoes: { id: string; numero: number; valor_total: string; emitida: boolean; validade: string | null }[] };
 
@@ -260,6 +265,11 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
   const [erro, setErro] = useState<string | null>(null);
   const [custos, setCustos] = useState<Custo[]>([]);
   const [notas, setNotas] = useState('');
+  const [usos, setUsos] = useState<Uso[]>([]);
+  const [bdi, setBdi] = useState(25);
+  const [padrao, setPadrao] = useState<Padrao>('medio');
+  const [condicoes, setCondicoes] = useState<string[]>([]);
+  const [custoComp, setCustoComp] = useState(0);
   const [custoCarregado, setCustoCarregado] = useState(false);
   const [preview, setPreview] = useState(false);
   const [comparar, setComparar] = useState(false);
@@ -284,8 +294,13 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
   useEffect(() => {
     if (!podeFinanceiro) return;
     supabase.from('proposta_custo').select('*').eq('versao_id', versao.id).maybeSingle().then(({ data }) => {
-      const d = data as { custos: { linhas?: Custo[] }; notas_internas: string | null } | null;
+      const d = data as { custos: { linhas?: Custo[]; composicoes?: Uso[]; bdi_pct?: number; padrao?: Padrao; condicoes?: string[] }; notas_internas: string | null } | null;
       setCustos(d?.custos?.linhas ?? []);
+      setUsos(Array.isArray(d?.custos?.composicoes) ? d!.custos.composicoes! : []);
+      if (typeof d?.custos?.bdi_pct === 'number') setBdi(d.custos.bdi_pct);
+      if (d?.custos?.padrao && PADROES.includes(d.custos.padrao)) setPadrao(d.custos.padrao);
+      // Sem escolha salva, vem do que foi marcado no orçamento automático.
+      setCondicoes(Array.isArray(d?.custos?.condicoes) ? d!.custos.condicoes! : codigosDe(c.gerador?.respostas?.condicoes));
       setNotas(d?.notas_internas ?? '');
       setCustoCarregado(true);
     });
@@ -293,8 +308,8 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
 
   async function salvarCustos() {
     const linhasValidas = custos.filter((x) => x.descricao.trim() || x.valor);
-    const total = somar(linhasValidas.map((x) => paraCentavos(x.valor)));
-    const { error } = await supabase.from('proposta_custo').upsert({ versao_id: versao.id, custos: { linhas: linhasValidas }, custo_total: paraBanco(total), notas_internas: notas || null });
+    const total = somar(linhasValidas.map((x) => paraCentavos(x.valor))) + Math.round(custoComp * 100);
+    const { error } = await supabase.from('proposta_custo').upsert({ versao_id: versao.id, custos: { linhas: linhasValidas, composicoes: usos.filter((u) => u.quantidade > 0), bdi_pct: bdi, padrao, condicoes }, custo_total: paraBanco(total), notas_internas: notas || null });
     if (error) return setErro(mensagemErro(error));
     toast('Custos internos salvos (não aparecem para o cliente).');
   }
@@ -345,7 +360,8 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
             setC(o.conteudo);
             if (podeFinanceiro) {
               setCustos(o.custos);
-              const { error } = await supabase.from('proposta_custo').upsert({ versao_id: versao.id, custos: { linhas: o.custos }, custo_total: paraBanco(Math.round(o.analise.custo * 100)), notas_internas: notas || `Gerado pelo orçamento automático (pacote ${o.principal.nome}).` });
+              setCondicoes(codigosDe(o.conteudo.gerador?.respostas?.condicoes));
+              const { error } = await supabase.from('proposta_custo').upsert({ versao_id: versao.id, custos: { linhas: o.custos, composicoes: usos, bdi_pct: bdi, padrao, condicoes: codigosDe(o.conteudo.gerador?.respostas?.condicoes) }, custo_total: paraBanco(Math.round(o.analise.custo * 100)), notas_internas: notas || `Gerado pelo orçamento automático (pacote ${o.principal.nome}).` });
               if (error) setErro(mensagemErro(error));
             }
             toast('Proposta montada. Confira cada parte e veja como o cliente vai receber.');
@@ -373,7 +389,9 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
           </div>
         )}
         {aba === 'custos' && podeFinanceiro && (
-          <AbaCustos custos={custos} setCustos={setCustos} notas={notas} setNotas={setNotas} total={total} carregado={custoCarregado} salvar={salvarCustos} />
+          <AbaCustos custos={custos} setCustos={setCustos} notas={notas} setNotas={setNotas} total={total} carregado={custoCarregado} salvar={salvarCustos} custoComposicao={custoComp}
+            composicao={<ComposicaoProposta c={c} usos={usos} setUsos={setUsos} bdi={bdi} setBdi={setBdi} padrao={padrao} setPadrao={setPadrao} condicoes={condicoes} setCondicoes={setCondicoes} aoCusto={setCustoComp}
+              aoUsarPreco={(ai, ii, v) => { setCValores((x) => mudarItemConteudo(x, ai, ii, (i) => definirTotalItem(i, Math.round(v * 100)))); toast('Preço do item atualizado. As parcelas acompanham o novo total.'); }} />} />
         )}
         {aba === 'revisao' && (
           <div className="stack">
@@ -437,8 +455,9 @@ type SetC = React.Dispatch<React.SetStateAction<Conteudo>>;
 
 function AbaAutomatica({ c, biblioteca, podeFinanceiro, aoAplicar }: { c: Conteudo; biblioteca: ModeloServico[]; podeFinanceiro: boolean; aoAplicar: (o: Orcamento) => void }) {
   const precos = useConsulta(() => carregarPrecos(), []);
+  const condicoes = useConsulta(() => carregarCondicoes().catch(() => []), []);
   const [estado, setEstado] = useState<EstadoGerador>(() => estadoInicial(c.gerador));
-  const contexto = useMemo(() => ({ necessidade: c.necessidade, local: c.local, biblioteca, base: c }), [c, biblioteca]);
+  const contexto = useMemo(() => ({ necessidade: c.necessidade, local: c.local, biblioteca, base: c, condicoes: condicoes.dados ?? [] }), [c, biblioteca, condicoes.dados]);
   if (precos.carregando && !precos.dados) return <Carregando />;
   if (precos.erro || !precos.dados) return <Erro mensagem={precos.erro ?? 'Erro ao carregar a tabela de preços.'} />;
   return (
@@ -689,14 +708,17 @@ function AbaPagamento({ c, setC }: { c: Conteudo; setC: SetC }) {
   );
 }
 
-function AbaCustos({ custos, setCustos, notas, setNotas, total, carregado, salvar }: { custos: Custo[]; setCustos: (c: Custo[]) => void; notas: string; setNotas: (s: string) => void; total: Centavos; carregado: boolean; salvar: () => void }) {
+function AbaCustos({ custos, setCustos, notas, setNotas, total, carregado, salvar, composicao, custoComposicao }: { custos: Custo[]; setCustos: (c: Custo[]) => void; notas: string; setNotas: (s: string) => void; total: Centavos; carregado: boolean; salvar: () => void; composicao: React.ReactNode; custoComposicao: number }) {
   if (!carregado) return <Carregando />;
-  const custoTotal = somar(custos.map((x) => paraCentavos(x.valor)));
+  const custoTotal = somar(custos.map((x) => paraCentavos(x.valor))) + Math.round(custoComposicao * 100);
   const margem = total - custoTotal;
   const pct = total > 0 ? Math.round((margem / total) * 1000) / 10 : 0;
   return (
     <div className="stack">
       <div className="aviso info"><span>Só você vê esta parte. Custos e margem nunca vão para a proposta, o link ou o PDF.</span></div>
+      {composicao}
+      <h2>Outros custos</h2>
+      <p className="muted small" style={{ margin: 0 }}>Custos que não estão nas composições: deslocamento, empreiteiro por preço fechado, impostos, taxas.</p>
       {custos.map((x, k) => (
         <div key={k} className="linha-valores" style={{ alignItems: 'end' }}>
           <label className="campo" style={{ flex: 3 }}>Custo<input value={x.descricao} onChange={(e) => setCustos(custos.map((y, j) => (j === k ? { ...y, descricao: e.target.value } : y)))} placeholder="Mão de obra parceira, material, deslocamento, impostos…" /></label>
@@ -952,7 +974,13 @@ function Converter({ proposta, versaoId }: { proposta: Proposta; versaoId: strin
       }
     }
     setRodando(false);
-    toast(proposta.tipo === 'aditivo' ? 'Aditivo incorporado à obra.' : `Obra criada: ambientes, serviços, etapas, materiais sugeridos e previsão de recebimento${nAd ? `, com ${nAd} aditivo(s) aceito(s)` : ''}. Revise cada parte.`);
+    // Materiais das composições de custo viram a lista de compras da obra (para conferir).
+    let lista = 0;
+    if (proposta.tipo !== 'aditivo') {
+      const l = await supabase.rpc('gerar_lista_compras', { p_obra: r.data as string });
+      if (!l.error) lista = Number(l.data) || 0;
+    }
+    toast(proposta.tipo === 'aditivo' ? 'Aditivo incorporado à obra.' : `Obra criada: ambientes, serviços, etapas, materiais sugeridos e previsão de recebimento${nAd ? `, com ${nAd} aditivo(s) aceito(s)` : ''}.${lista ? ` Lista de compras com ${lista} materiais em Materiais, para conferir.` : ''} Revise cada parte.`);
     navegar(`/obras/${r.data as string}${proposta.tipo === 'aditivo' ? '?aba=contrato' : ''}`);
   }
   if (existente.carregando && !existente.dados) return null;

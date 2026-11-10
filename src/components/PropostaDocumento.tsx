@@ -123,19 +123,34 @@ function useCaberNaFolha() {
     const el = ref.current;
     if (!el) return;
     let quadro = 0;
-    const ajustar = () => {
+    // Cada medida força o navegador a recalcular a página: começa pela proporção que falta
+    // (um passo só, quase sempre) e só refaz quando o texto ou a largura da folha mudam.
+    const ajustar = (forcar = false) => {
+      const assinatura = `${el.textContent?.length ?? 0}|${el.childElementCount}|${el.clientWidth}`;
+      if (!forcar && el.dataset.ajuste === assinatura) return;
+      el.dataset.ajuste = assinatura;
       el.style.removeProperty('--fator');
-      let f = 1;
-      for (let i = 0; i < 14 && el.scrollHeight > el.clientHeight + 1 && f > 0.6; i++) {
+      const sobra = () => el.scrollHeight > el.clientHeight + 1;
+      if (!sobra()) { el.classList.remove('transborda'); return; }
+      let f = Math.max(0.6, Math.floor((el.clientHeight / el.scrollHeight) * 100) / 100);
+      el.style.setProperty('--fator', String(f));
+      for (let i = 0; i < 6 && f > 0.6 && sobra(); i++) {
         f = Math.max(0.6, Math.round((f - 0.03) * 100) / 100);
         el.style.setProperty('--fator', String(f));
       }
-      el.classList.toggle('transborda', el.scrollHeight > el.clientHeight + 1);
+      el.classList.toggle('transborda', sobra());
     };
     ajustar();
-    const ro = new ResizeObserver(() => { cancelAnimationFrame(quadro); quadro = requestAnimationFrame(ajustar); });
+    // Só reajusta quando a folha muda de tamanho de verdade: o próprio ajuste não pode disparar outro (laço sem fim).
+    let ultimo = '';
+    const ro = new ResizeObserver(([e]) => {
+      const tam = `${Math.round(e.contentRect.width)}x${Math.round(e.contentRect.height)}`;
+      if (tam === ultimo) return;
+      ultimo = tam;
+      cancelAnimationFrame(quadro); quadro = requestAnimationFrame(() => ajustar(true));
+    });
     ro.observe(el.parentElement!);
-    document.fonts?.ready.then(() => { quadro = requestAnimationFrame(ajustar); });
+    document.fonts?.ready.then(() => { quadro = requestAnimationFrame(() => ajustar(true)); });
     return () => { ro.disconnect(); cancelAnimationFrame(quadro); };
   });
   return ref;

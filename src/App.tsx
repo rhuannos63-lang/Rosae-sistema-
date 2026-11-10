@@ -29,6 +29,7 @@ const PropostaPublica = preguicoso(() => import('./pages/PropostaPublica'), 'Pro
 const ContratoPublico = preguicoso(() => import('./pages/ContratoPublico'), 'ContratoPublico');
 const NovoOrcamento = preguicoso(() => import('./pages/Orcamento'), 'NovoOrcamento');
 const PrecosOrcamento = preguicoso(() => import('./pages/Orcamento'), 'PrecosOrcamento');
+const Composicoes = preguicoso(() => import('./pages/Composicoes'), 'Composicoes');
 const Agenda = preguicoso(() => import('./pages/Agenda'), 'Agenda');
 const Biblioteca = preguicoso(() => import('./pages/Biblioteca'), 'Biblioteca');
 const Planejador = preguicoso(() => import('./pages/Planejador'), 'Planejador');
@@ -92,6 +93,7 @@ function Rotas() {
             {comercial && <Route path="biblioteca" element={<Biblioteca />} />}
             {comercial && <Route path="orcamento" element={<NovoOrcamento />} />}
             {comercial && <Route path="orcamento/precos" element={<PrecosOrcamento />} />}
+            {podeFinanceiro && <Route path="orcamento/composicoes" element={<Composicoes />} />}
             <Route path="agenda" element={<Agenda />} />
             {podeFinanceiro && <Route path="financeiro" element={<Financeiro />} />}
             {podeFinanceiro && <Route path="financeiro/:id" element={<LancamentoDetalhe />} />}

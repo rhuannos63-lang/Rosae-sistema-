@@ -200,10 +200,10 @@ function Laudo({ f }: { f: FaseCalculada[] }) {
 export function CenaServico({ perfil, fases, ambientes, rotulo }: { perfil: Perfil; fases: FaseCalculada[]; ambientes: { nome: string; executado: number }[]; rotulo: string }) {
   return (
     <svg className={`cena-servico cena-${perfil}`} viewBox="0 0 400 260" role="img" aria-label={rotulo}>
-      {perfil === 'projeto' && <Projeto f={fases} />}
+      {(perfil === 'projeto' || perfil === 'arquitetura') && <Projeto f={fases} />}
       {perfil === 'reforco' && <Reforco f={fases} />}
       {perfil === 'reforma' && <Reforma f={fases} ambientes={ambientes} />}
-      {perfil === 'laudo' && <Laudo f={fases} />}
+      {(perfil === 'laudo' || perfil === 'regularizacao') && <Laudo f={fases} />}
       {(perfil === 'construcao' || perfil === 'gestao') && <Construcao f={perfil === 'gestao' ? [fases[0], fases[1], fases[2], fases[2], fases[3], fases[4]] : fases} />}
     </svg>
   );

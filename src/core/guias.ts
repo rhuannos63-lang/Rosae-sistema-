@@ -73,10 +73,11 @@ const G: Guia[] = [
     id: 'orcamento', titulo: 'Novo orçamento', manual: 'orcamento',
     serve: 'Responder poucas perguntas e receber o orçamento calculado, em três pacotes, com a apresentação de alto padrão pronta para enviar.',
     passos: [
-      { titulo: 'Escolha o serviço', texto: 'Projeto estrutural, reforço, reforma, construção, gestão ou perícia. Cada um tem as suas perguntas.' },
+      { titulo: 'Escolha um ou mais serviços', texto: 'Projeto estrutural, arquitetônico, reforço, reforma, construção, regularização, laudo ou perícia. Toque em vários para juntar tudo na mesma proposta.' },
       { titulo: 'Informe o cliente', texto: 'Já cadastrado ou Novo cliente.', alvo: 'Novo cliente' },
       { titulo: 'Responda e veja o preço mudar', texto: 'Área, complexidade, prazo: o valor é recalculado a cada resposta.' },
       { titulo: 'Compare os pacotes', texto: 'Essencial, Completo e Premium, com o que cada um inclui. Confira a margem estimada.' },
+      { titulo: 'Marque as condições do local', texto: 'Em reforço, reforma e construção: escada, elevador, aclive, condomínio, imóvel ocupado. O acréscimo entra numa linha própria.' },
       { titulo: 'Defina o seu preço, se quiser', texto: '“Definir meu preço” troca o valor calculado pelo seu, e as parcelas acompanham.' },
       { titulo: 'Gere a proposta', texto: 'Ela abre pronta para editar direto na página e emitir.' },
     ],
@@ -111,6 +112,16 @@ const G: Guia[] = [
       { titulo: 'Escolha o serviço', texto: 'Cada tipo de serviço tem a sua tabela.' },
       { titulo: 'Mude os valores', texto: 'Digite o novo valor. Só o que você mudou é guardado; o resto segue o padrão.' },
       { titulo: 'Salve ou descarte', texto: 'Salvar vale para os próximos orçamentos. Os já feitos não mudam.', alvo: 'Descartar mudanças' },
+    ],
+  },
+  {
+    id: 'composicoes', titulo: 'Insumos e composições', manual: 'composicoes',
+    serve: 'O custo de material e mão de obra de cada serviço, em três padrões de acabamento (básico, médio e premium), com valores do Rio de Janeiro que você edita.',
+    passos: [
+      { titulo: 'Veja as composições', texto: 'Cada linha mostra o custo por unidade nos três padrões. Abra uma para ver os insumos e a metodologia.', alvo: 'Composições' },
+      { titulo: 'Edite os preços', texto: 'Na aba Insumos e preços, clique no valor de cada padrão e digite o seu.', alvo: 'Insumos e preços' },
+      { titulo: 'Ajuste as condições da obra', texto: 'Escada, elevador, aclive, condomínio, imóvel ocupado: cada condição soma um percentual na mão de obra e no material.', alvo: 'Condições da obra' },
+      { titulo: 'Use na proposta', texto: 'Na proposta, aba Custos internos, escolha o padrão, marque as condições e ligue cada item às composições. Aceita a proposta, a lista de compras sai sozinha.' },
     ],
   },
   {
@@ -278,6 +289,7 @@ const ROTAS: [RegExp, string][] = [
   [/^\/d\/empresa/, 'dep-empresa'],
   [/^\/comercial/, 'comercial'],
   [/^\/orcamento\/precos/, 'precos'],
+  [/^\/orcamento\/composicoes/, 'composicoes'],
   [/^\/orcamento/, 'orcamento'],
   [/^\/propostas\/[^/]+/, 'proposta'],
   [/^\/propostas/, 'propostas'],
