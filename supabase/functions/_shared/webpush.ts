@@ -3,14 +3,14 @@
 
 const te = new TextEncoder();
 
-export function b64url(bytes: Uint8Array | ArrayBuffer): string {
+export function b64url(bytes: Uint8Array<ArrayBuffer> | ArrayBuffer): string {
   const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
   let s = '';
   for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export function deB64url(s: string): Uint8Array {
+export function deB64url(s: string): Uint8Array<ArrayBuffer> {
   const t = s.replace(/-/g, '+').replace(/_/g, '/');
   const bin = atob(t + '='.repeat((4 - (t.length % 4)) % 4));
   const r = new Uint8Array(bin.length);
@@ -18,20 +18,20 @@ export function deB64url(s: string): Uint8Array {
   return r;
 }
 
-export function juntar(...partes: Uint8Array[]): Uint8Array {
+export function juntar(...partes: Uint8Array<ArrayBuffer>[]): Uint8Array<ArrayBuffer> {
   const r = new Uint8Array(partes.reduce((t, p) => t + p.length, 0));
   let o = 0;
   for (const p of partes) { r.set(p, o); o += p.length; }
   return r;
 }
 
-async function hmac(chave: Uint8Array, dados: Uint8Array): Promise<Uint8Array> {
+async function hmac(chave: Uint8Array<ArrayBuffer>, dados: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
   const k = await crypto.subtle.importKey('raw', chave, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return new Uint8Array(await crypto.subtle.sign('HMAC', k, dados));
 }
 
 /** HKDF (extrair e expandir) com SHA-256, até 32 bytes. */
-export async function hkdf(sal: Uint8Array, ikm: Uint8Array, info: Uint8Array, tamanho: number): Promise<Uint8Array> {
+export async function hkdf(sal: Uint8Array<ArrayBuffer>, ikm: Uint8Array<ArrayBuffer>, info: Uint8Array<ArrayBuffer>, tamanho: number): Promise<Uint8Array<ArrayBuffer>> {
   const prk = await hmac(sal, ikm);
   return (await hmac(prk, juntar(info, new Uint8Array([1])))).slice(0, tamanho);
 }
@@ -57,7 +57,7 @@ export async function tokenVapid(endpoint: string, assunto: string, privada: Jso
 }
 
 /** Criptografa a mensagem para um aparelho (p256dh e auth vêm da inscrição do navegador). */
-export async function criptografar(mensagem: Uint8Array, p256dh: string, auth: string, sal = crypto.getRandomValues(new Uint8Array(16))): Promise<Uint8Array> {
+export async function criptografar(mensagem: Uint8Array<ArrayBuffer>, p256dh: string, auth: string, sal = crypto.getRandomValues(new Uint8Array(16))): Promise<Uint8Array<ArrayBuffer>> {
   const uaPublica = deB64url(p256dh);
   const segredoAuth = deB64url(auth);
   const efemera = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']) as CryptoKeyPair;
