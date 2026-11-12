@@ -21,9 +21,12 @@ describe('funil completo', () => {
     expect(n.passo?.para).toBe('/orcamento?oportunidade=1');
   });
 
-  it('usa a proposta mais avançada da oportunidade', () => {
-    const [n] = montarFunil({ ...vazio, ops: [op('1')], propostas: [prop('a', '1'), prop('b', '1', { estado: 'enviada', vistas: 4 })] }, HOJE);
-    expect(n.fase).toBe('enviada');
+  it('cada proposta viva do mesmo contato conta uma vez', () => {
+    const ns = montarFunil({ ...vazio, ops: [op('1')], propostas: [prop('a', '1'), prop('b', '1', { estado: 'enviada', vistas: 4 })] }, HOJE);
+    expect(ns.map((x) => x.fase).sort()).toEqual(['enviada', 'orcamento']);
+    expect(new Set(ns.map((x) => x.chave)).size).toBe(2);
+    const n = ns.find((x) => x.fase === 'enviada')!;
+    expect(n.abrir).toBe('/propostas/b');
     expect(n.propostaId).toBe('b');
     expect(n.quente).toBe(true);
     expect(n.passo?.acao).toBe('whatsapp');
@@ -81,5 +84,26 @@ describe('funil completo', () => {
   it('validade perto do fim avisa', () => {
     const [n] = montarFunil({ ...vazio, ops: [op('1')], propostas: [prop('a', '1', { estado: 'enviada', validade: '2026-11-12', vistas: 1 })] }, HOJE);
     expect(n.alertas.map((a) => a.texto)).toContain('Vence em 2 d');
+  });
+
+  it('duas enviadas no mesmo contato aparecem como duas aguardando', () => {
+    const ns = montarFunil({ ...vazio, ops: [op('1')], propostas: [
+      prop('a', '1', { estado: 'enviada', emitida: true, situacao: 'aguardando' }),
+      prop('b', '1', { estado: 'enviada', emitida: true, situacao: 'aguardando', pessoa_nome: 'Outra cliente' }),
+    ] }, HOJE);
+    expect(resumir(ns, HOJE).porFase.enviada.qtd).toBe(2);
+  });
+
+  it('recusada some quando há outra viva; contato arquivado não esconde a proposta', () => {
+    const ns = montarFunil({ ...vazio, ops: [op('1')], propostas: [prop('a', '1', { estado: 'recusada' }), prop('b', '1', { estado: 'enviada' }), prop('c', 'arquivado', { estado: 'enviada' })] }, HOJE);
+    expect(ns.map((x) => x.propostaId).sort()).toEqual(['b', 'c']);
+  });
+
+  it('negociação e vencida pedem para alterar o valor e reenviar', () => {
+    const [a] = montarFunil({ ...vazio, propostas: [prop('a', null, { estado: 'em_negociacao', situacao: 'ajuste' })] }, HOJE);
+    expect(a.fase).toBe('enviada');
+    expect(a.passo).toMatchObject({ rotulo: 'Alterar valor e reenviar', para: '/propostas/a?alterar=valor' });
+    const [v] = montarFunil({ ...vazio, propostas: [prop('v', null, { estado: 'enviada', situacao: 'vencida', validade: '2026-11-01' })] }, HOJE);
+    expect(v.passo?.rotulo).toBe('Alterar valor e reenviar');
   });
 });
