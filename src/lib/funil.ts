@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 import { ok, todas } from './consulta';
 import { hoje } from '../core/datas';
 import { doBanco } from '../core/dinheiro';
+import { situacaoDa, valorDe } from '../core/situacaoProposta';
 import { montarFunil, type ContratoFunil, type Negocio, type ObraFunil, type OpFunil, type PropostaFunil } from '../core/funil';
 
 type OpBanco = {
@@ -14,6 +15,7 @@ type PropBanco = {
   id: string; codigo: string; titulo: string; tipo: 'proposta' | 'aditivo'; oportunidade_id: string | null; pessoa_id: string; obra_id: string | null;
   estado: PropostaFunil['estado']; versao_aprovada_id: string | null; aprovada_em: string | null; atualizado_em: string; criado_em: string;
   pessoa: { nome: string; telefone: string | null } | null;
+  oportunidade: { estado_id: string } | null;
   versoes: { id: string; numero: number; valor_total: string | number; emitida: boolean; validade: string | null }[];
 };
 
@@ -32,7 +34,7 @@ export async function carregarFunil(oportunidadeId?: string): Promise<{ negocios
       return q.order('atualizado_em', { ascending: false }).order('id').range(de, ate) as unknown as PromiseLike<{ data: OpBanco[] | null; error: unknown }>;
     }),
     todas<PropBanco>((de, ate) => {
-      let q = supabase.from('proposta').select('id, codigo, titulo, tipo, oportunidade_id, pessoa_id, obra_id, estado, versao_aprovada_id, aprovada_em, atualizado_em, criado_em, pessoa:pessoa(nome, telefone), versoes:proposta_versao!proposta_versao_proposta_id_fkey(id, numero, valor_total, emitida, validade)');
+      let q = supabase.from('proposta').select('id, codigo, titulo, tipo, oportunidade_id, pessoa_id, obra_id, estado, versao_aprovada_id, aprovada_em, atualizado_em, criado_em, pessoa:pessoa(nome, telefone), oportunidade:oportunidade(estado_id), versoes:proposta_versao!proposta_versao_proposta_id_fkey(id, numero, valor_total, emitida, validade)');
       if (oportunidadeId) q = q.eq('oportunidade_id', oportunidadeId);
       return q.order('atualizado_em', { ascending: false }).order('id').range(de, ate) as unknown as PromiseLike<{ data: PropBanco[] | null; error: unknown }>;
     }),
@@ -45,14 +47,15 @@ export async function carregarFunil(oportunidadeId?: string): Promise<{ negocios
   const propostas: PropostaFunil[] = props.map((p) => {
     const vs = [...(p.versoes ?? [])].sort((a, b) => b.numero - a.numero);
     versaoDaProposta.set(p.id, vs.map((v) => v.id));
-    const ref = (p.versao_aprovada_id && vs.find((v) => v.id === p.versao_aprovada_id)) || vs[0];
     const ultimaEmitida = vs.find((v) => v.emitida);
+    const negocio = p.oportunidade ? tipo.get(p.oportunidade.estado_id)?.tipo ?? null : null;
     return {
       id: p.id, codigo: p.codigo, titulo: p.titulo, tipo: p.tipo, oportunidade_id: p.oportunidade_id, pessoa_id: p.pessoa_id, obra_id: p.obra_id,
       pessoa_nome: p.pessoa?.nome ?? null, telefone: p.pessoa?.telefone ?? null, estado: p.estado,
-      valor: doBanco(ref?.valor_total ?? 0), validade: ultimaEmitida?.validade ?? null, emitida: !!ultimaEmitida,
+      valor: valorDe(vs.map((v) => ({ id: v.id, numero: v.numero, emitida: v.emitida, valor: doBanco(v.valor_total) })), p.versao_aprovada_id), validade: ultimaEmitida?.validade ?? null, emitida: !!ultimaEmitida,
       versao_aprovada_id: p.versao_aprovada_id, aprovada_em: p.aprovada_em, atualizado_em: p.atualizado_em, criado_em: p.criado_em,
       vistas: vistas.get(p.id)?.n ?? 0, ultima_vista: vistas.get(p.id)?.ultima ?? null,
+      situacao: situacaoDa({ estado: p.estado, versoes: vs, negocio }, hoje()),
     };
   });
   const versoes = propostas.flatMap((p) => versaoDaProposta.get(p.id) ?? []);

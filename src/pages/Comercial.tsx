@@ -12,10 +12,11 @@ import { carregarFunil, converterEmObra } from '../lib/funil';
 import { MenuAcoes } from '../components/MenuAcoes';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
 import {
-  ESTADO_PROPOSTA, ORIGEM, TIPOS_SERVICO, TIPO_INTERACAO,
+  ORIGEM, TIPOS_SERVICO, TIPO_INTERACAO,
   type EstadoFunil, type Interacao, type Oportunidade, type Origem, type Pessoa, type Proposta,
 } from '../lib/tipos';
 import { PessoaForm } from './Pessoas';
+import { SITUACAO_PROPOSTA, situacaoDa, valorDe } from '../core/situacaoProposta';
 
 const SELECT_OP = '*, pessoa:pessoa(nome, telefone, email)';
 
@@ -364,11 +365,11 @@ export function OportunidadeDetalhe() {
       supabase.from('oportunidade').select(SELECT_OP).eq('id', id!).maybeSingle(),
       supabase.from('estado_funil').select('*').eq('ativo', true).order('ordem'),
       supabase.from('interacao').select('*').eq('oportunidade_id', id!).order('em', { ascending: false }),
-      supabase.from('proposta').select('*, versoes:proposta_versao!proposta_versao_proposta_id_fkey(numero, valor_total, emitida)').eq('oportunidade_id', id!).order('criado_em', { ascending: false }),
+      supabase.from('proposta').select('*, versoes:proposta_versao!proposta_versao_proposta_id_fkey(numero, valor_total, emitida, validade)').eq('oportunidade_id', id!).order('criado_em', { ascending: false }),
     ]);
     return {
       op: ok(o) as Oportunidade | null, estados: ok(e) as EstadoFunil[], historico: ok(h) as Interacao[],
-      propostas: ok(p) as (Proposta & { versoes: { numero: number; valor_total: string; emitida: boolean }[] })[],
+      propostas: ok(p) as (Proposta & { versoes: { numero: number; valor_total: string; emitida: boolean; validade: string | null }[] })[],
     };
   }, [id]);
 
@@ -468,13 +469,15 @@ export function OportunidadeDetalhe() {
               <div className="stack" style={{ gap: 6 }}>
                 {dados.propostas.map((p) => {
                   const ultima = [...p.versoes].sort((a, b) => b.numero - a.numero)[0];
+                  const sit = SITUACAO_PROPOSTA[situacaoDa({ estado: p.estado, versoes: p.versoes, negocio: estado?.tipo ?? null }, hoje())];
+                  const valor = valorDe(p.versoes.map((v) => ({ numero: v.numero, emitida: v.emitida, valor: doBanco(v.valor_total) })));
                   return (
                     <Link key={p.id} to={`/propostas/${p.id}`} className="item-cartao">
                       <div>
                         <div className="titulo">{p.codigo} · {p.titulo}</div>
-                        <div className="small muted">versão {ultima?.numero ?? 1} · <span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span></div>
+                        <div className="small muted">versão {ultima?.numero ?? 1} · <span className={`selo ${sit.classe}`} title={sit.dica}>{sit.rotulo}</span></div>
                       </div>
-                      {ultima && <Dinheiro valor={doBanco(ultima.valor_total)} />}
+                      {ultima && <Dinheiro valor={valor} />}
                     </Link>
                   );
                 })}

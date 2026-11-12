@@ -5,6 +5,8 @@ import { conferirAceitesPendentes } from '../lib/avisos';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
+import { useResumoPropostas } from '../lib/propostasSituacao';
+import { detalheComCliente } from '../core/situacaoProposta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo, useDepartamentos } from '../components/Layout';
 import { Ajuda, Carregando, Erro } from '../components/ui';
@@ -24,12 +26,13 @@ type Indicadores = Record<string, string | number | boolean | null | Comercial> 
 const n = (v: unknown) => Number(v ?? 0) || 0;
 
 function KpisComerciais({ c: bruto }: { c: Comercial | null | undefined }) {
+  const r = useResumoPropostas();
   if (!bruto) return null;
   const c = Object.fromEntries(Object.entries(bruto).map(([k, v]) => [k, n(v)])) as Comercial;
   for (const k of ['enviadas', 'em_negociacao', 'aprovadas_periodo', 'rascunhos', 'oportunidades_abertas', 'acoes_atrasadas'] as const) c[k] = n(bruto[k]);
   return (
     <>
-      <Kpi rotulo="Propostas em aberto" valor={String(c.enviadas + c.em_negociacao)} det={<>{c.em_negociacao} em negociação · {c.rascunhos} rascunho(s) · {c.aprovadas_periodo} aprovada(s) no período</>} para="/propostas" />
+      <Kpi rotulo="Propostas enviadas, sem aprovação" valor={r ? String(r.comCliente.qtd) : '…'} det={r ? <>{detalheComCliente(r)} · {r.rascunho.qtd} em preparo</> : 'Carregando…'} para="/propostas" />
       <Kpi rotulo="Oportunidades" valor={String(c.oportunidades_abertas)} det={c.acoes_atrasadas > 0 ? <span style={{ color: 'var(--desfavoravel)' }}>{c.acoes_atrasadas} com ação atrasada</span> : 'Nenhuma ação atrasada'} para="/comercial" ajuda="Contatos em andamento no funil. Formulários do site e cliques no WhatsApp do período aparecem no Comercial." />
     </>
   );
@@ -180,6 +183,7 @@ function AtalhosDepartamentos() {
 }
 
 function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes, anterior, rotuloAnt }: { anterior: Indicadores | null; rotuloAnt?: string; ind: Indicadores; serie: Serie[]; empresa: Empresa | null; qs: string; rotulo: string; tipo: TipoPeriodo; ehAdmin: boolean; inicio: string; fim: string; aoAbrirMes: (mes: string) => void }) {
+  const resumoProp = useResumoPropostas();
   if (ind.sem_permissao) {
     return (
       <div className="grid grid-kpi">
@@ -240,7 +244,7 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
         { rotulo: 'Pró-labore', valor: formatar(c('retiradas')), det: 'Retiradas', para: `/contas?grupo=retiradas&${qs}` },
         { rotulo: 'Obras ativas', valor: String(n(ind.obras_ativas)), det: 'Contratadas ou em execução', para: '/obras' },
         ...(ind.comercial ? [
-          { rotulo: 'Propostas em aberto', valor: String(ind.comercial.enviadas + ind.comercial.em_negociacao), det: `${ind.comercial.aprovadas_periodo} aprovada(s)`, para: '/propostas' },
+          { rotulo: 'Propostas com o cliente', valor: resumoProp ? String(resumoProp.comCliente.qtd) : '…', det: resumoProp ? `${formatar(resumoProp.comCliente.valor)} · ${resumoProp.rascunho.qtd} em preparo` : '', para: '/propostas' },
           { rotulo: 'Oportunidades', valor: String(ind.comercial.oportunidades_abertas), det: ind.comercial.acoes_atrasadas > 0 ? `${ind.comercial.acoes_atrasadas} atrasada(s)` : 'Em dia', alerta: ind.comercial.acoes_atrasadas > 0, para: '/comercial' },
         ] : []),
         ...(c('outras_entradas') !== 0 ? [{ rotulo: 'Outras entradas', valor: formatar(c('outras_entradas')), det: 'Rendimentos e aportes', para: `/contas?grupo=outras&${qs}` }] : []),

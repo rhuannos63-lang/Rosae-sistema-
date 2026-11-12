@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
-import { useConsulta, ok, todas } from '../lib/consulta';
+import { useConsulta, ok } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
@@ -19,6 +19,9 @@ import {
   forcaDaProposta, CONDICOES_GERAIS_PADRAO, dataEntrega, datasDasEtapas, definirFimEtapa, incluirEtapa, moverEtapa, moverItem, mudarEtapa, selosPadrao, tirarEtapa,
 } from '../core/proposta';
 import { ESTADO_PROPOSTA, EVENTO_PROPOSTA, type EstadoProposta, type Proposta, type PropostaEvento, type PropostaVersao } from '../lib/tipos';
+import { COM_O_CLIENTE, SITUACAO_PROPOSTA, detalheComCliente, situacaoDa, type Situacao } from '../core/situacaoProposta';
+import { carregarPropostas, resumoPropostas } from '../lib/propostasSituacao';
+import { reajustarValor, textoReajuste } from '../core/negociacao';
 import { linkWhatsApp } from './Comercial';
 import { estadoInicial, OrcamentoGerador, type EstadoGerador } from '../components/OrcamentoGerador';
 import { EncaixeAgenda, useFila } from '../components/EncaixeAgenda';
@@ -34,15 +37,21 @@ import { codigosDe } from '../core/condicoes';
 import { carregarCondicoes } from '../lib/composicoes';
 import { definirTotalItem, mudarItem as mudarItemConteudo } from '../core/proposta';
 
-type PropostaLista = Proposta & { versoes: { id: string; numero: number; valor_total: string; emitida: boolean; validade: string | null }[] };
+type Filtro = 'com_cliente' | 'rascunho' | 'aprovada' | 'recusada' | 'todas' | Situacao;
+const FILTROS: { id: Filtro; rotulo: string }[] = [
+  { id: 'com_cliente', rotulo: 'Com o cliente' }, { id: 'rascunho', rotulo: 'Em preparo' }, { id: 'aprovada', rotulo: 'Aprovadas' },
+  { id: 'recusada', rotulo: 'Recusadas / perdidas' }, { id: 'todas', rotulo: 'Todas' },
+];
 
 export function Propostas() {
   const navegar = useNavigate();
-  const [params] = useSearchParams();
-  const [filtro, setFiltro] = useState<'ativas' | EstadoProposta | 'todas'>(params.get('estado') === 'aprovada' ? 'aprovada' : 'ativas');
+  const [params, setParams] = useSearchParams();
+  const pedido = params.get('estado') ?? params.get('situacao');
+  const [filtro, setFiltroLocal] = useState<Filtro>(() => (pedido && (FILTROS.some((f) => f.id === pedido) || pedido in SITUACAO_PROPOSTA) ? pedido as Filtro : 'com_cliente'));
+  const setFiltro = (f: Filtro) => { setFiltroLocal(f); setParams(f === 'com_cliente' ? {} : { situacao: f }, { replace: true }); };
   const { dados, erro, carregando } = useConsulta(async () => {
-    const [p, ev] = await Promise.all([
-      todas((de, ate) => supabase.from('proposta').select('*, pessoa:pessoa(nome, telefone, email), versoes:proposta_versao!proposta_versao_proposta_id_fkey(id, numero, valor_total, emitida, validade)').order('atualizado_em', { ascending: false }).order('id').range(de, ate)).then((data) => ({ data, error: null })),
+    const [lista, ev] = await Promise.all([
+      carregarPropostas(),
       supabase.from('proposta_evento').select('proposta_id, em').eq('tipo', 'visualizada').order('em', { ascending: false }).limit(2000),
     ]);
     const vistas = new Map<string, { n: number; ultima: string }>();
@@ -50,17 +59,26 @@ export function Propostas() {
       const x = vistas.get(e.proposta_id);
       vistas.set(e.proposta_id, { n: (x?.n ?? 0) + 1, ultima: x?.ultima ?? e.em });
     }
-    return (ok(p) as PropostaLista[]).map((x) => ({ ...x, vistas: vistas.get(x.id) }));
+    return lista.map((x) => ({ ...x, vistas: vistas.get(x.id) }));
   }, []);
-  const codigos = new Map((dados ?? []).map((p) => [p.id, p.codigo]));
+  const todasP = dados ?? [];
+  const resumo = useMemo(() => resumoPropostas(todasP), [todasP]);
+  const codigos = new Map(todasP.map((p) => [p.id, p.codigo]));
   const nAditivos = new Map<string, number>();
-  for (const p of dados ?? []) if (p.proposta_origem_id && p.estado !== 'arquivada') nAditivos.set(p.proposta_origem_id, (nAditivos.get(p.proposta_origem_id) ?? 0) + 1);
-  const lista = (dados ?? []).filter((p) =>
-    filtro === 'todas' ? true : filtro === 'ativas' ? ['rascunho', 'enviada', 'em_negociacao'].includes(p.estado) : p.estado === filtro,
+  for (const p of todasP) if (p.proposta_origem_id && p.estado !== 'arquivada') nAditivos.set(p.proposta_origem_id, (nAditivos.get(p.proposta_origem_id) ?? 0) + 1);
+  const passa = (s: Situacao) => filtro === 'todas' ? s !== 'arquivada' : filtro === 'com_cliente' ? COM_O_CLIENTE.includes(s) : s === filtro;
+  const lista = todasP.filter((p) => passa(p.situacao));
+  const sub = filtro === 'com_cliente' || COM_O_CLIENTE.includes(filtro as Situacao);
+  const kpi = (f: Filtro, rotulo: string, qtd: number, valor: number, det: string, alerta = false) => (
+    <button className={`kpi${filtro === f ? ' ativo' : ''}`} style={{ textAlign: 'left', font: 'inherit' }} aria-pressed={filtro === f} onClick={() => setFiltro(f)}>
+      <div className="rotulo">{rotulo}</div>
+      <div className="valor" style={alerta ? { color: 'var(--alerta)' } : undefined}>{qtd}</div>
+      <div className="det">{valor > 0 && <><Dinheiro valor={valor} /> · </>}{det}</div>
+    </button>
   );
   return (
     <>
-      <Topo titulo="Propostas" sub="Cada proposta guarda todas as versões. A versão enviada fica congelada; mudanças viram uma nova versão.">
+      <Topo titulo="Propostas" sub="Cada proposta aparece uma vez, na situação em que realmente está. A versão enviada fica congelada; mudanças viram uma nova versão.">
         <Link className="btn-secundario" to="/comercial"><Icone nome="voltar" /> Funil</Link>
         <MenuAcoes>
           <Link role="menuitem" to="/biblioteca"><Icone nome="lista" /> Biblioteca de serviços</Link>
@@ -68,28 +86,49 @@ export function Propostas() {
         </MenuAcoes>
         <Link className="btn-primario" to="/orcamento"><Icone nome="varinha" /> Novo orçamento</Link>
       </Topo>
+      {dados && (
+        <div className="grid grid-kpi" style={{ marginBottom: 14 }}>
+          {kpi('com_cliente', 'Enviadas, sem aprovação', resumo.comCliente.qtd, resumo.comCliente.valor, detalheComCliente(resumo))}
+          {kpi('rascunho', 'Em preparo', resumo.rascunho.qtd, resumo.rascunho.valor, 'Ainda não enviadas')}
+          {kpi('aprovada', 'Aprovadas', resumo.aprovada.qtd, resumo.aprovada.valor, `${resumo.aprovadasMes} neste mês`)}
+          {kpi('recusada', 'Recusadas / perdidas', resumo.recusada.qtd, resumo.recusada.valor, 'Fora da conta em aberto')}
+        </div>
+      )}
       <div className="card">
-        <div className="row" style={{ marginBottom: 12 }}>
+        <div className="row" style={{ marginBottom: 12, gap: 8 }}>
           <div className="segmentado">
-            {(['ativas', 'aprovada', 'recusada', 'todas'] as const).map((f) => (
-              <button key={f} className={filtro === f ? 'ativo' : ''} onClick={() => setFiltro(f)}>
-                {{ ativas: 'Em aberto', aprovada: 'Aprovadas', recusada: 'Recusadas', todas: 'Todas' }[f]}
-              </button>
+            {FILTROS.map((f) => (
+              <button key={f.id} className={filtro === f.id || (f.id === 'com_cliente' && sub) ? 'ativo' : ''} onClick={() => setFiltro(f.id)}>{f.rotulo}</button>
             ))}
           </div>
+          {sub && (
+            <div className="row" style={{ gap: 6 }}>
+              {COM_O_CLIENTE.map((s) => (
+                <button key={s} className={`chip-link${filtro === s ? ' ativo' : ''}`} onClick={() => setFiltro(filtro === s ? 'com_cliente' : s)}>
+                  {SITUACAO_PROPOSTA[s].rotulo} · {resumo[s].qtd}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+        {resumo.aditivosAbertos > 0 && filtro === 'com_cliente' && <p className="muted small" style={{ marginTop: 0 }}>Aditivos aparecem na lista, mas não entram nos números acima: eles somam no orçamento de origem.</p>}
         <Erro mensagem={erro} />
         {carregando && !dados ? <Carregando /> : lista.length === 0 ? (
           <Vazio titulo="Nenhuma proposta aqui">
-            <p>Use “Novo orçamento”: escolha o serviço, preencha os dados e a proposta sai pronta. Também dá para começar de um contato no Comercial.</p>
+            <p>Use “Novo orçamento”: escolha o serviço, preencha os dados e a proposta sai pronta. Também dá para começar de um contato no Funil.</p>
           </Vazio>
         ) : (
           <div className="tabela-wrap">
             <table className="tabela">
-              <thead><tr><th>Proposta</th><th>Cliente</th><th>Situação</th><th>Interesse do cliente</th><th>Versão</th><th className="right">Valor</th></tr></thead>
+              <thead><tr><th>Proposta</th><th>Cliente</th><th>Situação</th><th>Interesse do cliente</th><th>Versão</th><th className="right">Valor</th><th></th></tr></thead>
               <tbody>
                 {lista.map((p) => {
                   const u = [...p.versoes].sort((a, b) => b.numero - a.numero)[0];
+                  const ue = [...p.versoes].filter((v) => v.emitida).sort((a, b) => b.numero - a.numero)[0];
+                  const s = SITUACAO_PROPOSTA[p.situacao];
+                  const passo = p.situacao === 'rascunho' ? 'Terminar e enviar'
+                    : p.situacao === 'revisando' ? `Emitir v${u?.numero}`
+                    : ['aguardando', 'ajuste', 'vencida'].includes(p.situacao) ? 'Alterar valor' : null;
                   return (
                     <tr key={p.id} className="clicavel" onClick={() => navegar(`/propostas/${p.id}`)}>
                       <td>
@@ -98,10 +137,18 @@ export function Propostas() {
                         {nAditivos.get(p.id) ? <span className="selo neutro" style={{ marginTop: 4 }}>+ {nAditivos.get(p.id)} aditivo(s)</span> : null}
                       </td>
                       <td>{p.pessoa?.nome}</td>
-                      <td><span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span></td>
-                      <td className="small"><Interesse p={p} validade={u?.emitida ? u.validade : null} /></td>
-                      <td className="small">{u ? `v${u.numero}${u.emitida ? '' : ' (rascunho)'}` : '—'}</td>
-                      <td className="right">{u && <Dinheiro valor={doBanco(u.valor_total)} />}</td>
+                      <td><span className={`selo ${s.classe}`} title={s.dica}>{s.rotulo}</span></td>
+                      <td className="small"><Interesse p={p} aberta={COM_O_CLIENTE.includes(p.situacao)} validade={ue?.validade ?? null} /></td>
+                      <td className="small">{u ? (p.situacao === 'revisando' && ue ? `v${ue.numero} com o cliente · v${u.numero} em preparo` : `v${u.numero}${u.emitida ? '' : ' (rascunho)'}`) : '—'}</td>
+                      <td className="right"><Dinheiro valor={p.valor} /></td>
+                      <td className="right">
+                        {passo && (
+                          <button className="btn-link" onClick={(e) => {
+                            e.stopPropagation();
+                            navegar(passo === 'Alterar valor' ? `/propostas/${p.id}?alterar=valor` : `/propostas/${p.id}`);
+                          }}>{passo}</button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -115,8 +162,7 @@ export function Propostas() {
 }
 
 /** Quantas vezes o cliente abriu o link e quando vence: ajuda a decidir quem ligar primeiro. */
-function Interesse({ p, validade }: { p: Proposta & { vistas?: { n: number; ultima: string } }; validade: string | null }) {
-  const aberta = ['enviada', 'em_negociacao'].includes(p.estado);
+function Interesse({ p, aberta, validade }: { p: Proposta & { vistas?: { n: number; ultima: string } }; aberta: boolean; validade: string | null }) {
   const dias = validade ? Math.round((Date.parse(`${validade}T12:00:00Z`) - Date.parse(`${hoje()}T12:00:00Z`)) / 86400000) : null;
   if (!p.vistas && !aberta) return <span className="muted">—</span>;
   return (
@@ -194,6 +240,18 @@ export function PropostaEditor() {
     recarregar();
   }
 
+  const situacao = situacaoDa({ estado: p.estado, versoes }, hoje());
+
+  async function mudarEstado(estado: EstadoProposta) {
+    setErro(null);
+    if (estado === 'recusada' && !window.confirm('Marcar esta proposta como recusada / perdida? Ela sai das propostas em aberto. Dá para reabrir depois.')) return;
+    const r = await supabase.from('proposta').update({ estado }).eq('id', p.id);
+    if (r.error) return setErro(mensagemErro(r.error));
+    if (p.oportunidade_id) await supabase.from('interacao').insert({ oportunidade_id: p.oportunidade_id, tipo: 'nota', texto: estado === 'recusada' ? `Proposta ${p.codigo} marcada como recusada / perdida.` : `Proposta ${p.codigo} reaberta.` });
+    toast(estado === 'recusada' ? 'Proposta marcada como recusada / perdida.' : 'Proposta reaberta.');
+    recarregar();
+  }
+
   async function duplicar() {
     const r = await supabase.rpc('duplicar_proposta', { p_proposta: p.id });
     if (r.error) return setErro(mensagemErro(r.error));
@@ -203,9 +261,13 @@ export function PropostaEditor() {
 
   return (
     <>
-      <Topo titulo={p.titulo} sub={<>{p.codigo} · {p.pessoa?.nome} · <span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span>{dados.origem && <> · aditivo do orçamento <Link to={`/propostas/${dados.origem.id}`}>{dados.origem.codigo}</Link></>}</>}>
+      <Topo titulo={p.titulo} sub={<>{p.codigo} · {p.pessoa?.nome} · <span className={`selo ${SITUACAO_PROPOSTA[situacao].classe}`} title={SITUACAO_PROPOSTA[situacao].dica}>{SITUACAO_PROPOSTA[situacao].rotulo}</span>{dados.origem && <> · aditivo do orçamento <Link to={`/propostas/${dados.origem.id}`}>{dados.origem.codigo}</Link></>}</>}>
         <button className="btn-secundario" onClick={() => (p.oportunidade_id ? navegar(`/comercial/${p.oportunidade_id}`) : navegar('/propostas'))}><Icone nome="voltar" /> Voltar</button>
-        <button className="btn-secundario" onClick={duplicar}>Duplicar</button>
+        <MenuAcoes>
+          <button role="menuitem" onClick={duplicar}><Icone nome="documento" /> Duplicar</button>
+          {['rascunho', 'enviada', 'em_negociacao'].includes(p.estado) && <button role="menuitem" onClick={() => mudarEstado('recusada')}><Icone nome="voltar" /> Marcar como recusada / perdida</button>}
+          {p.estado === 'recusada' && <button role="menuitem" onClick={() => mudarEstado(versoes.some((x) => x.emitida) ? 'enviada' : 'rascunho')}><Icone nome="editar" /> Reabrir proposta</button>}
+        </MenuAcoes>
         <BotaoExcluir tabela="proposta" id={p.id} nome={p.titulo} aoExcluir={() => navegar('/propostas')} />
         {p.estado === 'aprovada' && (p.tipo === 'proposta' || dados.origem) && (
           <button className="btn-primario" onClick={() => setAditivo(true)}><Icone nome="mais" /> Adicionar aditivo</button>
@@ -804,9 +866,14 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
   const [comparar, setComparar] = useState(false);
   // Aditivo recém-criado chega com ?enviar=email: a janela do e-mail já abre.
   const [email, setEmail] = useState(() => params.get('enviar') === 'email' && ehUltima && p.estado !== 'aprovada');
+  // Vindo da lista ("Alterar valor"), a janela já abre; depois do reenvio, mostra o aviso do novo valor.
+  const [alterar, setAlterar] = useState(() => params.get('alterar') === 'valor' && ehUltima && p.estado !== 'aprovada');
+  const [reenviada] = useState(() => (params.get('reenviada') && ehUltima ? params.get('reenviada') : null));
   const ehAditivo = p.tipo === 'aditivo';
   useEffect(() => {
-    if (params.get('enviar')) { const n = new URLSearchParams(params); n.delete('enviar'); setParams(n, { replace: true }); }
+    if (params.get('enviar') || params.get('alterar') || params.get('reenviada')) {
+      const n = new URLSearchParams(params); n.delete('enviar'); n.delete('alterar'); n.delete('reenviada'); setParams(n, { replace: true });
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [emails, setEmails] = useState(0);
   const [gerando, setGerando] = useState<string | null>(null);
@@ -905,13 +972,19 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
             </>
           )}
           {!ehUltima && <div className="aviso info" style={{ marginTop: 10 }}><span>Existe versão mais nova. Esta continua guardada como histórico, mas não pode mais ser aceita.</span></div>}
+          {reenviada && (
+            <div className="aviso ok" style={{ marginTop: 10 }}><Icone nome="check" /><span>Novo valor pronto na versão {versao.numero}{reenviada !== '1' ? ` (antes ${formatar(Number(reenviada))})` : ''}, com validade renovada. Agora envie ao cliente pelo WhatsApp ou e-mail aqui embaixo. O link antigo passa a avisar que existe uma versão mais nova.</span></div>
+          )}
           {ehUltima && p.estado !== 'aprovada' && (
             <div className="editar-emitida">
               <div>
-                <b>Precisa mudar ou inserir algo?</b>
-                <span className="muted small">A versão {versao.numero} fica guardada como enviada. A edição vira a versão {versao.numero + 1}, com tudo copiado desta: você muda preço, itens, prazo ou pagamento, emite e envia o link novo.</span>
+                <b>Negociou com o cliente?</b>
+                <span className="muted small">“Alterar valor e reenviar” cria a versão {versao.numero + 1} só com o novo total (itens e parcelas acompanham), já emitida e pronta para enviar. A versão {versao.numero} fica guardada como enviada. Para mudar itens, prazo ou texto, use “Editar orçamento”.</span>
               </div>
-              <button className="btn-primario" onClick={aoEditar}><Icone nome="editar" /> Editar orçamento</button>
+              <div className="row" style={{ gap: 8 }}>
+                <button className="btn-primario" onClick={() => setAlterar(true)}><Icone nome="editar" /> Alterar valor e reenviar</button>
+                <button className="btn-secundario" onClick={aoEditar}>Editar orçamento</button>
+              </div>
             </div>
           )}
           {p.estado === 'aprovada' && p.versao_aprovada_id === versao.id && (
@@ -979,6 +1052,7 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
       </div>
       <div className="card"><PropostaDocumento d={doc} /></div>
       {comparar && anterior && <Comparacao a={normalizar(anterior.conteudo as Partial<Conteudo>)} b={c} na={anterior.numero} nb={versao.numero} aoFechar={() => setComparar(false)} />}
+      {alterar && <AlterarValor proposta={p} versao={versao} conteudo={c} aoFechar={() => setAlterar(false)} aoConcluir={(nova, antes) => { setAlterar(false); setParams({ v: nova, reenviada: String(antes) }); aoMudar(); }} />}
       {email && (
         <EnviarEmail aditivo={ehAditivo} versaoId={versao.id} codigo={p.codigo} versao={versao.numero} titulo={p.titulo} cliente={p.pessoa?.nome ?? ''} emailCliente={p.pessoa?.email ?? null}
           aoFechar={() => setEmail(false)} aoEnviar={() => { setEmails((n) => n + 1); aoMudar(); }} abrirNoAplicativo={() => enviar('email')}
@@ -995,6 +1069,88 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
         </Modal>
       )}
     </div>
+  );
+}
+
+/**
+ * Depois de uma negociação: novo total numa versão nova, já emitida e pronta para reenviar.
+ * Só o valor muda (itens, parcelas, pacote escolhido e à vista acompanham); o resto da proposta fica igual.
+ */
+function AlterarValor({ proposta: p, versao, conteudo, aoFechar, aoConcluir }: { proposta: Proposta; versao: PropostaVersao; conteudo: Conteudo; aoFechar: () => void; aoConcluir: (novaVersao: string, valorAntes: number) => void }) {
+  const toast = useToast();
+  const atual = totalConteudo(conteudo);
+  const [alvo, setAlvo] = useState<Centavos | null>(null);
+  const [modo, setModo] = useState<'valor' | 'desconto'>('valor');
+  const [pct, setPct] = useState('');
+  const [motivo, setMotivo] = useState('');
+  const [rodando, setRodando] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const pedido = modo === 'valor' ? alvo : (() => { const x = Number(pct.replace(',', '.')); return x > 0 && x < 100 ? Math.round(atual * (1 - x / 100)) : null; })();
+  const r = useMemo(() => (pedido && pedido > 0 && pedido !== atual ? reajustarValor(conteudo, pedido) : null), [conteudo, pedido, atual]);
+
+  async function confirmar() {
+    if (!r) return;
+    setErro(null);
+    setRodando('Criando a nova versão…');
+    try {
+      const nv = await supabase.rpc('nova_versao_proposta', { p_proposta: p.id });
+      if (nv.error) throw nv.error;
+      const id = nv.data as string;
+      const pr = prepararParaSalvar(r.conteudo);
+      const up = await supabase.from('proposta_versao').update({ conteudo: pr.conteudo, valor_total: pr.valor_total }).eq('id', id);
+      if (up.error) throw up.error;
+      setRodando('Emitindo com validade renovada…');
+      const em = await supabase.rpc('emitir_versao', { p_versao: id });
+      if (em.error) {
+        // A versão fica salva como rascunho: dá para conferir e emitir pelo editor.
+        setRodando(null);
+        setErro(`O novo valor foi salvo na versão ${versao.numero + 1}, mas ela não pôde ser emitida: ${mensagemErro(em.error)} Abra a versão, confira e emita.`);
+        return;
+      }
+      if (p.oportunidade_id) {
+        await supabase.from('interacao').insert({ oportunidade_id: p.oportunidade_id, tipo: 'nota', texto: textoReajuste(r, versao.numero + 1, motivo) });
+      }
+      toast(`Versão ${versao.numero + 1} emitida com ${formatar(r.depois)}. Agora é só enviar.`);
+      aoConcluir(id, r.antes);
+    } catch (e) {
+      setRodando(null);
+      setErro(mensagemErro(e));
+    }
+  }
+
+  return (
+    <Modal titulo="Alterar valor e reenviar" aoFechar={aoFechar}
+      rodape={<><button className="btn-link" onClick={aoFechar}>Cancelar</button><button className="btn-primario" disabled={!r || !!rodando} onClick={confirmar}>{rodando ?? `Criar versão ${versao.numero + 1} e emitir`}</button></>}>
+      <div className="stack">
+        <p className="muted small" style={{ margin: 0 }}>Valor atual (versão {versao.numero}): <b>{formatar(atual)}</b>. A proposta continua igual; só o valor muda, e a validade recomeça a contar.</p>
+        <div className="segmentado">
+          <button className={modo === 'valor' ? 'ativo' : ''} onClick={() => setModo('valor')}>Novo valor</button>
+          <button className={modo === 'desconto' ? 'ativo' : ''} onClick={() => setModo('desconto')}>Desconto em %</button>
+        </div>
+        {modo === 'valor' ? (
+          <label className="campo"><span>Novo valor total</span><CampoValor valor={alvo} aoMudar={setAlvo} autoFocus /></label>
+        ) : (
+          <label className="campo"><span>Desconto sobre {formatar(atual)}</span><input inputMode="decimal" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="Ex.: 5" autoFocus /></label>
+        )}
+        <label className="campo"><span>O que foi negociado <span className="muted small">(só para você, vai para o histórico)</span></span><input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex.: cliente pediu desconto para fechar à vista" /></label>
+        {r && (
+          <div className="card" style={{ padding: 12 }}>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <span>{formatar(r.antes)} → <b>{formatar(r.depois)}</b></span>
+              <span className={`selo ${r.diferenca < 0 ? 'alerta' : 'ok'}`}>{r.diferenca < 0 ? '−' : '+'}{formatar(Math.abs(r.diferenca))} ({r.percentual.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)</span>
+            </div>
+            {r.parcelas.length > 0 && (
+              <table className="tabela" style={{ marginTop: 8 }}>
+                <thead><tr><th>Pagamento</th><th className="right">Antes</th><th className="right">Agora</th></tr></thead>
+                <tbody>{r.parcelas.map((x, k) => <tr key={k}><td>{x.descricao}</td><td className="right muted">{formatar(x.antes)}</td><td className="right">{formatar(x.depois)}</td></tr>)}</tbody>
+              </table>
+            )}
+            {r.outrosPacotes && <p className="muted small" style={{ marginBottom: 0 }}>O pacote escolhido passa a {formatar(r.depois)}. Os outros pacotes da comparação continuam com os valores de antes; para mudá-los, use “Editar orçamento”.</p>}
+          </div>
+        )}
+        <Erro mensagem={erro} />
+      </div>
+    </Modal>
   );
 }
 

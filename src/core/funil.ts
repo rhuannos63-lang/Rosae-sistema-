@@ -2,6 +2,8 @@
 // Junta oportunidade, proposta (com versões e aberturas do link), obra e contrato
 // e diz em que fase cada negócio está e qual é o único próximo passo.
 
+import { SITUACAO_PROPOSTA, type Situacao } from './situacaoProposta';
+
 export type FaseFunil = 'contato' | 'orcamento' | 'enviada' | 'aceita' | 'contrato' | 'obra' | 'entregue' | 'perdido';
 
 export const FASES: { id: FaseFunil; nome: string; dica: string }[] = [
@@ -26,6 +28,8 @@ export type PropostaFunil = {
   estado: 'rascunho' | 'enviada' | 'em_negociacao' | 'aprovada' | 'recusada' | 'arquivada';
   valor: number; validade: string | null; emitida: boolean; versao_aprovada_id: string | null; aprovada_em: string | null;
   atualizado_em: string; criado_em: string; vistas: number; ultima_vista: string | null; obra_id?: string | null;
+  /** Situação real (mesma regra da lista de propostas e do painel). Sem ela, vem do estado. */
+  situacao?: Situacao;
 };
 export type ObraFunil = {
   id: string; codigo: string; nome: string; status: string; proposta_versao_id: string | null; data_previsao_fim: string | null; criado_em: string;
@@ -53,11 +57,32 @@ function dias(desde: string, hoje: string): number {
 
 const ORDEM_PROPOSTA: Record<PropostaFunil['estado'], number> = { aprovada: 5, em_negociacao: 4, enviada: 3, rascunho: 2, recusada: 1, arquivada: 0 };
 
+/** Situação da proposta: a calculada, ou uma aproximação pelo estado (dados antigos/testes). */
+export function situacaoFunil(p: PropostaFunil): Situacao {
+  if (p.situacao) return p.situacao;
+  if (p.estado === 'enviada') return 'aguardando';
+  if (p.estado === 'em_negociacao') return 'ajuste';
+  return p.estado;
+}
+
 /** A proposta que representa o negócio: a mais avançada; empate, a mais recente. */
 export function propostaPrincipal(ps: PropostaFunil[]): PropostaFunil | null {
   const validas = ps.filter((p) => p.tipo === 'proposta' && p.estado !== 'arquivada');
   if (!validas.length) return null;
   return [...validas].sort((a, b) => ORDEM_PROPOSTA[b.estado] - ORDEM_PROPOSTA[a.estado] || b.atualizado_em.localeCompare(a.atualizado_em))[0];
+}
+
+/**
+ * Quais propostas de um mesmo negócio viram cartão: cada proposta viva conta uma vez
+ * (duas propostas enviadas são duas propostas aguardando, mesmo no mesmo contato).
+ * Recusadas só aparecem quando não sobrou nenhuma viva.
+ */
+export function propostasDoNegocio(ps: PropostaFunil[]): PropostaFunil[] {
+  const validas = ps.filter((p) => p.tipo === 'proposta' && situacaoFunil(p) !== 'arquivada');
+  const vivas = validas.filter((p) => situacaoFunil(p) !== 'recusada');
+  if (vivas.length) return vivas;
+  const principal = propostaPrincipal(validas);
+  return principal ? [principal] : [];
 }
 
 /** Monta um negócio por oportunidade (ou por proposta solta) e diz a fase e o próximo passo. */
@@ -66,6 +91,8 @@ export function montarFunil(
   hoje: string,
 ): Negocio[] {
   const porOp = new Map<string, PropostaFunil[]>();
+  // Proposta de um contato arquivado (ou fora da lista) não some: vira negócio próprio.
+  const opsIds = new Set(d.ops.map((o) => o.id));
   const soltas: PropostaFunil[] = [];
   const aditivos = new Map<string, number>();
   for (const p of d.propostas) {
@@ -76,7 +103,7 @@ export function montarFunil(
       }
       continue;
     }
-    if (p.oportunidade_id) porOp.set(p.oportunidade_id, [...(porOp.get(p.oportunidade_id) ?? []), p]);
+    if (p.oportunidade_id && opsIds.has(p.oportunidade_id)) porOp.set(p.oportunidade_id, [...(porOp.get(p.oportunidade_id) ?? []), p]);
     else soltas.push(p);
   }
   // Obra ligada à versão aprovada; contrato ativo (não cancelado) da obra.
@@ -92,8 +119,9 @@ export function montarFunil(
   };
 
   const negocios: Negocio[] = [];
-  const montar = (op: OpFunil | null, p: PropostaFunil | null) => {
+  const montar = (op: OpFunil | null, p: PropostaFunil | null, varias = false) => {
     const obra = obraDaProposta(p);
+    const sit = p ? situacaoFunil(p) : null;
     const contrato = obra ? contratoPorObra.get(obra.id) ?? null : null;
     let fase: FaseFunil;
     let desde: string;
@@ -101,10 +129,10 @@ export function montarFunil(
     else if (obra && obra.status === 'cancelada') { fase = 'perdido'; desde = obra.criado_em; }
     else if (contrato?.estado === 'assinado' || obra?.status === 'em_execucao') { fase = 'obra'; desde = contrato?.assinado_em ?? obra!.criado_em; }
     else if (contrato?.estado === 'emitido') { fase = 'contrato'; desde = contrato.emitido_em ?? contrato.criado_em; }
-    else if (p?.estado === 'aprovada') { fase = 'aceita'; desde = p.aprovada_em ?? p.atualizado_em; }
+    else if (sit === 'aprovada') { fase = 'aceita'; desde = p!.aprovada_em ?? p!.atualizado_em; }
     else if (op && (op.estado_tipo === 'perdido' || op.estado_tipo === 'arquivado')) { fase = 'perdido'; desde = op.estado_desde; }
-    else if (p && (p.estado === 'enviada' || p.estado === 'em_negociacao')) { fase = 'enviada'; desde = p.atualizado_em; }
-    else if (p?.estado === 'recusada') { fase = 'perdido'; desde = p.atualizado_em; }
+    else if (sit === 'aguardando' || sit === 'ajuste' || sit === 'revisando' || sit === 'vencida') { fase = 'enviada'; desde = p!.atualizado_em; }
+    else if (sit === 'recusada') { fase = 'perdido'; desde = p!.atualizado_em; }
     else if (p) { fase = 'orcamento'; desde = p.criado_em; }
     else if (op?.estado_tipo === 'ganho') { fase = 'aceita'; desde = op.estado_desde; }
     else { fase = 'contato'; desde = op?.estado_desde ?? hoje; }
@@ -112,12 +140,14 @@ export function montarFunil(
     const cliente = p?.pessoa_nome ?? op?.pessoa_nome ?? 'Cliente';
     const telefone = p?.telefone ?? op?.telefone ?? null;
     const valor = p ? p.valor : op?.valor_estimado ?? 0;
-    const abrir = op ? `/comercial/${op.id}` : `/propostas/${p!.id}`;
+    // Com mais de uma proposta no mesmo contato, cada cartão abre a sua proposta.
+    const abrir = op && !varias ? `/comercial/${op.id}` : `/propostas/${p!.id}`;
     const alertas: Alerta[] = [];
     const atrasado = !!(op?.proxima_acao_data && op.proxima_acao_data < hoje && (fase === 'contato' || fase === 'orcamento' || fase === 'enviada'));
     if (atrasado) alertas.push({ texto: `Atrasado: ${op!.proxima_acao ?? 'próxima ação'}`, nivel: 'atencao' });
     const quente = fase === 'enviada' && (p?.vistas ?? 0) >= 3;
     if (fase === 'enviada' && p) {
+      if (sit === 'ajuste' || sit === 'revisando') alertas.push({ texto: SITUACAO_PROPOSTA[sit].rotulo, nivel: 'atencao' });
       if (p.vistas === 0) alertas.push({ texto: 'Ainda não abriu o link', nivel: 'atencao' });
       else alertas.push({ texto: `Abriu ${p.vistas}×${quente ? ' · quente' : ''}`, nivel: quente ? 'bom' : 'atencao' });
       if (p.validade) {
@@ -133,7 +163,11 @@ export function montarFunil(
     switch (fase) {
       case 'contato': passo = { rotulo: 'Fazer orçamento', para: op ? `/orcamento?oportunidade=${op.id}` : '/orcamento' }; break;
       case 'orcamento': passo = { rotulo: 'Terminar e enviar', para: `/propostas/${p!.id}` }; break;
-      case 'enviada': passo = telefone ? { rotulo: 'Cobrar retorno', para: `/propostas/${p!.id}`, acao: 'whatsapp' } : { rotulo: 'Ver proposta', para: `/propostas/${p!.id}` }; break;
+      case 'enviada':
+        passo = sit === 'ajuste' || sit === 'vencida' ? { rotulo: 'Alterar valor e reenviar', para: `/propostas/${p!.id}?alterar=valor` }
+          : sit === 'revisando' ? { rotulo: 'Emitir e enviar a nova versão', para: `/propostas/${p!.id}` }
+          : telefone ? { rotulo: 'Cobrar retorno', para: `/propostas/${p!.id}`, acao: 'whatsapp' } : { rotulo: 'Ver proposta', para: `/propostas/${p!.id}` };
+        break;
       case 'aceita': passo = obra ? { rotulo: 'Gerar contrato', para: `/obras/${obra.id}?aba=contrato` } : p?.versao_aprovada_id ? { rotulo: 'Gerar contrato', para: `/propostas/${p.id}`, acao: 'converter' } : p ? { rotulo: 'Ver proposta', para: `/propostas/${p.id}` } : null; break;
       case 'contrato': passo = { rotulo: 'Acompanhar assinatura', para: `/obras/${obra!.id}?aba=contrato` }; break;
       case 'obra': passo = { rotulo: 'Abrir obra', para: `/obras/${obra!.id}` }; break;
@@ -142,15 +176,19 @@ export function montarFunil(
     }
 
     negocios.push({
-      chave: op?.id ?? p!.id, fase, cliente, titulo: p?.titulo ?? op?.titulo ?? '', codigo: p?.codigo ?? op?.codigo ?? '',
+      chave: op && p && varias ? `${op.id}:${p.id}` : op?.id ?? p!.id, fase, cliente, titulo: p?.titulo ?? op?.titulo ?? '', codigo: p?.codigo ?? op?.codigo ?? '',
       servico: op?.tipo_servico ?? null, valor, desde, dias: n, telefone, abrir, passo, alertas, atrasado, quente,
       oportunidadeId: op?.id ?? null, propostaId: p?.id ?? null, versaoAprovadaId: p?.versao_aprovada_id ?? null, obraId: obra?.id ?? null,
       aditivos: obra ? aditivos.get(obra.id) ?? 0 : 0,
-      aceitoEm: p?.estado === 'aprovada' ? p.aprovada_em ?? p.atualizado_em : null,
+      aceitoEm: sit === 'aprovada' ? p!.aprovada_em ?? p!.atualizado_em : null,
     });
   };
-  for (const op of d.ops) montar(op, propostaPrincipal(porOp.get(op.id) ?? []));
-  for (const p of soltas) if (p.estado !== 'arquivada') montar(null, p);
+  for (const op of d.ops) {
+    const ps = propostasDoNegocio(porOp.get(op.id) ?? []);
+    if (!ps.length) montar(op, null);
+    else for (const p of ps) montar(op, p, ps.length > 1);
+  }
+  for (const p of soltas) if (situacaoFunil(p) !== 'arquivada') montar(null, p);
   return negocios;
 }
 
