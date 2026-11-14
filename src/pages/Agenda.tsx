@@ -116,7 +116,7 @@ export function Agenda() {
 
   return (
     <>
-      <Topo titulo="Agenda" sub="Tudo o que você precisa fazer, num lugar só: suas tarefas, as etapas das obras, propostas aceitas e o dinheiro que entra e sai.">
+      <Topo titulo="Agenda" sub="Tarefas, etapas das obras e vencimentos num lugar só.">
         <button className="btn-secundario" onClick={() => setConfig(true)}><Icone nome="sino" /> Avisos e encaixe</button>
         <button className="btn-primario" onClick={() => setForm({ data: vista === 'lista' ? h : ref })}><Icone nome="mais" /> Nova tarefa</button>
       </Topo>

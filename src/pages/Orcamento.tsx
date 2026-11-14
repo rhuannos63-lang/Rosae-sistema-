@@ -1,6 +1,6 @@
 // Novo orçamento (automático) e tabela de preços do orçamento.
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { ok, useConsulta } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
@@ -107,9 +107,7 @@ export function NovoOrcamento() {
 
   return (
     <>
-      <Topo titulo="Novo orçamento" sub="Escolha o serviço, preencha os dados e a proposta sai pronta: escopo, pacotes, prazo, pagamento e apresentação.">
-        <Link className="btn-secundario" to="/orcamento/precos"><Icone nome="config" /> Tabela de preços</Link>
-        <Link className="btn-secundario" to="/propostas">Propostas</Link>
+      <Topo titulo="Novo orçamento" sub="Escolha o serviço e preencha os dados: a proposta sai pronta.">
       </Topo>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="grid grid-2">
@@ -222,8 +220,7 @@ export function PrecosOrcamento() {
   };
   return (
     <>
-      <Topo titulo="Tabela de preços do orçamento" sub="Os valores iniciais são referências para começar. Ajuste à sua realidade: vale para os próximos orçamentos, os já emitidos não mudam.">
-        <Link className="btn-secundario" to="/orcamento"><Icone nome="voltar" /> Novo orçamento</Link>
+      <Topo titulo="Tabela de preços do orçamento" sub="Valores usados nos próximos orçamentos. Os já emitidos não mudam.">
       </Topo>
       <div className="abas-obra">
         {TIPOS.map((t) => <button key={t} className={t === tipo ? 'ativo' : ''} onClick={() => setParams({ tipo: t })}>{DEFINICOES[t].nome}</button>)}

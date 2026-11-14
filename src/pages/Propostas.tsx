@@ -79,12 +79,7 @@ export function Propostas() {
   );
   return (
     <>
-      <Topo titulo="Propostas" sub="Cada proposta aparece uma vez, na situação em que realmente está. A versão enviada fica congelada; mudanças viram uma nova versão.">
-        <Link className="btn-secundario" to="/comercial"><Icone nome="voltar" /> Funil</Link>
-        <MenuAcoes>
-          <Link role="menuitem" to="/biblioteca"><Icone nome="lista" /> Biblioteca de serviços</Link>
-          <Link role="menuitem" to="/orcamento/precos"><Icone nome="tabela" /> Tabela de preços</Link>
-        </MenuAcoes>
+      <Topo titulo="Propostas" sub="Cada proposta na situação em que realmente está.">
         <Link className="btn-primario" to="/orcamento"><Icone nome="varinha" /> Novo orçamento</Link>
       </Topo>
       {dados && (
@@ -97,11 +92,8 @@ export function Propostas() {
       )}
       <div className="card">
         <div className="row" style={{ marginBottom: 12, gap: 8 }}>
-          <div className="segmentado">
-            {FILTROS.map((f) => (
-              <button key={f.id} className={filtro === f.id || (f.id === 'com_cliente' && sub) ? 'ativo' : ''} onClick={() => setFiltro(f.id)}>{f.rotulo}</button>
-            ))}
-          </div>
+          {/* Os cartões acima são as abas; aqui ficam só o "Todas" e o detalhe de quem está com o cliente. */}
+          <button className={`chip-link${filtro === 'todas' ? ' ativo' : ''}`} onClick={() => setFiltro(filtro === 'todas' ? 'com_cliente' : 'todas')}>{filtro === 'todas' ? 'Mostrando todas' : 'Ver todas'}</button>
           {sub && (
             <div className="row" style={{ gap: 6 }}>
               {COM_O_CLIENTE.map((s) => (

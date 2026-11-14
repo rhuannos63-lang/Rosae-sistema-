@@ -54,7 +54,7 @@ export function BotaoExcluir({ tabela, id, nome, aoExcluir, rotulo = 'Excluir', 
     setOcupado(false);
     if (r.error) return setErro(mensagemErro(r.error));
     setAberto(false);
-    toast(`${nome} foi para a lixeira. Dá para restaurar em Empresa → Lixeira.`);
+    toast(`${nome} foi para a lixeira. Dá para restaurar em Empresa → Configurações → Lixeira.`);
     aoExcluir?.();
   }
   const outros = plano ? Object.entries(plano.resumo).filter(([t]) => t !== tabela || plano.resumo[t] > 1).map(([t, n]) => [t, t === tabela ? n - 1 : n] as const).filter(([, n]) => n > 0) : [];

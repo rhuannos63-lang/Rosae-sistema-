@@ -48,7 +48,7 @@ export function Financeiro() {
 
   return (
     <>
-      <Topo titulo="Financeiro" sub="Contas a receber e a pagar, com parcelas. Cada pagamento registrado vira um movimento na conta.">
+      <Topo titulo="Financeiro" sub="Contas a receber e a pagar, com parcelas.">
         <button className="btn-primario" onClick={() => setNovo(true)}><Icone nome="mais" /> Nova conta {rotuloTipo}</button>
       </Topo>
       <div className="card">
