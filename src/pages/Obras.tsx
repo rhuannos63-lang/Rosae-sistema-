@@ -13,6 +13,7 @@ import { MODELO_CONTRATACAO, SITUACAO, STATUS_OBRA, TIPOS_SERVICO, type Obra, ty
 import { PessoaForm } from './Pessoas';
 import { LancamentoForm } from './Financeiro';
 import { Contratacoes, ResultadoServicos } from './ObraFinanceiro';
+import { ComparativoCategorias } from '../components/ComparativoCategorias';
 import { Cronograma } from './ObraCronograma';
 import { Materiais } from './ObraMateriais';
 import { Registros } from './ObraRegistros';
@@ -370,6 +371,7 @@ export function ObraDetalhe() {
               <span>O total lançado a receber ({formatar(r('a_receber_total'))}) é diferente do valor contratado{r('aditivos') ? ' com aditivos' : ''} ({formatar(r('valor_contratado') + r('aditivos'))}). Confira se faltam parcelas.</span>
             </div>
           )}
+          <ComparativoCategorias key={`c-${versaoFin}`} obraId={obra.id} />
           <ResultadoServicos key={`r-${versaoFin}`} obraId={obra.id} servicos={dados.servicos} />
           <Contratacoes obraId={obra.id} servicos={dados.servicos} aoMudar={() => { setVersaoFin((v) => v + 1); recarregar(); }} />
           <div className="card" style={{ marginTop: 14 }}>

@@ -2608,3 +2608,117 @@ td .ed-mais { margin: 0 0 0 .6em; padding: .1em .6em; }
   .menu-acoes-lista { right: auto; left: 0; }
 }
 .negocio .selo { white-space: normal; max-width: 100%; }
+
+/* ---------------------------------------------------------------------------------------------
+   Comparativo orçado × fechado por categoria (financeiro da obra)
+   --------------------------------------------------------------------------------------------- */
+.comparativo { --cmp-lucro: var(--favoravel); --cmp-prej: var(--desfavoravel); }
+.cmp-resumo { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid var(--linha); border-radius: var(--raio); overflow: hidden; margin-bottom: 14px; }
+.cmp-kpi { display: grid; align-content: start; gap: 3px; padding: 14px 16px; border-right: 1px solid var(--linha); background: var(--papel); min-width: 0; }
+.cmp-kpi:last-child { border-right: none; }
+.cmp-kpi .rotulo { font-size: 0.76rem; color: var(--texto-2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+.cmp-kpi b { font-family: var(--fonte-titulo); font-size: 1.45rem; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.cmp-kpi .det { font-size: 0.76rem; color: var(--texto-2); }
+.cmp-kpi.destaque { background: var(--neutro-fundo); }
+.cmp-kpi.destaque.lucro { background: var(--ok-fundo); }
+.cmp-kpi.destaque.lucro b, .cmp-kpi.destaque.lucro .rotulo { color: var(--cmp-lucro); }
+.cmp-kpi.destaque.prejuizo { background: var(--erro-fundo); }
+.cmp-kpi.destaque.prejuizo b, .cmp-kpi.destaque.prejuizo .rotulo { color: var(--cmp-prej); }
+.cmp-barra { display: block; height: 4px; border-radius: 4px; background: var(--linha); overflow: hidden; margin-top: 6px; }
+.cmp-barra i { display: block; height: 100%; background: var(--verde); border-radius: 4px; transition: width 0.3s; }
+
+.cmp-filtros { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.cmp-filtros > button:not(.btn-link) { all: unset; cursor: pointer; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--linha); font-size: 0.82rem; color: var(--texto-2); background: var(--papel); }
+.cmp-filtros > button:not(.btn-link):hover { border-color: var(--linha-forte); color: var(--grafite); }
+.cmp-filtros > button.ativo { background: var(--verde); border-color: var(--verde); color: #fff; }
+.cmp-filtros .espaco { flex: 1; }
+
+.cmp-tabela { border: 1px solid var(--linha); border-radius: var(--raio); overflow: hidden; margin-bottom: 8px; }
+.cmp-cab, .cmp-linha-cat, .cmp-total { display: grid; grid-template-columns: minmax(0, 1fr) 140px 140px 190px; gap: 12px; align-items: center; padding: 10px 14px; }
+.cmp-cab { background: var(--verde-tinta); font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-2); font-weight: 600; border-bottom: 1px solid var(--linha); }
+.cmp-cat { border-bottom: 1px solid var(--linha); }
+.cmp-linha-cat { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) 140px 140px 190px; gap: 12px; align-items: center; padding: 12px 14px; cursor: pointer; }
+.cmp-linha-cat:hover { background: var(--verde-tinta); }
+.cmp-linha-cat:focus-visible { outline: 2px solid var(--verde); outline-offset: -2px; }
+.cmp-nome { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.cmp-nome > svg { width: 16px; height: 16px; flex: none; margin-top: 3px; color: var(--texto-3); transition: transform 0.15s; }
+.cmp-cat.expandida .cmp-nome > svg { transform: rotate(90deg); color: var(--verde); }
+.cmp-nome > span { min-width: 0; flex: 1; }
+.cmp-nome b { font-weight: 600; }
+.cmp-sub { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 0.76rem; color: var(--texto-2); margin-top: 2px; }
+.cmp-nome .cmp-barra { max-width: 220px; height: 3px; margin-top: 7px; }
+.cmp-situacao { font-weight: 600; }
+.cmp-situacao.fechada { color: var(--favoravel); }
+.cmp-situacao.parcial { color: var(--alerta); }
+.cmp-situacao.aberta { color: var(--texto-3); }
+.cmp-dif { display: inline-flex; gap: 8px; align-items: center; justify-content: flex-end; }
+.cmp-dif.lucro b { color: var(--cmp-lucro); }
+.cmp-dif.prejuizo b { color: var(--cmp-prej); }
+.cmp-pill { display: inline-block; font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; letter-spacing: 0.02em; white-space: nowrap; }
+.cmp-pill.lucro { background: var(--ok-fundo); color: var(--cmp-lucro); }
+.cmp-pill.prejuizo { background: var(--erro-fundo); color: var(--cmp-prej); }
+.cmp-pill.neutro { background: var(--neutro-fundo); color: var(--texto-2); }
+.cmp-total { background: var(--verde-tinta); font-weight: 600; }
+.cmp-total .num { font-variant-numeric: tabular-nums; }
+.cmp-rot-mob { display: none; }
+
+.cmp-detalhe { padding: 4px 14px 14px 38px; display: grid; gap: 10px; background: var(--papel); }
+.cmp-sugestao { display: flex !important; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cmp-sugestao span { flex: 1; min-width: 200px; }
+.cmp-pacote { display: flex; gap: 8px; align-items: center; font-size: 0.88rem; cursor: pointer; }
+.cmp-pacote input { width: 16px; height: 16px; accent-color: var(--verde); }
+.cmp-pacote-campos { display: grid; grid-template-columns: 200px minmax(0, 320px); gap: 10px; }
+.cmp-itens { border: 1px solid var(--linha); border-radius: var(--raio-p); overflow: hidden; }
+.cmp-itens-cab, .cmp-item { display: grid; grid-template-columns: minmax(0, 1fr) 120px minmax(120px, 190px) 140px 120px 34px; gap: 10px; align-items: center; padding: 8px 10px; }
+.cmp-itens-cab { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-3); font-weight: 600; background: var(--neutro-fundo); }
+.cmp-item { border-top: 1px solid var(--linha); font-size: 0.9rem; }
+.cmp-item.dispensada { opacity: 0.55; }
+.cmp-item.dispensada .cmp-item-nome b { text-decoration: line-through; }
+.cmp-item-nome { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; min-width: 0; }
+.cmp-item-nome b { font-weight: 500; }
+.cmp-item-nome .muted { flex-basis: 100%; }
+.cmp-tipo { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; color: var(--texto-3); }
+.cmp-tipo.mao_de_obra { color: var(--info); }
+.cmp-tipo.material { color: var(--verde-escuro); }
+.cmp-tipo.equipamento { color: var(--alerta); }
+.cmp-item input { width: 100%; padding: 6px 8px; font-size: 0.88rem; }
+.cmp-valor input { text-align: right; }
+.cmp-no-pacote { grid-column: span 2; }
+.cmp-acoes { display: flex; justify-content: flex-end; }
+.cmp-acoes .btn-icone { all: unset; cursor: pointer; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--raio-p); color: var(--texto-3); }
+.cmp-acoes .btn-icone:hover { background: var(--neutro-fundo); color: var(--grafite); }
+.cmp-acoes svg { width: 15px; height: 15px; }
+.cmp-rodape { gap: 14px; align-items: center; flex-wrap: wrap; }
+.cmp-rodape .espaco-esq { margin-left: auto; }
+.cmp-tipos { display: flex; gap: 6px; flex-wrap: wrap; }
+.cmp-tipos button { all: unset; cursor: pointer; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--linha); font-size: 0.84rem; }
+.cmp-tipos button.ativo { background: var(--verde); border-color: var(--verde); color: #fff; }
+
+@media (max-width: 900px) {
+  .cmp-resumo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cmp-kpi { padding: 12px; }
+  .cmp-kpi b { font-size: 1.15rem; }
+  .cmp-kpi:nth-child(2) { border-right: none; }
+  .cmp-kpi:nth-child(-n+2) { border-bottom: 1px solid var(--linha); }
+  .cmp-cab { display: none; }
+  .cmp-linha-cat, .cmp-total { grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+  .cmp-linha-cat .cmp-nome { grid-column: 1 / -1; }
+  .cmp-linha-cat > .right:last-child { grid-column: 1 / -1; justify-content: flex-start; text-align: left; }
+  .cmp-linha-cat > .right { text-align: left; }
+  .cmp-rot-mob { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--texto-3); font-weight: 600; }
+  .cmp-total > span:first-child { grid-column: 1 / -1; }
+  .cmp-total > .right { text-align: left; }
+  .cmp-total > .right:last-child { grid-column: 1 / -1; }
+  .cmp-total .cmp-dif { justify-content: flex-start; }
+  .cmp-linha-cat .cmp-dif { justify-content: flex-start; }
+  .cmp-detalhe { padding: 4px 10px 12px; }
+  .cmp-itens-cab { display: none; }
+  .cmp-item { grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+  .cmp-item-nome { grid-column: 1 / -1; padding-right: 30px; }
+  .cmp-item { position: relative; }
+  .cmp-acoes { position: absolute; top: 6px; right: 6px; }
+  .cmp-item > .right { text-align: left; }
+  .cmp-item > .right:nth-of-type(2) { grid-column: 1 / -1; }
+  .cmp-forn { grid-column: 1 / -1; }
+  .cmp-pacote-campos { grid-template-columns: 1fr; }
+}
