@@ -25,6 +25,7 @@ import { carregarPrecos } from '../lib/orcamentoParametros';
 import { EnviarEmail, HistoricoEmails } from '../components/EnvioEmail';
 import { NovoAditivo } from '../components/NovoAditivo';
 import { QuadroRecebido } from '../components/Recebimentos';
+import { ContratoDoAceite } from '../components/ContratoDoAceite';
 import { baixarArquivo, compartilharArquivo, gerarPdfProposta, nomeDoPdf, paraBase64 } from '../lib/pdfProposta';
 import type { Orcamento } from '../core/orcamento';
 import { ComposicaoProposta } from '../components/ComposicaoProposta';
@@ -898,7 +899,9 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
           {p.versao_aprovada_id === versao.id && (
             <>
               <div className="aviso ok" style={{ marginTop: 10 }}><Icone nome="check" /><span>Aprovada por <b>{p.aprovada_por_nome}</b> em {formatarDataHora(p.aprovada_em)}.</span></div>
-              <Converter proposta={p} versaoId={versao.id} />
+              {p.tipo === 'proposta'
+                ? <ContratoDoAceite proposta={p} versaoId={versao.id} conteudo={versao.conteudo as Partial<Conteudo>} />
+                : <Converter proposta={p} versaoId={versao.id} />}
             </>
           )}
           {!ehUltima && <div className="aviso info" style={{ marginTop: 10 }}><span>Existe versão mais nova. Esta continua guardada como histórico, mas não pode mais ser aceita.</span></div>}

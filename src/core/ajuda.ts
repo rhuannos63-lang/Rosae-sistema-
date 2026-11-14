@@ -26,7 +26,7 @@ export const AJUDA: TopicoAjuda[] = [
   {
     id: 'obra', titulo: 'Criar obra', onde: 'Proposta aprovada ou Obras', link: '/obras',
     serve: 'Transformar a proposta aprovada em obra sem redigitar: ambientes, serviços, valores vendidos, etapas, materiais e previsão de recebimentos.',
-    passos: ['Na proposta aprovada, toque em Converter em obra (repetir não duplica nada).', 'Gere o contrato na aba Contrato, confira os dados que faltam e emita.', 'Registre a assinatura e toque em Liberar obra para iniciar.'],
+    passos: ['Na proposta aprovada, toque em Gerar contrato: a obra é criada e o contrato do tipo de serviço abre pronto (repetir não duplica nada).', 'Confira os dados que faltam, edite o que quiser e emita.', 'Registre a assinatura e toque em Liberar obra para iniciar.'],
     exemplo: 'Proposta de R$ 6.000 em 2 parcelas vira obra com 2 serviços, 6 etapas e uma conta a receber em 2 parcelas.',
     erros: ['Confundir proposta aprovada, contrato assinado e obra liberada: são três passos diferentes, cada um com seu registro.'],
   },
