@@ -39,7 +39,7 @@ Testes: `npm test` (regras) e `npm run test:db` (banco, precisa do PostgreSQL in
 
 ## Segredos do GitHub (Settings → Secrets → Actions)
 
-`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` e, opcional, `BACKUP_SENHA` (senha da criptografia do backup; sem ela, usa a senha do banco).
+`SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_REF` e, opcional, `BACKUP_SENHA` (senha da criptografia do backup; sem ela, usa a senha do banco). Para guardar 10 anos: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` e `R2_BUCKET` (veja abaixo).
 
 Assistente de IA (opcional): `ANTHROPIC_API_KEY` (Claude), `GEMINI_API_KEY` (Gemini; também transcreve áudio do WhatsApp) e, para o WhatsApp oficial da Meta, `WHATSAPP_TOKEN`, `WHATSAPP_NUMERO_ID`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN` e `WHATSAPP_NUMERO_EXIBICAO`. Depois de cadastrar, rode o workflow **Publicar assistente**: ele copia as chaves para o Supabase e publica as funções `assistente` e `whatsapp` (`supabase/functions`). O passo a passo completo está no sistema, em Empresa e Sistema › Assistente IA › Ligar.
 
@@ -50,17 +50,34 @@ E-mail das propostas (opcional): `RESEND_API_KEY` (conta em resend.com, com o do
 - Permissões são conferidas no banco (RLS e funções), não só na tela. O cliente acessa só a própria obra por link pessoal com prazo e revogação.
 - Não são apagados: propostas emitidas, contratos, aceites, medições, lançamentos, pagamentos, notas e a auditoria. O prazo de guarda de documentos fiscais e financeiros deve ser definido com o contador.
 - Pedido de exclusão de dados pessoais (LGPD): Cadastros › Privacidade › Anonimizar (só administrador). Tira nome, documento, contatos, endereço e Pix do cadastro e da auditoria, desativa os acessos ao portal e mantém os registros financeiros e contratuais.
-- Backup diário criptografado, guardado 30 dias (workflow `backup.yml`).
+- Verificação em 2 etapas (código do aplicativo autenticador), ligada em Configurações › Dados e segurança. Vale no banco: com o código ativado, uma sessão só com a senha não lê nem grava nada (`sessao_segura()` dentro de `eh_admin`, `eh_equipe_adm`, `eh_equipe`, `tem_financeiro`, `meu_papel` e `membro_da_obra`). Perdeu o celular? Supabase › Authentication › Users › o usuário › remover o fator.
+- Saída por inatividade em cada aparelho (padrão 8 horas).
+- Cabeçalhos de proteção no site (`public/_headers`): CSP sem scripts de fora, HSTS, sem abrir dentro de outro site.
+- O Storage só aceita foto, PDF e XML.
+- Auditoria guarda só o que mudou em cada alteração (e nada quando nada mudou), com compressão lz4.
+- Backup diário criptografado (workflow `backup.yml`). Com o Cloudflare R2: diário por 35 dias, um por mês por 10 anos e cópia de todos os arquivos. Sem o R2: 30 dias no GitHub, com os arquivos no dia 1 de cada mês.
+- Arquivo frio: quando os arquivos passam de 70% do limite do Supabase, os mais antigos (já copiados e com mais de 6 meses) saem de lá e são lidos do R2 pela função `arquivos`, que confere a permissão no banco (`arquivos_frios_permitidos`). Uso e projeção de 10 anos em Configurações › Dados e segurança (`uso_armazenamento()`).
 - Logs das funções não gravam chaves nem o conteúdo de documentos.
+
+## Guardar 10 anos (Cloudflare R2)
+
+1. Cloudflare › R2 Object Storage: ative o R2 (plano grátis, 10 GB) e crie o bucket `rosae-arquivos`.
+2. R2 › Manage API tokens › Create API token: permissão **Object Read & Write**, só para esse bucket. Copie o Access Key ID e o Secret Access Key. O Account ID aparece na página do R2.
+3. GitHub › Settings › Secrets › Actions: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (= `rosae-arquivos`).
+4. Rode **Publicar assistente** (copia as chaves para a função `arquivos`) e depois **Backup diário**.
 
 ## Restaurar um backup
 
-Baixe o arquivo em Actions → Backup diário, depois:
+Baixe o arquivo (R2: `backups/diario/` ou `backups/mensal/`; sem R2: Actions → Backup diário), depois:
 
 ```bash
 gpg -d rosae-backup-AAAA-MM-DD.tar.gz.gpg | tar xz
 psql "<conexão do banco novo>" -f backup/papeis.sql -f backup/estrutura.sql -f backup/dados.sql
 ```
+
+Arquivos (fotos, comprovantes, notas): no R2 ficam em `arquivos/` com o mesmo caminho do Storage
+(`aws s3 sync s3://rosae-arquivos/arquivos ./arquivos --endpoint-url https://<conta>.r2.cloudflarestorage.com`);
+sem R2, estão dentro do backup do dia 1 em `backup/arquivos/`.
 
 ## Publicação
 
