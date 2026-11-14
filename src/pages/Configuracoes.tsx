@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { AvisosAparelho } from '../components/AvisosAparelho';
 import { supabase, mensagemErro } from '../lib/supabase';
+import { SegurancaDados } from './Seguranca';
 import { useConsulta, ok } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
@@ -15,7 +17,7 @@ type Aba = 'empresa' | 'metas' | 'contas' | 'categorias' | 'usuarios' | 'dados' 
 
 export function Configuracoes() {
   const [aba, setAba] = useState<Aba>('empresa');
-  const abas: Record<Aba, string> = { empresa: 'Empresa', metas: 'Metas', contas: 'Contas bancárias', categorias: 'Categorias', usuarios: 'Usuários', dados: 'Exportar e backup', historico: 'Histórico' };
+  const abas: Record<Aba, string> = { empresa: 'Empresa', metas: 'Metas', contas: 'Contas bancárias', categorias: 'Categorias', usuarios: 'Usuários', dados: 'Dados e segurança', historico: 'Histórico' };
   return (
     <>
       <Topo titulo="Configurações" sub="Dados reais da empresa, metas, contas e segurança." />
@@ -24,12 +26,12 @@ export function Configuracoes() {
           <button key={a} role="tab" aria-selected={aba === a} className={aba === a ? 'ativo' : ''} onClick={() => setAba(a)}>{abas[a]}</button>
         ))}
       </div>
-      {aba === 'empresa' && <AbaEmpresa />}
+      {aba === 'empresa' && <><AvisosAparelho /><div style={{ height: 16 }} /><AbaEmpresa /></>}
       {aba === 'metas' && <AbaMetas />}
       {aba === 'contas' && <AbaContas />}
       {aba === 'categorias' && <AbaCategorias />}
       {aba === 'usuarios' && <AbaUsuarios />}
-      {aba === 'dados' && <AbaDados />}
+      {aba === 'dados' && <><SegurancaDados /><AbaDados /></>}
       {aba === 'historico' && <AbaHistorico />}
     </>
   );
@@ -389,11 +391,6 @@ function AbaDados() {
       </div>
       {estado && <div className="aviso ok">{estado}</div>}
       <Erro mensagem={erro} />
-      <h2 style={{ marginTop: 10 }}>Backup automático</h2>
-      <p className="muted" style={{ margin: 0 }}>
-        Todo dia às 3h (Brasília) o GitHub copia o banco inteiro, criptografado, e guarda por 30 dias no repositório privado. Isso também evita a pausa do plano gratuito do Supabase.
-        O estado de cada cópia aparece em GitHub → rosae-sistema → Actions → "Backup diário".
-      </p>
     </div>
   );
 }

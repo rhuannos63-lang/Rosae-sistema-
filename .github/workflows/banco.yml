@@ -31,3 +31,10 @@ jobs:
         run: |
           supabase link --project-ref "${{ steps.p.outputs.ref }}" --password "$SUPABASE_DB_PASSWORD"
           supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
+      - name: Reforçar o login (código em 2 etapas e troca de sessão)
+        if: steps.p.outputs.ok == 'sim'
+        run: |
+          curl -sS -o /dev/null -w "configuração do login: %{http_code}\n" -X PATCH \
+            "https://api.supabase.com/v1/projects/${{ steps.p.outputs.ref }}/config/auth" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" \
+            -d '{"mfa_totp_enroll_enabled": true, "mfa_totp_verify_enabled": true, "mfa_max_enrolled_factors": 10, "refresh_token_rotation_enabled": true, "security_refresh_token_reuse_interval": 10}'

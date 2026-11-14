@@ -8,8 +8,9 @@ import { novaChave } from '../lib/consulta';
 import { Carregando } from '../components/ui';
 import { Icone } from '../components/Icone';
 import { CenaServico } from '../components/CenaServico';
-import { calcularJornada, faseAtual, perfilDaObra, PERFIS, type Perfil } from '../core/jornada';
-import { formatarData, formatarDataHora } from '../core/datas';
+import { calcularJornada, faseAtual, perfilDaObra, PERFIS, type FaseCalculada, type Perfil } from '../core/jornada';
+import { formatarData, formatarDataHora, hoje as hojeISO } from '../core/datas';
+import { SERVICO, haQuanto, linhaDoTempo, proximoMarco, seuTrabalho, doTrabalho, type ConfigServico } from '../core/portalServico';
 import {
   ESTADO_PORTAL, SITUACAO_MATERIAL_PORTAL, STATUS_OBRA_PORTAL, TIPO_COMENTARIO, TIPO_REGISTRO_PORTAL,
   cienciaDoItem, faseEtapa, paresAntesDepois, primeiroNome, proximaEtapa,
@@ -123,15 +124,17 @@ export function ImagemPortal({ token, id, grande, alt, className }: { token: str
 // Tela
 // ---------------------------------------------------------------------
 type Aba = 'inicio' | 'cronograma' | 'ambientes' | 'fotos' | 'medicoes' | 'atualizacoes' | 'mensagens';
-type Ctx = { d: DadosPortal; token: string | null; recarregar: () => Promise<void> | void; nomeServico: (id: string | null) => string; nomeEtapa: (id: string | null) => string; abrirFoto: (f: FotoPortal) => void };
+type Ctx = { d: DadosPortal; perfil: Perfil; cfg: ConfigServico; hoje: string; token: string | null; recarregar: () => Promise<void> | void; nomeServico: (id: string | null) => string; nomeEtapa: (id: string | null) => string; abrirFoto: (f: FotoPortal) => void };
 
 function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: string | null; recarregar: () => Promise<void> | void; sair?: () => void }) {
   const [aba, setAba] = useState<Aba>('inicio');
   const [foto, setFoto] = useState<FotoPortal | null>(null);
   const servicos = useMemo(() => new Map(d.servicos.map((s) => [s.id, s.nome])), [d.servicos]);
   const etapas = useMemo(() => new Map(d.etapas.map((e) => [e.id, e.nome])), [d.etapas]);
+  const perfil = perfilDaObra(d.obra.tipo_servico, d.obra.perfil);
+  const cfg = SERVICO[perfil];
   const ctx: Ctx = {
-    d, token, recarregar,
+    d, perfil, cfg, hoje: hojeISO(), token, recarregar,
     nomeServico: (id) => (id ? servicos.get(id) ?? '' : ''),
     nomeEtapa: (id) => (id ? etapas.get(id) ?? '' : ''),
     abrirFoto: setFoto,
@@ -143,7 +146,7 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
   ].length;
   const medicoes = d.medicoes ?? [];
   const abas: [Aba, string, number?][] = [
-    ['inicio', 'Início'], ['cronograma', 'Etapas'], ...(d.ambientes.length ? [['ambientes', 'Ambientes'] as [Aba, string]] : []), ...(d.fotos.length ? [['fotos', 'Fotos', d.fotos.length] as [Aba, string, number]] : []),
+    ['inicio', 'Início'], ['cronograma', 'Etapas'], ...(d.ambientes.length ? [['ambientes', 'Ambientes'] as [Aba, string]] : []), ...(d.fotos.length ? [['fotos', cfg.galeria, d.fotos.length] as [Aba, string, number]] : []),
     ...(medicoes.length ? [['medicoes', 'Medições', medicoes.filter((m) => m.estado === 'enviada').length] as [Aba, string, number]] : []),
     ['atualizacoes', 'Atualizações', eu ? semCiencia : undefined], ['mensagens', 'Mensagens', d.comentarios.length],
   ];
@@ -171,12 +174,12 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
       <nav className="portal-abas" aria-label="Seções do acompanhamento">
         {abas.map(([k, rot, n]) => (
           <button key={k} className={aba === k ? 'ativo' : ''} aria-current={aba === k ? 'page' : undefined} onClick={() => irPara(k)}>
-            {rot}{n ? <span className="portal-badge" aria-label={`${n} itens`}>{n}</span> : null}
+            <Icone nome={ICONE_ABA[k]} /><span className="portal-aba-rot">{rot}</span>{n ? <span className="portal-badge" aria-label={`${n} itens`}>{n}</span> : null}
           </button>
         ))}
       </nav>
 
-      <main className="portal-corpo" key={aba}>
+      <main className={`portal-corpo perfil-${perfil}`} key={aba}>
         {aba === 'inicio' && <Inicio ctx={ctx} irPara={irPara} />}
         {aba === 'cronograma' && <Etapas ctx={ctx} />}
         {aba === 'ambientes' && <Ambientes ctx={ctx} />}
@@ -194,7 +197,7 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
           {d.empresa?.email && <> · <a href={`mailto:${d.empresa.email}`}>{d.empresa.email}</a></>}
         </p>
         <p className="small">
-          Este acompanhamento mostra o andamento físico publicado pela ROSAE. Valores, pagamentos e documentos comerciais seguem por e-mail.
+          Este acompanhamento mostra o andamento {doTrabalho(perfil)} publicado pela ROSAE. Valores, pagamentos e documentos comerciais seguem por e-mail.
           {d.expira_em && <> Seu link pessoal vale até {formatarData(d.expira_em)}.</>}
         </p>
         <p className="portal-rodape-acoes">
@@ -211,12 +214,21 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
 function Capa({ ctx }: { ctx: Ctx }) {
   const { d, token } = ctx;
   const capa = useFoto(token, d.obra.capa, true);
+  const executado = Math.round(Number(d.progresso.executado));
   return (
     <section className={`portal-capa ${capa ? 'com-imagem' : ''}`} style={capa ? { backgroundImage: `url("${capa}")` } : undefined}>
       <div className="portal-capa-conteudo">
         <span className="portal-kicker">{d.obra.codigo} · {STATUS_OBRA_PORTAL[d.obra.status] ?? 'Em andamento'}</span>
         <h1>{d.obra.nome}</h1>
         {d.obra.endereco && <p className="portal-endereco">{d.obra.endereco}</p>}
+        <div className="portal-capa-chips">
+          <span className="portal-chip">{PERFIS[ctx.perfil].nome}</span>
+          {d.ultima_atualizacao && <span className="portal-chip">Atualizado {haQuanto(d.ultima_atualizacao, ctx.hoje)}</span>}
+        </div>
+      </div>
+      <div className="portal-capa-anel" role="img" aria-label={`${executado}% executado`}>
+        <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" className="trilho" /><circle cx="60" cy="60" r="52" className="valor" pathLength={100} strokeDasharray={`${executado} 100`} /></svg>
+        <span><strong>{executado}%</strong>{ctx.cfg.campo ? 'executado' : 'concluído'}</span>
       </div>
     </section>
   );
@@ -242,15 +254,23 @@ function datasEtapa(e: EtapaPortal): string {
   return prev;
 }
 
+const ICONE_ABA: Record<Aba, string> = {
+  inicio: 'inicio', cronograma: 'lista', ambientes: 'pasta', fotos: 'foto', medicoes: 'grafico', atualizacoes: 'sino', mensagens: 'mensagem',
+};
+
 function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
-  const { d } = ctx;
+  const { d, perfil, cfg } = ctx;
   const decisoes = d.pendencias.filter((p) => p.estado === 'aberta' && p.responsavel === 'cliente');
   const medicaoAberta = (d.medicoes ?? []).find((m) => m.estado === 'enviada');
   const ultimas = d.fotos.slice(0, 8);
-  const perfil = perfilDaObra(d.obra.tipo_servico, d.obra.perfil);
+  const fases = useMemo(() => calcularJornada(perfil, d.etapas, Number(d.progresso.executado), ctx.nomeServico),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [perfil, d.etapas, d.progresso.executado]);
   return (
     <div className="portal-stack">
       {d.obra.boas_vindas && <p className="portal-boas-vindas">{d.obra.boas_vindas}</p>}
+
+      <Agora ctx={ctx} fases={fases} />
 
       {(medicaoAberta || decisoes.length > 0) && (
         <section className="portal-card portal-destaque portal-aguardando">
@@ -272,9 +292,9 @@ function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
         </section>
       )}
 
-      <Jornada ctx={ctx} perfil={perfil} />
+      <Jornada ctx={ctx} perfil={perfil} fases={fases} />
 
-      {perfil !== 'reforma' && d.ambientes.length > 0 && (
+      {cfg.campo && perfil !== 'reforma' && d.ambientes.length > 0 && (
         <section className="portal-card">
           <div className="portal-linha"><h2>Por ambiente</h2><button className="btn-link" onClick={() => irPara('ambientes')}>Explorar</button></div>
           <div className="portal-ambientes-mini">
@@ -287,27 +307,120 @@ function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
 
       {ultimas.length > 0 && (
         <section className="portal-card">
-          <div className="portal-linha"><h2>Fotos recentes</h2><button className="btn-link" onClick={() => irPara('fotos')}>Ver todas</button></div>
+          <div className="portal-linha"><h2>{cfg.galeria} recentes</h2><button className="btn-link" onClick={() => irPara('fotos')}>Ver todas</button></div>
           <div className="portal-faixa">
             {ultimas.map((f) => (
-              <button key={f.id} className="portal-mini" onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir foto ${f.legenda ?? ''} de ${formatarData(f.tirada_em)}`}>
-                <ImagemPortal token={ctx.token} id={f.id} alt={f.legenda ?? 'Foto da obra'} />
+              <button key={f.id} className="portal-mini" onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir imagem ${f.legenda ?? ''} de ${formatarData(f.tirada_em)}`}>
+                <ImagemPortal token={ctx.token} id={f.id} alt={f.legenda ?? `Imagem ${doTrabalho(perfil)}`} />
               </button>
             ))}
           </div>
         </section>
       )}
+
+      <ParaCorrerBem ctx={ctx} />
+      <Duvidas ctx={ctx} irPara={irPara} />
+    </div>
+  );
+}
+
+/** O momento atual em uma frase: a fase, o que acontece, como o cliente participa e o próximo marco. */
+function Agora({ ctx, fases }: { ctx: Ctx; fases: FaseCalculada[] }) {
+  const { d, perfil, cfg } = ctx;
+  const def = PERFIS[perfil];
+  const f = fases[faseAtual(fases)];
+  const concluida = fases.every((x) => x.estado === 'concluida');
+  const marco = concluida ? null : proximoMarco(fases, d.etapas, d.obra.data_previsao_fim, ctx.hoje);
+  const voce = concluida ? null : cfg.voce[f.id];
+  const seu = seuTrabalho(perfil);
+  return (
+    <section className="portal-agora" aria-label="O que está acontecendo agora">
+      <div className="pa-texto">
+        <span className="pj-kicker">{concluida ? 'Concluído' : f.estado === 'atual' ? `Agora ${def.onde}` : 'A seguir'}</span>
+        <h2>{concluida ? `${seu[0].toUpperCase()}${seu.slice(1)} está pronto${cfg.trabalho === 'obra' ? 'a' : ''}` : f.nome}</h2>
+        <p>{concluida ? 'Obrigado pela confiança. A documentação final e o histórico completo continuam disponíveis aqui.' : f.agora}</p>
+      </div>
+      {(voce || marco) && (
+        <div className="pa-lado">
+          {voce && <div className="pa-bloco"><span className="pa-rot">Como você participa</span><p>{voce}</p></div>}
+          {marco && (
+            <div className="pa-bloco pa-marco">
+              <Icone nome="calendario" />
+              <div><span className="pa-rot">Próximo marco</span><strong>{marco.titulo}</strong><span className="muted small">{formatarData(marco.data)} · {marco.quando}</span></div>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** O que costumamos pedir neste tipo de serviço e os cuidados durante a execução. */
+function ParaCorrerBem({ ctx }: { ctx: Ctx }) {
+  const { cfg, perfil } = ctx;
+  return (
+    <section className="portal-card portal-colabora">
+      <h2>Para tudo correr bem</h2>
+      <div className="pc-grade">
+        <div>
+          <h3>O que costumamos pedir a você</h3>
+          <ul className="pc-lista">{cfg.pedimos.map((x) => <li key={x}>{x}</li>)}</ul>
+        </div>
+        {cfg.cuidados.length > 0 && (
+          <div>
+            <h3>Cuidados durante a obra</h3>
+            <ul className="pc-lista cuidado">{cfg.cuidados.map((x) => <li key={x}>{x}</li>)}</ul>
+          </div>
+        )}
+      </div>
+      <p className="portal-nota">Lista geral para {PERFIS[perfil].nome.toLowerCase()}. O que for preciso {cfg.trabalho === 'obra' ? 'na' : 'no'} {seuTrabalho(perfil)} chega como decisão em “Aguardando você”, com prazo.</p>
+    </section>
+  );
+}
+
+function Duvidas({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
+  const { cfg } = ctx;
+  return (
+    <section className="portal-card portal-duvidas">
+      <h2>Dúvidas frequentes</h2>
+      {cfg.duvidas.map((q) => <details key={q.p}><summary>{q.p}</summary><p>{q.r}</p></details>)}
+      <details className="pd-termos">
+        <summary>Termos técnicos, em palavras simples</summary>
+        <dl>{cfg.termos.map((x) => <div key={x.t}><dt>{x.t}</dt><dd>{x.d}</dd></div>)}</dl>
+      </details>
+      <p className="portal-nota">Não achou o que procurava? <button className="btn-link" onClick={() => irPara('mensagens')}>Pergunte à ROSAE</button></p>
+    </section>
+  );
+}
+
+/** As fases no calendário: cada barra vai do início ao fim das etapas da fase; a linha marca hoje. */
+function LinhaTempo({ ctx, fases }: { ctx: Ctx; fases: FaseCalculada[] }) {
+  const l = useMemo(() => linhaDoTempo(fases, ctx.hoje), [fases, ctx.hoje]);
+  if (!l) return null;
+  return (
+    <div className="pj-tempo">
+      <div className="portal-linha"><h3>Linha do tempo</h3><span className="muted small">{formatarData(l.inicio)} a {formatarData(l.fim)}</span></div>
+      <ul>
+        {l.fases.map((f) => (
+          <li key={f.id} className={f.estado}>
+            <span className="pj-tempo-nome">{f.nome}</span>
+            <span className="pj-tempo-trilho">
+              <span className="pj-tempo-barra" style={{ left: `${f.esquerda}%`, width: `${Math.min(f.largura, 100 - f.esquerda)}%` }} title={`${formatarData(f.inicio)} a ${formatarData(f.fim)}`} />
+              {l.hoje != null && <span className="pj-tempo-hoje" style={{ left: `${l.hoje}%` }} aria-hidden="true" />}
+            </span>
+            <span className="pj-tempo-datas muted small">{formatarData(f.inicio).slice(0, 5)} a {formatarData(f.fim).slice(0, 5)}</span>
+          </li>
+        ))}
+      </ul>
+      {l.hoje != null && <p className="portal-nota">A linha vertical marca hoje, {formatarData(ctx.hoje)}.</p>}
     </div>
   );
 }
 
 /** A jornada do serviço: desenho que cresce com a obra, fases em linguagem simples e o detalhe da fase escolhida. */
-function Jornada({ ctx, perfil }: { ctx: Ctx; perfil: Perfil }) {
+function Jornada({ ctx, perfil, fases }: { ctx: Ctx; perfil: Perfil; fases: FaseCalculada[] }) {
   const { d } = ctx;
   const def = PERFIS[perfil];
-  const fases = useMemo(() => calcularJornada(perfil, d.etapas, Number(d.progresso.executado), ctx.nomeServico),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [perfil, d.etapas, d.progresso.executado]);
   const atual = faseAtual(fases);
   const [sel, setSel] = useState(atual);
   const fase = fases[sel] ?? fases[atual];
@@ -375,6 +488,8 @@ function Jornada({ ctx, perfil }: { ctx: Ctx; perfil: Perfil }) {
           </div>
         </div>
       </div>
+
+      <LinhaTempo ctx={ctx} fases={fases} />
 
       <dl className="pj-numeros">
         <div><dt>Etapas concluídas</dt><dd>{d.progresso.concluidas} de {d.progresso.etapas}</dd></div>
@@ -867,7 +982,7 @@ function Mensagens({ ctx }: { ctx: Ctx }) {
     <div className="portal-stack">
       <section className="portal-card">
         <h2>Fale com a ROSAE</h2>
-        <p className="muted small">Mensagens gerais da obra. Para falar de uma etapa ou foto, comente direto nela.</p>
+        <p className="muted small">Mensagens gerais {doTrabalho(ctx.perfil)}. Para falar de uma etapa ou foto, comente direto nela.</p>
         <Conversa ctx={ctx} alvo="obra" id={null} aberta />
       </section>
       {outros.length > 0 && (

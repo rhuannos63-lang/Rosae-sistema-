@@ -2,7 +2,9 @@
 // pasta com subpastas, e eles se ligam (proposta vira obra, medição vira cobrança).
 
 export type Acesso = 'todos' | 'comercial' | 'financeiro' | 'admin';
-export type Subpasta = { para: string; rotulo: string; icone: string; descricao: string; acesso?: Acesso };
+export type Aba = { para: string; rotulo: string; acesso?: Acesso };
+/** Subpasta do menu. Com `abas`, junta várias telas parecidas numa entrada só, com abas no topo. */
+export type Subpasta = { para: string; rotulo: string; icone: string; descricao: string; acesso?: Acesso; abas?: Aba[] };
 export type Ligacao = { com: IdDepartamento; texto: string };
 export type IdDepartamento = 'comercial' | 'obras' | 'financeiro' | 'empresa';
 export type Departamento = {
@@ -17,16 +19,22 @@ export const DEPARTAMENTOS: Departamento[] = [
     id: 'comercial', nome: 'Comercial e Orçamentos', curto: 'Comercial', icone: 'comercial', acesso: 'comercial',
     resumo: 'Do primeiro contato à proposta aprovada: funil, orçamento automático, propostas e preços.',
     subpastas: [
-      { para: '/comercial', rotulo: 'Funil de clientes', icone: 'comercial', descricao: 'Contatos, oportunidades e próximas ações.' },
+      { para: '/comercial', rotulo: 'Funil', icone: 'comercial', descricao: 'Todos os negócios do contato à obra, com o próximo passo de cada um.' },
       { para: '/orcamento', rotulo: 'Novo orçamento', icone: 'varinha', descricao: 'Orçamento automático por tipo de serviço, em 3 pacotes.' },
       { para: '/propostas', rotulo: 'Propostas', icone: 'documento', descricao: 'Editar, emitir, enviar o link e acompanhar o aceite.' },
-      { para: '/orcamento/precos', rotulo: 'Tabela de preços', icone: 'tabela', descricao: 'Valores de referência que o orçamento usa.' },
-      { para: '/biblioteca', rotulo: 'Biblioteca de serviços', icone: 'lista', descricao: 'Serviços prontos com escopo, inclusões e exclusões.' },
-      { para: '/clausulas', rotulo: 'Cláusulas de contrato', icone: 'livro', descricao: 'Modelos de cláusulas usados nos contratos.' },
+      {
+        para: '/orcamento/precos', rotulo: 'Preços e modelos', icone: 'tabela', descricao: 'Tabela de preços, insumos, biblioteca de serviços e cláusulas de contrato.',
+        abas: [
+          { para: '/orcamento/precos', rotulo: 'Tabela de preços' },
+          { para: '/orcamento/composicoes', rotulo: 'Insumos e composições', acesso: 'financeiro' },
+          { para: '/biblioteca', rotulo: 'Biblioteca de serviços' },
+          { para: '/clausulas', rotulo: 'Cláusulas de contrato' },
+        ],
+      },
     ],
     ligacoes: [
       { com: 'obras', texto: 'Proposta aprovada vira obra, com serviços e etapas.' },
-      { com: 'financeiro', texto: 'Condições de pagamento viram parcelas a receber.' },
+      { com: 'financeiro', texto: 'Orçamento aceito aparece como fechado; o recebido você registra quando entrar.' },
     ],
     pendencias: ['proposta', 'comercial'],
   },
@@ -35,7 +43,7 @@ export const DEPARTAMENTOS: Departamento[] = [
     resumo: 'Execução e acompanhamento: obras, cronograma, medições, contratos, agenda e pendências.',
     subpastas: [
       { para: '/obras', rotulo: 'Obras', icone: 'obras', descricao: 'Cronograma, materiais, diário, medições, contrato e portal de cada obra.' },
-      { para: '/agenda', rotulo: 'Agenda', icone: 'calendario', descricao: 'Visitas, prazos de etapas e vencimentos no calendário.' },
+      { para: '/agenda', rotulo: 'Agenda', icone: 'calendario', descricao: 'Calendário do dia a dia: tarefas, etapas, propostas aceitas e vencimentos, com avisos.' },
       { para: '/pendencias', rotulo: 'Central de pendências', icone: 'alerta', descricao: 'Tudo que precisa de ação, de todos os departamentos.' },
     ],
     ligacoes: [
@@ -48,6 +56,7 @@ export const DEPARTAMENTOS: Departamento[] = [
     id: 'financeiro', nome: 'Financeiro', curto: 'Financeiro', icone: 'financeiro', acesso: 'financeiro',
     resumo: 'Dinheiro da empresa e de cada obra: contas a pagar e a receber, bancos, notas e planejamento.',
     subpastas: [
+      { para: '/recebimentos', rotulo: 'Contratos e recebimentos', icone: 'caixa', descricao: 'Quanto fechou em cada orçamento e quanto de fato entrou.' },
       { para: '/financeiro', rotulo: 'Pagar e receber', icone: 'financeiro', descricao: 'Lançamentos, parcelas, baixas e situação de cada conta.' },
       { para: '/contas', rotulo: 'Contas bancárias', icone: 'contas', descricao: 'Saldos, extrato e transferências entre contas.' },
       { para: '/notas', rotulo: 'Notas fiscais', icone: 'documento', descricao: 'Importar XML de NF-e e transformar em contas a pagar.' },
@@ -65,11 +74,21 @@ export const DEPARTAMENTOS: Departamento[] = [
     subpastas: [
       { para: '/assistente', rotulo: 'Assistente IA', icone: 'varinha', descricao: 'Converse para consultar e lançar dados, aqui ou pelo WhatsApp.' },
       { para: '/pessoas', rotulo: 'Cadastros', icone: 'pessoas', descricao: 'Clientes, parceiros, prestadores e fornecedores.' },
-      { para: '/configuracoes', rotulo: 'Configurações', icone: 'config', descricao: 'Dados da ROSAE, usuários e permissões.', acesso: 'admin' },
-      { para: '/lixeira', rotulo: 'Lixeira', icone: 'lixeira', descricao: 'O que foi excluído, para restaurar com um toque.', acesso: 'admin' },
-      { para: '/aparencia', rotulo: 'Aparência', icone: 'paleta', descricao: 'Cores, menu, modo escuro e tamanho do texto.' },
-      { para: '/manual', rotulo: 'Manual', icone: 'livro', descricao: 'Passo a passo de cada parte do sistema.' },
-      { para: '/ajuda', rotulo: 'Ajuda rápida', icone: 'ajuda', descricao: 'Respostas curtas por tarefa.' },
+      {
+        para: '/configuracoes', rotulo: 'Configurações', icone: 'config', descricao: 'Dados da ROSAE, usuários, segurança, aparência e lixeira.',
+        abas: [
+          { para: '/configuracoes', rotulo: 'Empresa e usuários', acesso: 'admin' },
+          { para: '/aparencia', rotulo: 'Aparência' },
+          { para: '/lixeira', rotulo: 'Lixeira', acesso: 'admin' },
+        ],
+      },
+      {
+        para: '/manual', rotulo: 'Ajuda', icone: 'ajuda', descricao: 'Manual passo a passo e respostas curtas por tarefa.',
+        abas: [
+          { para: '/manual', rotulo: 'Manual' },
+          { para: '/ajuda', rotulo: 'Respostas rápidas' },
+        ],
+      },
     ],
     ligacoes: [
       { com: 'comercial', texto: 'O cadastro do cliente vai para a proposta e o contrato.' },
@@ -87,7 +106,14 @@ export function pode(a: Acesso | undefined, p: Permissoes) {
 /** Departamentos e subpastas que esta pessoa pode abrir. */
 export function departamentosVisiveis(p: Permissoes): Departamento[] {
   return DEPARTAMENTOS.filter((d) => pode(d.acesso, p))
-    .map((d) => ({ ...d, subpastas: d.subpastas.filter((s) => pode(s.acesso, p)) }))
+    .map((d) => ({
+      ...d,
+      subpastas: d.subpastas.filter((s) => pode(s.acesso, p)).flatMap((s) => {
+        if (!s.abas) return [s];
+        const abas = s.abas.filter((a) => pode(a.acesso, p));
+        return abas.length ? [{ ...s, para: abas[0].para, abas }] : [];
+      }),
+    }))
     .filter((d) => d.subpastas.length > 0);
 }
 
@@ -95,15 +121,23 @@ export function departamentosVisiveis(p: Permissoes): Departamento[] {
 export function localizar(caminho: string, deps: Departamento[] = DEPARTAMENTOS): { dep: Departamento; sub: Subpasta | null } | null {
   const m = /^\/d\/([a-z]+)/.exec(caminho);
   if (m) { const dep = deps.find((d) => d.id === m[1]); return dep ? { dep, sub: null } : null; }
-  let melhor: { dep: Departamento; sub: Subpasta } | null = null;
+  let melhor: { dep: Departamento; sub: Subpasta; tam: number } | null = null;
   for (const dep of deps) {
     for (const sub of dep.subpastas) {
-      if ((caminho === sub.para || caminho.startsWith(sub.para + '/')) && (!melhor || sub.para.length > melhor.sub.para.length)) melhor = { dep, sub };
+      for (const alvo of [sub.para, ...(sub.abas ?? []).map((a) => a.para)]) {
+        if ((caminho === alvo || caminho.startsWith(alvo + '/')) && (!melhor || alvo.length > melhor.tam)) melhor = { dep, sub, tam: alvo.length };
+      }
     }
   }
   // Rotas internas que não são subpastas próprias, mas pertencem a um departamento.
   if (!melhor && /^\/contratos\//.test(caminho)) { const dep = deps.find((d) => d.id === 'obras'); if (dep) return { dep, sub: dep.subpastas[0] }; }
-  return melhor;
+  return melhor && { dep: melhor.dep, sub: melhor.sub };
+}
+
+/** A aba (dentro de uma subpasta com abas) que corresponde a esta rota. */
+export function abaAtual(caminho: string, sub: Subpasta | null): Aba | null {
+  if (!sub?.abas) return null;
+  return [...sub.abas].sort((a, b) => b.para.length - a.para.length).find((a) => caminho === a.para || caminho.startsWith(a.para + '/')) ?? null;
 }
 
 export const DEPARTAMENTO_POR_ID = Object.fromEntries(DEPARTAMENTOS.map((d) => [d.id, d])) as Record<IdDepartamento, Departamento>;

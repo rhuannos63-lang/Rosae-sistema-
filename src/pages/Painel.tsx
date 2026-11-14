@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { AvisosAparelho } from '../components/AvisosAparelho';
+import { AgendaPainel } from '../components/AgendaPainel';
+import { conferirAceitesPendentes } from '../lib/avisos';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
+import { useResumoPropostas } from '../lib/propostasSituacao';
+import { detalheComCliente } from '../core/situacaoProposta';
 import { useAuth } from '../auth/AuthProvider';
-import { Topo, useDepartamentos } from '../components/Layout';
+import { Topo } from '../components/Layout';
 import { Ajuda, Carregando, Erro } from '../components/ui';
 import { Icone } from '../components/Icone';
 import { doBanco, formatar, type Centavos } from '../core/dinheiro';
@@ -21,12 +26,13 @@ type Indicadores = Record<string, string | number | boolean | null | Comercial> 
 const n = (v: unknown) => Number(v ?? 0) || 0;
 
 function KpisComerciais({ c: bruto }: { c: Comercial | null | undefined }) {
+  const r = useResumoPropostas();
   if (!bruto) return null;
   const c = Object.fromEntries(Object.entries(bruto).map(([k, v]) => [k, n(v)])) as Comercial;
   for (const k of ['enviadas', 'em_negociacao', 'aprovadas_periodo', 'rascunhos', 'oportunidades_abertas', 'acoes_atrasadas'] as const) c[k] = n(bruto[k]);
   return (
     <>
-      <Kpi rotulo="Propostas em aberto" valor={String(c.enviadas + c.em_negociacao)} det={<>{c.em_negociacao} em negociação · {c.rascunhos} rascunho(s) · {c.aprovadas_periodo} aprovada(s) no período</>} para="/propostas" />
+      <Kpi rotulo="Propostas enviadas, sem aprovação" valor={r ? String(r.comCliente.qtd) : '…'} det={r ? <>{detalheComCliente(r)} · {r.rascunho.qtd} em preparo</> : 'Carregando…'} para="/propostas" />
       <Kpi rotulo="Oportunidades" valor={String(c.oportunidades_abertas)} det={c.acoes_atrasadas > 0 ? <span style={{ color: 'var(--desfavoravel)' }}>{c.acoes_atrasadas} com ação atrasada</span> : 'Nenhuma ação atrasada'} para="/comercial" ajuda="Contatos em andamento no funil. Formulários do site e cliques no WhatsApp do período aparecem no Comercial." />
     </>
   );
@@ -128,6 +134,7 @@ export function Painel() {
   }, [p.inicio, p.fim, podeFinanceiro]);
 
   const primeiroNome = usuario?.nome.split(' ')[0] ?? '';
+  useEffect(() => { conferirAceitesPendentes(); }, []);
   const qs = `inicio=${p.inicio}&fim=${p.fim}`;
 
   return (
@@ -143,7 +150,8 @@ export function Painel() {
         <button className="btn-secundario" aria-label="Período anterior" onClick={() => setRef(deslocarPeriodo(tipo, ref, -1))}>‹</button>
         <button className="btn-secundario" aria-label="Próximo período" onClick={() => setRef(deslocarPeriodo(tipo, ref, 1))}>›</button>
       </Topo>
-      <AtalhosDepartamentos />
+      <AvisosAparelho compacto />
+      <AgendaPainel />
       <Erro mensagem={erro} />
       {carregando && !dados && <Carregando />}
       {dados && (
@@ -158,22 +166,8 @@ export function Painel() {
   );
 }
 
-/** Entrada rápida nos departamentos (pastas) logo abaixo do título. */
-function AtalhosDepartamentos() {
-  const deps = useDepartamentos();
-  return (
-    <nav className="dep-atalhos" aria-label="Departamentos">
-      {deps.map((d) => (
-        <Link key={d.id} to={`/d/${d.id}`} className="dep-atalho">
-          <span className="dep-pasta-icone"><Icone nome={d.icone} /></span>
-          <span className="dep-pasta-texto"><b>{d.nome}</b><span>{d.subpastas.length} subpastas</span></span>
-        </Link>
-      ))}
-    </nav>
-  );
-}
-
 function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes, anterior, rotuloAnt }: { anterior: Indicadores | null; rotuloAnt?: string; ind: Indicadores; serie: Serie[]; empresa: Empresa | null; qs: string; rotulo: string; tipo: TipoPeriodo; ehAdmin: boolean; inicio: string; fim: string; aoAbrirMes: (mes: string) => void }) {
+  const resumoProp = useResumoPropostas();
   if (ind.sem_permissao) {
     return (
       <div className="grid grid-kpi">
@@ -198,13 +192,6 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
 
   return (
     <>
-      {ind.gerencial && (
-        <div className="aviso info" style={{ marginBottom: 14 }}>
-          <span>
-            Valores <b>gerenciais (estimados)</b>: ainda não há regra de reconhecimento de receita configurada. Vendido, recebido e resultado são números diferentes e aparecem separados.
-          </span>
-        </div>
-      )}
       <div className="bi-kpis">
         <KpiBI
           rotulo="Recebido de clientes" centavos={c('recebido')} anterior={ca('recebido')} rotuloAnt={rotuloAnt} tendencia={tRec}
@@ -229,16 +216,19 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
       <Faixa itens={[
         { rotulo: 'A receber', valor: formatar(c('a_receber')), det: c('a_receber_vencido') > 0 ? `${formatar(c('a_receber_vencido'))} vencido` : 'Nada vencido', alerta: c('a_receber_vencido') > 0, para: '/financeiro?tipo=receber&situacao=abertas' },
         { rotulo: 'A pagar', valor: formatar(c('a_pagar')), det: `${formatar(c('a_pagar_7_dias'))} em 7 dias`, para: '/financeiro?tipo=pagar&situacao=abertas' },
-        { rotulo: 'Pago em obras', valor: formatar(c('pago_obras')), det: 'Material e parceiros', para: `/contas?grupo=pago_obras&${qs}` },
-        { rotulo: 'Despesas da empresa', valor: formatar(c('pago_empresa')), det: 'Pagas no período', para: `/contas?grupo=pago_empresa&${qs}` },
-        { rotulo: 'Pró-labore', valor: formatar(c('retiradas')), det: 'Retiradas', para: `/contas?grupo=retiradas&${qs}` },
         { rotulo: 'Obras ativas', valor: String(n(ind.obras_ativas)), det: 'Contratadas ou em execução', para: '/obras' },
         ...(ind.comercial ? [
-          { rotulo: 'Propostas em aberto', valor: String(ind.comercial.enviadas + ind.comercial.em_negociacao), det: `${ind.comercial.aprovadas_periodo} aprovada(s)`, para: '/propostas' },
-          { rotulo: 'Oportunidades', valor: String(ind.comercial.oportunidades_abertas), det: ind.comercial.acoes_atrasadas > 0 ? `${ind.comercial.acoes_atrasadas} atrasada(s)` : 'Em dia', alerta: ind.comercial.acoes_atrasadas > 0, para: '/comercial' },
+          { rotulo: 'Propostas com o cliente', valor: resumoProp ? String(resumoProp.comCliente.qtd) : '…', det: resumoProp ? `${formatar(resumoProp.comCliente.valor)} · ${resumoProp.rascunho.qtd} em preparo` : '', para: '/propostas' },
         ] : []),
-        ...(c('outras_entradas') !== 0 ? [{ rotulo: 'Outras entradas', valor: formatar(c('outras_entradas')), det: 'Rendimentos e aportes', para: `/contas?grupo=outras&${qs}` }] : []),
       ]} />
+
+      <div className="card section">
+        <div className="card-titulo">
+          <h2>Pendências</h2>
+          <Link to="/pendencias" className="small">Ver todas</Link>
+        </div>
+        <ResumoPendencias />
+      </div>
 
       <div className="grid bi-linha section">
         <FluxoCaixa fim={fim} aoAbrirMes={aoAbrirMes} />
@@ -256,13 +246,6 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
             <Medidor rotulo="Vendas" valor={c('vendido')} meta={metaVen} formatar={formatarCompacto} />
           </div>
         </div>
-      </div>
-      <div className="card section">
-        <div className="card-titulo">
-          <h2>Pendências</h2>
-          <Link to="/pendencias" className="small">Ver todas</Link>
-        </div>
-        <ResumoPendencias />
       </div>
     </>
   );
@@ -285,8 +268,8 @@ function Comparativo({ atual, anterior, anoAnterior, rotulo, rotuloAnt, rotuloAn
     return <span className="small" style={{ color: pct === 0 ? undefined : fav ? 'var(--favoravel)' : 'var(--desfavoravel)' }}>{pct > 0 ? '▲' : pct < 0 ? '▼' : ''} {String(Math.abs(pct)).replace('.', ',')}%</span>;
   };
   return (
-    <div className="card section">
-      <div className="card-titulo"><h2>Comparativo</h2><span className="muted small">{rotulo} × {rotuloAnt} × {rotuloAno}</span></div>
+    <details className="card section painel-comparativo">
+      <summary className="card-titulo"><h2>Comparar com períodos anteriores</h2><span className="muted small">{rotulo} × {rotuloAnt} × {rotuloAno}</span></summary>
       <div className="tabela-wrap">
         <table className="tabela">
           <thead><tr><th /><th className="right">{rotulo}</th><th className="right">{rotuloAnt}</th><th className="right">{rotuloAno}</th></tr></thead>
@@ -302,8 +285,8 @@ function Comparativo({ atual, anterior, anoAnterior, rotulo, rotuloAnt, rotuloAn
           </tbody>
         </table>
       </div>
-      <p className="muted small" style={{ marginBottom: 0 }}>Percentuais comparam o período atual com cada coluna. Mais recebimento não significa mais lucro: confira custos e o resultado por obra.</p>
-    </div>
+      <p className="muted small" style={{ marginBottom: 0 }}>Percentuais comparam o período atual com cada coluna. Valores gerenciais, por regime de caixa: mais recebimento não significa mais lucro.</p>
+    </details>
   );
 }
 

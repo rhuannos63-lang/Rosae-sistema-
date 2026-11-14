@@ -6,13 +6,17 @@ import { Topo } from '../components/Layout';
 import { Ajuda, CampoValor, Carregando, Dinheiro, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
 import { BotaoExcluir } from '../components/Excluir';
-import { doBanco, paraBanco, type Centavos } from '../core/dinheiro';
+import { doBanco, formatar, paraBanco, type Centavos } from '../core/dinheiro';
+import { FASES, FASES_ATIVAS, NOME_FASE, ordenar, resumir, type FaseFunil, type Negocio } from '../core/funil';
+import { carregarFunil, converterEmObra } from '../lib/funil';
+import { MenuAcoes } from '../components/MenuAcoes';
 import { formatarData, formatarDataHora, hoje } from '../core/datas';
 import {
-  ESTADO_PROPOSTA, ORIGEM, TIPOS_SERVICO, TIPO_INTERACAO,
+  ORIGEM, TIPOS_SERVICO, TIPO_INTERACAO,
   type EstadoFunil, type Interacao, type Oportunidade, type Origem, type Pessoa, type Proposta,
 } from '../lib/tipos';
 import { PessoaForm } from './Pessoas';
+import { SITUACAO_PROPOSTA, situacaoDa, valorDe } from '../core/situacaoProposta';
 
 const SELECT_OP = '*, pessoa:pessoa(nome, telefone, email)';
 
@@ -40,121 +44,209 @@ function ProximaAcao({ o }: { o: Oportunidade }) {
 
 export function Comercial() {
   const navegar = useNavigate();
-  const [modo, setModo] = useState<'quadro' | 'lista'>(() => (window.innerWidth <= 860 ? 'lista' : 'quadro'));
-  const [filtro, setFiltro] = useState<'abertas' | 'atrasadas' | 'encerradas'>('abertas');
+  const toast = useToast();
+  const [ver, setVer] = useState<'ativos' | 'entregue' | 'perdido'>('ativos');
+  const [fase, setFase] = useState<FaseFunil | null>(null);
+  const [soAcao, setSoAcao] = useState(false);
   const [busca, setBusca] = useState('');
-  const [etapa, setEtapa] = useState<string | null>(null);
   const [nova, setNova] = useState(false);
   const [site, setSite] = useState(false);
-  const { dados, erro, carregando, recarregar } = useConsulta(async () => {
-    const [e, o] = await Promise.all([
-      supabase.from('estado_funil').select('*').eq('ativo', true).order('ordem'),
-      todas((de, ate) => supabase.from('oportunidade').select(SELECT_OP).eq('arquivado', false).order('atualizado_em', { ascending: false }).order('id').range(de, ate)).then((data) => ({ data, error: null })),
-    ]);
-    return { estados: ok(e) as EstadoFunil[], ops: ok(o) as Oportunidade[] };
-  }, []);
+  const [rodando, setRodando] = useState<string | null>(null);
+  const [erroAcao, setErroAcao] = useState<string | null>(null);
+  const largo = typeof window !== 'undefined' && window.innerWidth > 860;
+  const { dados, erro, carregando } = useConsulta(() => carregarFunil(), []);
+  const estadosOp = useConsulta(async () => ok(await supabase.from('estado_funil').select('*').eq('ativo', true).order('ordem')) as EstadoFunil[], []);
 
-  const estados = dados?.estados ?? [];
-  const tipoDe = useMemo(() => new Map(estados.map((e) => [e.id, e])), [estados]);
-  const lista = (dados?.ops ?? []).filter((o) => {
-    const t = tipoDe.get(o.estado_id)?.tipo;
-    if (filtro === 'abertas' && t !== 'aberto' && t !== 'ganho') return false;
-    if (filtro === 'encerradas' && (t === 'aberto')) return false;
-    if (filtro === 'atrasadas' && !(t === 'aberto' && o.proxima_acao_data && o.proxima_acao_data < hoje())) return false;
-    if (etapa && o.estado_id !== etapa) return false;
-    const b = busca.trim().toLowerCase();
-    return !b || [o.titulo, o.pessoa?.nome, o.pessoa?.telefone, o.codigo, o.local_obra].some((v) => v?.toLowerCase().includes(b));
+  const negocios = dados?.negocios ?? [];
+  const resumo = useMemo(() => resumir(negocios, hoje()), [negocios]);
+  const b = busca.trim().toLowerCase();
+  const filtrados = negocios.filter((n) => {
+    if (ver === 'ativos' ? !FASES_ATIVAS.includes(n.fase) : n.fase !== ver) return false;
+    if (fase && n.fase !== fase) return false;
+    if (soAcao && !(n.atrasado || n.alertas.some((a) => a.texto.startsWith('Parado')))) return false;
+    return !b || [n.cliente, n.titulo, n.codigo, n.servico, n.telefone].some((v) => v?.toLowerCase().includes(b));
   });
-  const colunas = estados.filter((e) => (filtro === 'encerradas' ? e.tipo !== 'aberto' : e.tipo === 'aberto' || e.tipo === 'ganho')).filter((e) => !etapa || e.id === etapa);
-  const funil = estados.filter((e) => e.tipo === 'aberto' || e.tipo === 'ganho').map((e) => ({ e, qtd: (dados?.ops ?? []).filter((o) => o.estado_id === e.id).length }));
-  const maxFunil = Math.max(1, ...funil.map((f) => f.qtd));
-  const atrasadas = (dados?.ops ?? []).filter((o) => tipoDe.get(o.estado_id)?.tipo === 'aberto' && o.proxima_acao_data && o.proxima_acao_data < hoje()).length;
+  const colunas = ver === 'ativos' ? FASES.filter((f) => FASES_ATIVAS.includes(f.id) && (!fase || f.id === fase)) : [];
+
+  async function fazer(n: Negocio) {
+    const p = n.passo;
+    if (!p) return navegar(n.abrir);
+    setErroAcao(null);
+    if (p.acao === 'whatsapp') {
+      const wa = linkWhatsApp(n.telefone, `Olá, ${n.cliente.split(' ')[0]}! Aqui é o Rhuann, da ROSAE Engenharia. Conseguiu ver a proposta? Fico à disposição para qualquer ajuste.`);
+      if (wa) {
+        window.open(wa, '_blank', 'noreferrer');
+        if (n.oportunidadeId) await supabase.from('interacao').insert({ oportunidade_id: n.oportunidadeId, tipo: 'whatsapp', texto: 'Cobrou retorno da proposta pelo WhatsApp.' });
+        return;
+      }
+      return navegar(p.para);
+    }
+    if (p.acao === 'converter' && n.propostaId && n.versaoAprovadaId) {
+      setRodando(n.chave);
+      try {
+        const obra = await converterEmObra(n.propostaId, n.versaoAprovadaId);
+        toast('Obra criada com serviços, etapas e recebimentos. Agora é só gerar o contrato.');
+        navegar(`/obras/${obra}?aba=contrato`);
+      } catch (e) { setErroAcao(mensagemErro(e)); } finally { setRodando(null); }
+      return;
+    }
+    navegar(p.para);
+  }
+
+  const cartao = (n: Negocio) => (
+    <div key={n.chave} className={`negocio${n.atrasado ? ' atrasado' : ''}`}>
+      <button className="negocio-abrir" onClick={() => navegar(n.abrir)} title="Abrir o negócio">
+        <span className="negocio-topo"><b>{n.cliente}</b>{n.valor > 0 && <Dinheiro valor={n.valor} />}</span>
+        <span className="small">{n.titulo}</span>
+        {(n.alertas.length > 0 || n.aditivos > 0) && (
+          <span className="negocio-alertas">
+            {n.alertas.map((a) => <span key={a.texto} className={`selo ${a.nivel === 'bom' ? 'ok' : 'alerta'}`}>{a.texto}</span>)}
+            {n.aditivos > 0 && <span className="selo neutro">+{n.aditivos} aditivo(s)</span>}
+          </span>
+        )}
+        <span className="muted small">{ver === 'ativos' ? `${n.dias === 0 ? 'hoje' : `há ${n.dias} d`} nesta fase` : NOME_FASE[n.fase]}{n.servico ? ` · ${n.servico}` : ''}</span>
+      </button>
+      {n.passo && ver === 'ativos' && (
+        <button className="negocio-passo" disabled={rodando === n.chave} onClick={() => fazer(n)}>
+          {rodando === n.chave ? 'Criando a obra…' : n.passo.rotulo} <Icone nome="seta" />
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <>
-      <Topo titulo="Comercial" sub="Cada contato vira uma oportunidade. Acompanhe a etapa, a próxima ação e as propostas.">
-        <button className="btn-secundario" onClick={() => setSite(true)}>Formulário do site</button>
-        <Link className="btn-secundario" to="/propostas">Propostas</Link>
-        <Link className="btn-secundario" to="/orcamento"><Icone nome="varinha" /> Novo orçamento</Link>
-        <button className="btn-primario" onClick={() => setNova(true)}><Icone nome="mais" /> Novo contato</button>
+      <Topo titulo="Funil" sub="Cada negócio na fase em que está, com o próximo passo.">
+        <MenuAcoes>
+          <button role="menuitem" onClick={() => setSite(true)}><Icone nome="link" /> Formulário do site</button>
+        </MenuAcoes>
+        <MenuAcoes texto={<><Icone nome="mais" /> Novo</>} rotulo="Novo">
+          <button role="menuitem" onClick={() => setNova(true)}><Icone nome="pessoas" /> Contato</button>
+          <Link role="menuitem" to="/orcamento"><Icone nome="varinha" /> Orçamento</Link>
+        </MenuAcoes>
       </Topo>
-      {atrasadas > 0 && filtro !== 'atrasadas' && (
-        <div className="aviso" style={{ marginBottom: 14 }}>
-          <Icone nome="alerta" />
-          <span>{atrasadas === 1 ? '1 oportunidade está' : `${atrasadas} oportunidades estão`} com a próxima ação atrasada. <button className="btn-link" onClick={() => setFiltro('atrasadas')}>Ver</button></span>
-        </div>
-      )}
-      {funil.length > 0 && filtro !== 'encerradas' && (
-        <div className="funil" role="group" aria-label="Funil: clique numa etapa para filtrar">
-          {funil.map(({ e, qtd }) => (
-            <button key={e.id} className={etapa === e.id ? 'ativo' : ''} aria-pressed={etapa === e.id} onClick={() => setEtapa(etapa === e.id ? null : e.id)} title={etapa === e.id ? 'Mostrar todas as etapas' : `Ver só “${e.nome}”`}>
-              <span className="f-nome">{e.nome}</span>
-              <span className="f-num num">{qtd}</span>
-              <span className="f-trilho"><span style={{ width: `${(qtd / maxFunil) * 100}%`, background: e.tipo === 'ganho' ? 'var(--favoravel)' : undefined }} /></span>
-            </button>
-          ))}
+      <div className="grid grid-kpi" style={{ marginBottom: 14 }}>
+        <div className="kpi"><div className="rotulo">Em negociação</div><div className="valor"><Dinheiro valor={resumo.emAberto} /></div><div className="det">{resumo.porFase.contato.qtd + resumo.porFase.orcamento.qtd + resumo.porFase.enviada.qtd} negócio(s) abertos</div></div>
+        <div className="kpi"><div className="rotulo">Com o cliente</div><div className="valor"><Dinheiro valor={resumo.aguardandoCliente} /></div><div className="det">{resumo.porFase.enviada.qtd} proposta(s) aguardando aceite</div></div>
+        <div className="kpi"><div className="rotulo">Fechado no mês</div><div className="valor"><Dinheiro valor={resumo.fechadoMes} /></div><div className="det">{resumo.qtdFechadoMes} aceite(s) · conversão {resumo.conversao === null ? '—' : `${Math.round(resumo.conversao * 100)}%`} em 90 dias</div></div>
+        <button className={`kpi${soAcao ? ' ativo' : ''}`} style={{ textAlign: 'left', font: 'inherit' }} aria-pressed={soAcao} onClick={() => { setVer('ativos'); setSoAcao(!soAcao); }}>
+          <div className="rotulo">Precisam de você</div><div className="valor" style={{ color: resumo.precisamAcao ? 'var(--alerta)' : undefined }}>{resumo.precisamAcao}</div>
+          <div className="det">{soAcao ? 'Mostrando só estes · tocar para ver todos' : 'Atrasados ou parados · tocar para filtrar'}</div>
+        </button>
+      </div>
+      {ver === 'ativos' && !largo && (
+        <div className="trilha-funil" role="group" aria-label="Fases do funil: toque numa fase para ver só ela">
+          {FASES.filter((f) => FASES_ATIVAS.includes(f.id)).map((f) => {
+            const x = resumo.porFase[f.id];
+            return (
+              <button key={f.id} className={fase === f.id ? 'ativo' : ''} aria-pressed={fase === f.id} title={f.dica} onClick={() => setFase(fase === f.id ? null : f.id)}>
+                <span className="f-nome">{f.nome}</span>
+                <span className="f-num num">{x.qtd}</span>
+                <span className="f-valor small">{x.valor > 0 ? formatar(x.valor) : '—'}</span>
+              </button>
+            );
+          })}
         </div>
       )}
       <div className="card">
         <div className="row" style={{ marginBottom: 12 }}>
-          {etapa && <button className="chip-link ativo" onClick={() => setEtapa(null)}>{tipoDe.get(etapa)?.nome} <Icone nome="fechar" /></button>}
-          <div className="segmentado" role="group" aria-label="Filtro">
-            {(['abertas', 'atrasadas', 'encerradas'] as const).map((f) => (
-              <button key={f} className={filtro === f ? 'ativo' : ''} onClick={() => setFiltro(f)}>
-                {{ abertas: 'Em andamento', atrasadas: 'Atrasadas', encerradas: 'Encerradas' }[f]}
+          <div className="segmentado" role="group" aria-label="Ver">
+            {(['ativos', 'entregue', 'perdido'] as const).map((v) => (
+              <button key={v} className={ver === v ? 'ativo' : ''} onClick={() => { setVer(v); setFase(null); setSoAcao(false); }}>
+                {{ ativos: 'Em andamento', entregue: `Entregues (${resumo.porFase.entregue.qtd})`, perdido: `Perdidos (${resumo.porFase.perdido.qtd})` }[v]}
               </button>
             ))}
           </div>
-          <div className="segmentado so-desktop" role="group" aria-label="Visualização">
-            <button className={modo === 'quadro' ? 'ativo' : ''} onClick={() => setModo('quadro')}>Quadro</button>
-            <button className={modo === 'lista' ? 'ativo' : ''} onClick={() => setModo('lista')}>Lista</button>
-          </div>
+          {(fase || soAcao) && <button className="chip-link ativo" onClick={() => { setFase(null); setSoAcao(false); }}>{fase ? NOME_FASE[fase] : 'Precisam de você'} <Icone nome="fechar" /></button>}
           <div className="spacer" />
-          <input placeholder="Buscar nome, telefone, local…" value={busca} onChange={(e) => setBusca(e.target.value)} style={{ maxWidth: 260 }} />
+          <input placeholder="Buscar cliente, telefone, código…" value={busca} onChange={(e) => setBusca(e.target.value)} style={{ maxWidth: 260 }} />
         </div>
-        <Erro mensagem={erro} />
+        <Erro mensagem={erro ?? erroAcao} />
         {carregando && !dados ? (
           <Carregando />
-        ) : lista.length === 0 ? (
-          <Vazio titulo={filtro === 'atrasadas' ? 'Nada atrasado' : 'Nenhuma oportunidade aqui'}>
-            <p>Cadastre cada pedido de orçamento como um contato. Os que chegam pelo formulário do site entram sozinhos.</p>
+        ) : filtrados.length === 0 ? (
+          <Vazio titulo={soAcao ? 'Nada esperando por você' : 'Nenhum negócio aqui'}>
+            <p>Toque em “Novo” para registrar um contato ou começar um orçamento. Os pedidos do formulário do site entram sozinhos.</p>
           </Vazio>
-        ) : modo === 'quadro' && window.innerWidth > 860 ? (
-          <div className="quadro">
+        ) : ver === 'ativos' && largo ? (
+          <div className="quadro funil-quadro">
             {colunas.map((c) => {
-              const itens = lista.filter((o) => o.estado_id === c.id);
+              const itens = ordenar(filtrados.filter((n) => n.fase === c.id));
               return (
                 <div key={c.id} className="coluna">
-                  <div className="coluna-cab"><span>{c.nome}</span><span className="muted">{itens.length}</span></div>
-                  {itens.map((o) => (
-                    <button key={o.id} className="cartao-op" onClick={() => navegar(`/comercial/${o.id}`)}>
-                      <b>{o.pessoa?.nome}</b>
-                      <span className="small">{o.titulo}</span>
-                      <ProximaAcao o={o} />
-                      <span className="muted small">{ORIGEM[o.origem]} · há {diasDesde(o.estado_desde)} d nesta etapa</span>
-                    </button>
-                  ))}
+                  <div className="coluna-cab" title={c.dica}><span>{c.nome}</span><span className="muted">{itens.length}</span></div>
+                  {itens.map(cartao)}
+                  {itens.length === 0 && <span className="muted small" style={{ padding: '4px 6px' }}>{c.dica}</span>}
                 </div>
               );
             })}
           </div>
-        ) : (
-          <div className="lista-cartoes" style={{ display: 'grid' }}>
-            {lista.map((o) => (
-              <button key={o.id} className="item-cartao" style={{ textAlign: 'left', fontWeight: 400 }} onClick={() => navegar(`/comercial/${o.id}`)}>
-                <div style={{ display: 'grid', gap: 2 }}>
-                  <div className="titulo">{o.pessoa?.nome} <span className="selo" style={{ marginLeft: 6 }}>{tipoDe.get(o.estado_id)?.nome}</span></div>
-                  <span className="small">{o.titulo}</span>
-                  <ProximaAcao o={o} />
-                </div>
-              </button>
-            ))}
+        ) : ver === 'ativos' ? (
+          <div className="stack" style={{ gap: 14 }}>
+            {colunas.map((c) => {
+              const itens = ordenar(filtrados.filter((n) => n.fase === c.id));
+              if (!itens.length) return null;
+              return (
+                <section key={c.id} className="stack" style={{ gap: 8 }}>
+                  <h3 className="fase-titulo">{c.nome} <span className="muted">{itens.length}</span></h3>
+                  {itens.map(cartao)}
+                </section>
+              );
+            })}
           </div>
+        ) : (
+          <div className="grade-negocios">{ordenar(filtrados).map(cartao)}</div>
         )}
       </div>
-      {nova && <OportunidadeForm estados={estados} aoFechar={() => setNova(false)} aoSalvar={(id) => { setNova(false); recarregar(); navegar(`/comercial/${id}`); }} />}
+      {nova && <OportunidadeForm estados={estadosOp.dados ?? []} aoFechar={() => setNova(false)} aoSalvar={(id) => { setNova(false); navegar(`/comercial/${id}`); }} />}
       {site && <FormularioSite aoFechar={() => setSite(false)} />}
     </>
+  );
+}
+
+/** Onde o negócio está no caminho todo (contato → obra) e o único próximo passo. */
+function JornadaNegocio({ opId, recarga }: { opId: string; recarga: number }) {
+  const navegar = useNavigate();
+  const toast = useToast();
+  const [rodando, setRodando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const { dados } = useConsulta(() => carregarFunil(opId), [opId, recarga]);
+  const n = dados?.negocios[0];
+  if (!n) return null;
+  const idx = FASES.findIndex((f) => f.id === n.fase);
+  async function passo() {
+    if (!n?.passo) return;
+    if (n.passo.acao === 'converter' && n.propostaId && n.versaoAprovadaId) {
+      setRodando(true); setErro(null);
+      try { const o = await converterEmObra(n.propostaId, n.versaoAprovadaId); toast('Obra criada. Agora é só gerar o contrato.'); navegar(`/obras/${o}?aba=contrato`); }
+      catch (e) { setErro(mensagemErro(e)); } finally { setRodando(false); }
+      return;
+    }
+    if (n.passo.acao === 'whatsapp') {
+      const wa = linkWhatsApp(n.telefone, `Olá, ${n.cliente.split(' ')[0]}! Aqui é o Rhuann, da ROSAE Engenharia. Conseguiu ver a proposta? Fico à disposição para qualquer ajuste.`);
+      if (wa) { window.open(wa, '_blank', 'noreferrer'); return; }
+    }
+    navegar(n.passo.para);
+  }
+  return (
+    <div className="card">
+      <ol className="jornada-negocio" aria-label="Caminho do negócio">
+        {FASES.map((f, i) => (
+          <li key={f.id} className={n.fase === 'perdido' ? '' : i < idx ? 'feito' : i === idx ? 'atual' : ''} title={f.dica}>
+            <span className="bolinha">{i < idx && n.fase !== 'perdido' ? <Icone nome="check" /> : i + 1}</span>
+            <span className="small">{f.nome}</span>
+          </li>
+        ))}
+      </ol>
+      <div className="row" style={{ marginTop: 12 }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <b>{n.fase === 'perdido' ? 'Negócio perdido' : FASES[idx]?.dica}</b>
+          {n.alertas.length > 0 && <div className="negocio-alertas" style={{ marginTop: 4 }}>{n.alertas.map((a) => <span key={a.texto} className={`selo ${a.nivel === 'bom' ? 'ok' : 'alerta'}`}>{a.texto}</span>)}</div>}
+        </div>
+        {n.passo && n.fase !== 'perdido' && <button className="btn-primario" disabled={rodando} onClick={passo}>{rodando ? 'Criando a obra…' : n.passo.rotulo} <Icone nome="seta" /></button>}
+      </div>
+      <Erro mensagem={erro} />
+    </div>
   );
 }
 
@@ -272,11 +364,11 @@ export function OportunidadeDetalhe() {
       supabase.from('oportunidade').select(SELECT_OP).eq('id', id!).maybeSingle(),
       supabase.from('estado_funil').select('*').eq('ativo', true).order('ordem'),
       supabase.from('interacao').select('*').eq('oportunidade_id', id!).order('em', { ascending: false }),
-      supabase.from('proposta').select('*, versoes:proposta_versao!proposta_versao_proposta_id_fkey(numero, valor_total, emitida)').eq('oportunidade_id', id!).order('criado_em', { ascending: false }),
+      supabase.from('proposta').select('*, versoes:proposta_versao!proposta_versao_proposta_id_fkey(numero, valor_total, emitida, validade)').eq('oportunidade_id', id!).order('criado_em', { ascending: false }),
     ]);
     return {
       op: ok(o) as Oportunidade | null, estados: ok(e) as EstadoFunil[], historico: ok(h) as Interacao[],
-      propostas: ok(p) as (Proposta & { versoes: { numero: number; valor_total: string; emitida: boolean }[] })[],
+      propostas: ok(p) as (Proposta & { versoes: { numero: number; valor_total: string; emitida: boolean; validade: string | null }[] })[],
     };
   }, [id]);
 
@@ -331,25 +423,29 @@ export function OportunidadeDetalhe() {
   return (
     <>
       <Topo titulo={op.pessoa?.nome ?? op.titulo} sub={<>{op.codigo} · {op.titulo}</>}>
-        <button className="btn-secundario" onClick={() => navegar('/comercial')}><Icone nome="voltar" /> Comercial</button>
-        <button className="btn-secundario" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar</button>
-        <Link className="btn-primario" to={`/orcamento?oportunidade=${op.id}`}><Icone nome="varinha" /> Orçamento automático</Link>
-        <button className="btn-secundario" onClick={novaProposta}><Icone nome="mais" /> Proposta em branco</button>
-        <BotaoExcluir tabela="oportunidade" id={op.id} nome={op.titulo} aoExcluir={() => navegar('/comercial')} />
+        <button className="btn-secundario" onClick={() => navegar('/comercial')}><Icone nome="voltar" /> Funil</button>
+        <MenuAcoes>
+          <button role="menuitem" onClick={() => setEditar(true)}><Icone nome="editar" /> Editar dados</button>
+          <Link role="menuitem" to={`/orcamento?oportunidade=${op.id}`}><Icone nome="varinha" /> Novo orçamento automático</Link>
+          <button role="menuitem" onClick={novaProposta}><Icone nome="documento" /> Proposta em branco</button>
+          <button role="menuitem" onClick={arquivar}><Icone nome="caixa" /> Arquivar</button>
+          <BotaoExcluir tabela="oportunidade" id={op.id} nome={op.titulo} aoExcluir={() => navegar('/comercial')} classe="" />
+        </MenuAcoes>
       </Topo>
       <Erro mensagem={erro} />
       <div className="grid grid-2">
         <div className="stack">
+          <JornadaNegocio opId={op.id} recarga={dados.propostas.length} />
           <div className="card">
-            <h2 style={{ marginBottom: 10 }}>Etapa</h2>
-            <div className="etapas-funil">
-              {estados.filter((e) => e.tipo !== 'arquivado').map((e) => (
-                <button key={e.id} className={`${e.id === op.estado_id ? 'ativo' : ''} ${e.tipo}`} onClick={() => e.id !== op.estado_id && mudarEstado(e.id)}>
-                  {e.nome}
-                </button>
-              ))}
+            <div className="row">
+              <label className="campo" style={{ flex: 1, minWidth: 200 }}>
+                <span>Etapa da conversa <Ajuda>Detalhe da negociação antes do aceite. Quando a proposta é aceita, o negócio avança sozinho para contrato e obra.</Ajuda></span>
+                <select value={op.estado_id} onChange={(e) => mudarEstado(e.target.value)}>
+                  {estados.filter((e) => e.tipo !== 'arquivado').map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+                </select>
+              </label>
             </div>
-            <p className="muted small" style={{ marginTop: 8 }}>Nesta etapa há {diasDesde(op.estado_desde)} dia(s).{op.motivo_perda && estado?.tipo === 'perdido' ? ` Motivo da perda: ${op.motivo_perda}` : ''}</p>
+            <p className="muted small" style={{ marginTop: 8, marginBottom: 0 }}>Nesta etapa há {diasDesde(op.estado_desde)} dia(s).{op.motivo_perda && estado?.tipo === 'perdido' ? ` Motivo da perda: ${op.motivo_perda}` : ''}</p>
           </div>
           <div className="card">
             <h2 style={{ marginBottom: 10 }}>Contato</h2>
@@ -363,23 +459,24 @@ export function OportunidadeDetalhe() {
               {op.valor_estimado != null && <><dt>Estimativa</dt><dd><Dinheiro valor={doBanco(op.valor_estimado)} /></dd></>}
             </dl>
             {op.resumo && <><h3 style={{ margin: '12px 0 4px' }}>Pedido</h3><p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{op.resumo}</p></>}
-            <div className="row" style={{ marginTop: 12 }}><button className="btn-link" onClick={arquivar}>Arquivar oportunidade</button></div>
           </div>
           <div className="card">
             <h2 style={{ marginBottom: 10 }}>Propostas</h2>
             {dados.propostas.length === 0 ? (
-              <p className="muted">Nenhuma proposta ainda. Use “Nova proposta”: o sistema sugere o escopo a partir do pedido.</p>
+              <p className="muted">Nenhuma proposta ainda. Use “Fazer orçamento” acima: o sistema monta a proposta a partir do pedido.</p>
             ) : (
               <div className="stack" style={{ gap: 6 }}>
                 {dados.propostas.map((p) => {
                   const ultima = [...p.versoes].sort((a, b) => b.numero - a.numero)[0];
+                  const sit = SITUACAO_PROPOSTA[situacaoDa({ estado: p.estado, versoes: p.versoes, negocio: estado?.tipo ?? null }, hoje())];
+                  const valor = valorDe(p.versoes.map((v) => ({ numero: v.numero, emitida: v.emitida, valor: doBanco(v.valor_total) })));
                   return (
                     <Link key={p.id} to={`/propostas/${p.id}`} className="item-cartao">
                       <div>
                         <div className="titulo">{p.codigo} · {p.titulo}</div>
-                        <div className="small muted">versão {ultima?.numero ?? 1} · <span className={`selo ${ESTADO_PROPOSTA[p.estado].classe}`}>{ESTADO_PROPOSTA[p.estado].rotulo}</span></div>
+                        <div className="small muted">versão {ultima?.numero ?? 1} · <span className={`selo ${sit.classe}`} title={sit.dica}>{sit.rotulo}</span></div>
                       </div>
-                      {ultima && <Dinheiro valor={doBanco(ultima.valor_total)} />}
+                      {ultima && <Dinheiro valor={valor} />}
                     </Link>
                   );
                 })}
@@ -434,7 +531,7 @@ function FormularioSite({ aoFechar }: { aoFechar: () => void }) {
   <input name="telefone" placeholder="WhatsApp">
   <input name="email" type="email" placeholder="E-mail">
   <select name="tipo_servico">
-    <option>Projeto estrutural</option><option>Reforço estrutural</option><option>Laudo / vistoria</option>
+    <option>Projeto estrutural</option><option>Projeto arquitetônico</option><option>Regularização de imóvel</option><option>Reforço estrutural</option><option>Laudo / vistoria</option>
     <option>Reforma</option><option>Construção</option><option>Gestão de obra</option>
   </select>
   <input name="local" placeholder="Bairro / cidade da obra">
