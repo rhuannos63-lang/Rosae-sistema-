@@ -722,8 +722,7 @@ export function Clausulas() {
   const { dados, erro, carregando, recarregar } = useConsulta(async () => ok(await supabase.from('clausula').select('*').order('ordem')) as (Clausula & { id: string; revisado_por: string | null; revisado_em: string | null; referencias: string | null })[], []);
   return (
     <>
-      <Topo titulo="Cláusulas de contrato" sub="Cláusulas por tipo de serviço, com versão e base legal. As sem base legal saem como minuta.">
-        <Link className="btn-secundario" to="/biblioteca"><Icone nome="voltar" /> Biblioteca</Link>
+      <Topo titulo="Cláusulas de contrato" sub="Cláusulas por tipo de serviço, com versão e base legal.">
         <button className="btn-primario" onClick={() => setEditar('nova')}><Icone nome="mais" /> Cláusula</button>
       </Topo>
       <div className="aviso info" style={{ marginBottom: 14 }}><span>As cláusulas citam a base legal (Código Civil, Código de Defesa do Consumidor, Leis 5.194/66 e 6.496/77, LGPD e normas ABNT) e cada tipo de serviço tem as suas. Elas seguem o CDC: multa de atraso de 2%, arrependimento em 7 dias, foro do cliente, multa também para a ROSAE e destaque nas cláusulas que limitam direitos. Se quiser, peça a um advogado para revisar e registre aqui quem revisou e quando. Mudar o texto cria nova versão; contratos já emitidos guardam o texto da época.</span></div>

@@ -81,7 +81,7 @@ export function Manual() {
 
   return (
     <>
-      <Topo titulo="Manual do sistema" sub="Passo a passo de cada parte, na ordem em que o trabalho acontece: do primeiro contato à entrega da obra.">
+      <Topo titulo="Manual do sistema" sub="Passo a passo, do primeiro contato à entrega da obra.">
         <button className="btn-secundario" onClick={() => window.print()}><Icone nome="imprimir" /> Imprimir</button>
       </Topo>
 

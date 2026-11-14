@@ -45,7 +45,7 @@ export function Pessoas() {
 
   return (
     <>
-      <Topo titulo="Cadastros" sub="Clientes, parceiros e fornecedores em um só lugar. Uma pessoa pode ter vários papéis.">
+      <Topo titulo="Cadastros" sub="Clientes, parceiros e fornecedores.">
         {ehAdmin && <button className="btn-secundario" onClick={() => setMesclar({})}>Mesclar cadastros</button>}
         <button className="btn-primario" onClick={() => setEditando('nova')}>
           <Icone nome="mais" /> Nova pessoa

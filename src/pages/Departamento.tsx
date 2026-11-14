@@ -8,7 +8,7 @@ import { Icone } from '../components/Icone';
 import { ComoFunciona } from '../components/ComoFunciona';
 import { doBanco, formatar } from '../core/dinheiro';
 import { formatarData, hoje } from '../core/datas';
-import { DEPARTAMENTO_POR_ID, type Departamento as Dep } from '../core/departamentos';
+import { type Departamento as Dep } from '../core/departamentos';
 import type { ItemPendencia } from './Pendencias';
 import { carregarResumoPropostas } from '../lib/propostasSituacao';
 import { detalheComCliente } from '../core/situacaoProposta';
@@ -148,22 +148,6 @@ export function Departamento() {
             )}
           </section>
         )}
-        <section className="card dep-ligacoes">
-          <h2>Como se liga aos outros</h2>
-          <ul>
-            {dep.ligacoes.map((l) => {
-              const outro = deps.find((d) => d.id === l.com) ?? DEPARTAMENTO_POR_ID[l.com];
-              const acessivel = deps.some((d) => d.id === l.com);
-              const conteudo = (
-                <>
-                  <span className="dep-ligacao-icone"><Icone nome={outro.icone} /></span>
-                  <span><b>{outro.nome}</b><span>{l.texto}</span></span>
-                </>
-              );
-              return <li key={l.com}>{acessivel ? <Link to={`/d/${l.com}`}>{conteudo}<Icone nome="chevron" /></Link> : <div>{conteudo}</div>}</li>;
-            })}
-          </ul>
-        </section>
       </div>
     </div>
   );

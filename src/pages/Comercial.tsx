@@ -116,9 +116,8 @@ export function Comercial() {
 
   return (
     <>
-      <Topo titulo="Funil" sub="Do primeiro contato à obra: cada negócio aparece uma vez, na fase em que está, com o próximo passo.">
+      <Topo titulo="Funil" sub="Cada negócio na fase em que está, com o próximo passo.">
         <MenuAcoes>
-          <Link role="menuitem" to="/propostas"><Icone nome="documento" /> Lista de propostas</Link>
           <button role="menuitem" onClick={() => setSite(true)}><Icone nome="link" /> Formulário do site</button>
         </MenuAcoes>
         <MenuAcoes texto={<><Icone nome="mais" /> Novo</>} rotulo="Novo">
@@ -135,7 +134,7 @@ export function Comercial() {
           <div className="det">{soAcao ? 'Mostrando só estes · tocar para ver todos' : 'Atrasados ou parados · tocar para filtrar'}</div>
         </button>
       </div>
-      {ver === 'ativos' && (
+      {ver === 'ativos' && !largo && (
         <div className="trilha-funil" role="group" aria-label="Fases do funil: toque numa fase para ver só ela">
           {FASES.filter((f) => FASES_ATIVAS.includes(f.id)).map((f) => {
             const x = resumo.porFase[f.id];
