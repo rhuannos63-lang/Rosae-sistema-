@@ -2441,7 +2441,8 @@ td .ed-mais { margin: 0 0 0 .6em; padding: .1em .6em; }
   .ag-tempo-item { grid-template-columns: 70px 1fr; }
 }
 
-/* ==============================================================   Portal moderno por tipo de serviço: "Agora", anel na capa, linha do tempo,
+/* =====================================================================
+   Portal moderno por tipo de serviço: "Agora", anel na capa, linha do tempo,
    "Para tudo correr bem", dúvidas e termos, barra inferior no celular.
    Cores sólidas (sem degradê).
    ===================================================================== */
@@ -2534,7 +2535,6 @@ td .ed-mais { margin: 0 0 0 .6em; padding: .1em .6em; }
 @media print {
   .portal-abas { display: none; }
 }
-=======
 /* ---------------------------------------------------------------------
    Funil completo (contato → obra) e menu "⋯"
    --------------------------------------------------------------------- */
