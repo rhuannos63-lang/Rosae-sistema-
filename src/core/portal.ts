@@ -45,6 +45,8 @@ export type DadosPortal = {
     data_previsao_fim: string | null; data_conclusao: string | null; boas_vindas: string | null; capa: string | null;
     // Tipo de serviço (jornada visual do portal) e entregáveis da proposta aprovada.
     tipo_servico?: string | null; perfil?: string | null; entregaveis?: string[];
+    /** Montagem do portal feita pela ROSAE (null = segue a sugestão do serviço). */
+    montagem?: unknown;
   };
   empresa: { nome: string; telefone: string | null; email: string | null; site: string | null; responsavel: string; frase: string | null } | null;
   eu: { id: string; nome: string } | null;

@@ -2,12 +2,13 @@
 // para o portal, mensagens e ciências. Nada é publicado sem um clique aqui.
 import { useMemo, useState } from 'react';
 import { supabase, mensagemErro } from '../lib/supabase';
-import { urlAssinada } from '../lib/arquivos';
+import { publicarFotoNoPortal } from '../lib/fotoPortal';
+import { MontarPortal } from './ObraPortalMontar';
 import { useConsulta, ok } from '../lib/consulta';
 import { Ajuda, Carregando, Erro, Modal, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
 import { formatarData, formatarDataHora } from '../core/datas';
-import { comprimirImagem, useUrlsFotos } from './ObraRegistros';
+import { useUrlsFotos } from './ObraRegistros';
 import { SeloEtapa } from './ObraCronograma';
 import { TIPO_COMENTARIO, cienciaDoItem, type DadosPortal } from '../core/portal';
 import { perfilDaObra, PERFIS } from '../core/jornada';
@@ -18,21 +19,9 @@ type Acesso = {
   ultimo_acesso_em: string | null; acessos: number; criado_em: string; pessoa: { nome: string; telefone: string | null; email: string | null } | null;
 };
 type PessoaCurta = { id: string; nome: string; telefone: string | null; email: string | null };
-type ObraPortalCampos = Obra & { portal_boas_vindas?: string | null; portal_capa_foto_id?: string | null };
+type ObraPortalCampos = Obra & { portal_boas_vindas?: string | null; portal_capa_foto_id?: string | null; portal_montagem?: unknown };
 
-async function paraBase64(b: Blob): Promise<string> {
-  const url = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(b); });
-  return url.slice(url.indexOf(',') + 1);
-}
-
-/** Cópia para o cliente: reduzida e regravada (sai sem os metadados da câmera, como localização). */
-export async function prepararCopiaPortal(original: Blob) {
-  const arquivo = new File([original], 'foto.jpg', { type: original.type || 'image/jpeg' });
-  // A cópia do portal fica no banco (500 MB no plano grátis): 1280 px já é nítida em qualquer tela.
-  const grande = await comprimirImagem(arquivo, 1280, 0.76);
-  const mini = await comprimirImagem(arquivo, 400, 0.7);
-  return { imagem: await paraBase64(grande.blob), miniatura: await paraBase64(mini.blob), largura: grande.largura, altura: grande.altura };
-}
+export { prepararCopiaPortal } from '../lib/fotoPortal';
 
 export function PortalObra({ obra, aoMudar }: { obra: ObraPortalCampos; aoMudar: () => void }) {
   const toast = useToast();
@@ -71,13 +60,7 @@ export function PortalObra({ obra, aoMudar }: { obra: ObraPortalCampos; aoMudar:
   async function publicarFoto(f: Foto) {
     setOcupado(f.id);
     try {
-      const url = urls[f.caminho] ?? (await urlAssinada(f.caminho, 600));
-      if (!url) throw new Error('Não consegui abrir a foto original.');
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error('Não consegui baixar a foto original.');
-      const c = await prepararCopiaPortal(await resp.blob());
-      const r = await supabase.rpc('publicar_foto', { p_foto: f.id, p_imagem: c.imagem, p_miniatura: c.miniatura, p_largura: c.largura, p_altura: c.altura });
-      if (r.error) throw r.error;
+      await publicarFotoNoPortal(f, urls[f.caminho]);
       toast('Foto publicada no portal.');
       recarregar();
     } catch (e) {
@@ -117,6 +100,8 @@ export function PortalObra({ obra, aoMudar }: { obra: ObraPortalCampos; aoMudar:
           </div>
         </div>
       </div>
+
+      <MontarPortal obra={obra} previa={previa} fotos={dados.fotos} urls={urls} aoPublicar={() => { aoMudar(); recarregar(); }} />
 
       <div className="grid grid-2">
         <div className="card">
