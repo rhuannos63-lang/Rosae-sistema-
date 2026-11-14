@@ -59,7 +59,7 @@ export function Aparencia() {
 
   return (
     <>
-      <Topo titulo="Aparência" sub="Deixe o sistema do seu jeito. Muda na hora e fica salvo no seu usuário, no celular e no computador.">
+      <Topo titulo="Aparência" sub="Cores, menu e tamanho do texto. Vale no celular e no computador.">
         <button className="btn-secundario" onClick={() => { mudar(PADRAO); setHex(PADRAO.cor); toast('Aparência padrão da ROSAE restaurada.'); }}>
           Restaurar padrão
         </button>

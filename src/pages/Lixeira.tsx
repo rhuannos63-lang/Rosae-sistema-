@@ -28,7 +28,7 @@ export function Lixeira() {
   const lista = (dados ?? []).filter((i) => verRestaurados || !i.restaurado_em);
   return (
     <>
-      <Topo titulo="Lixeira" sub="O que foi excluído fica guardado aqui com todos os dados. Restaurar devolve tudo como era, inclusive o que saiu junto.">
+      <Topo titulo="Lixeira" sub="O que foi excluído, para restaurar com um toque.">
         <label className="check"><input type="checkbox" checked={verRestaurados} onChange={(e) => setVerRestaurados(e.target.checked)} /> Mostrar já restaurados</label>
       </Topo>
       <Erro mensagem={erro ?? erroCarga} />

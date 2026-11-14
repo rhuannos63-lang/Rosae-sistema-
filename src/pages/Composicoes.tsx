@@ -21,8 +21,7 @@ export function Composicoes() {
   const base = useConsulta(carregarBase, []);
   return (
     <>
-      <Topo titulo="Insumos e composições" sub="A base de custo dos serviços: material, a sua mão de obra e a dos profissionais, e equipamentos, com quanto cada serviço consome por unidade, em três padrões de acabamento. Os valores iniciais são estimativas médias do Rio de Janeiro no estilo SINAPI: confira e ajuste.">
-        <Link className="btn-secundario" to="/propostas"><Icone nome="documento" /> Propostas</Link>
+      <Topo titulo="Insumos e composições" sub="Material, mão de obra e equipamentos por serviço, em três padrões. Valores iniciais: médias do RJ estilo SINAPI.">
       </Topo>
       <div className="abas-obra">
         <button className={aba === 'composicoes' ? 'ativo' : ''} onClick={() => setParams({})}>Composições</button>
