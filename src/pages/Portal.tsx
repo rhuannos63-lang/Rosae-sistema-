@@ -1,7 +1,7 @@
 // Portal do cliente. Abre pelo link pessoal (/c/<token>): o token fica só neste
 // aparelho e some do endereço. Tudo vem de portal_dados, que já filtra o que foi
 // publicado; a prévia do escritório ("Ver como cliente") usa a mesma montagem.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { novaChave } from '../lib/consulta';
@@ -11,6 +11,8 @@ import { CenaServico } from '../components/CenaServico';
 import { calcularJornada, faseAtual, perfilDaObra, PERFIS, type FaseCalculada, type Perfil } from '../core/jornada';
 import { formatarData, formatarDataHora, hoje as hojeISO } from '../core/datas';
 import { SERVICO, haQuanto, linhaDoTempo, proximoMarco, seuTrabalho, doTrabalho, type ConfigServico } from '../core/portalServico';
+import { aplicarRascunho, chaveRascunhoPortal, lerRascunhoPortal, type RascunhoPortal } from '../lib/rascunhoPortal';
+import { fotosDaNovidade, normalizarMontagem, textosDoPortal, tituloBloco, type BlocoId, type Montagem } from '../core/portalMontagem';
 import {
   ESTADO_PORTAL, SITUACAO_MATERIAL_PORTAL, STATUS_OBRA_PORTAL, TIPO_COMENTARIO, TIPO_REGISTRO_PORTAL,
   cienciaDoItem, faseEtapa, paresAntesDepois, primeiroNome, proximaEtapa,
@@ -71,9 +73,18 @@ export function PortalPrevia() {
   }
   useEffect(() => { carregar(); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+  // "Prévia com o rascunho": o montador grava o rascunho neste aparelho e a prévia acompanha ao vivo.
+  const comRascunho = new URLSearchParams(window.location.search).has('rascunho');
+  const [rascunho, setRascunho] = useState<RascunhoPortal | null>(() => (comRascunho && id ? lerRascunhoPortal(id) : null));
+  useEffect(() => {
+    if (!comRascunho || !id) return;
+    const ouvir = (e: StorageEvent) => { if (e.key === chaveRascunhoPortal(id)) setRascunho(lerRascunhoPortal(id)); };
+    window.addEventListener('storage', ouvir);
+    return () => window.removeEventListener('storage', ouvir);
+  }, [comRascunho, id]);
   if (erro) return <AvisoPortal titulo="Prévia indisponível">{erro}</AvisoPortal>;
   if (!d) return <Carregando />;
-  return <PortalVisao d={d} token={null} recarregar={carregar} />;
+  return <PortalVisao d={rascunho ? aplicarRascunho(d, rascunho) : d} token={null} recarregar={carregar} rascunho={!!rascunho} />;
 }
 
 function AvisoPortal({ titulo, children }: { titulo: string; children: ReactNode }) {
@@ -124,17 +135,18 @@ export function ImagemPortal({ token, id, grande, alt, className }: { token: str
 // Tela
 // ---------------------------------------------------------------------
 type Aba = 'inicio' | 'cronograma' | 'ambientes' | 'fotos' | 'medicoes' | 'atualizacoes' | 'mensagens';
-type Ctx = { d: DadosPortal; perfil: Perfil; cfg: ConfigServico; hoje: string; token: string | null; recarregar: () => Promise<void> | void; nomeServico: (id: string | null) => string; nomeEtapa: (id: string | null) => string; abrirFoto: (f: FotoPortal) => void };
+type Ctx = { d: DadosPortal; perfil: Perfil; cfg: ConfigServico; m: Montagem; textos: ReturnType<typeof textosDoPortal>; hoje: string; token: string | null; recarregar: () => Promise<void> | void; nomeServico: (id: string | null) => string; nomeEtapa: (id: string | null) => string; abrirFoto: (f: FotoPortal) => void };
 
-function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: string | null; recarregar: () => Promise<void> | void; sair?: () => void }) {
+function PortalVisao({ d, token, recarregar, sair, rascunho }: { d: DadosPortal; token: string | null; recarregar: () => Promise<void> | void; sair?: () => void; rascunho?: boolean }) {
   const [aba, setAba] = useState<Aba>('inicio');
   const [foto, setFoto] = useState<FotoPortal | null>(null);
   const servicos = useMemo(() => new Map(d.servicos.map((s) => [s.id, s.nome])), [d.servicos]);
   const etapas = useMemo(() => new Map(d.etapas.map((e) => [e.id, e.nome])), [d.etapas]);
   const perfil = perfilDaObra(d.obra.tipo_servico, d.obra.perfil);
   const cfg = SERVICO[perfil];
+  const m = useMemo(() => normalizarMontagem(d.obra.montagem, perfil), [d.obra.montagem, perfil]);
   const ctx: Ctx = {
-    d, perfil, cfg, hoje: hojeISO(), token, recarregar,
+    d, perfil, cfg, m, textos: textosDoPortal(m, perfil), hoje: hojeISO(), token, recarregar,
     nomeServico: (id) => (id ? servicos.get(id) ?? '' : ''),
     nomeEtapa: (id) => (id ? etapas.get(id) ?? '' : ''),
     abrirFoto: setFoto,
@@ -145,9 +157,12 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
     ...d.pendencias.filter((p) => p.estado === 'aberta' && !cienciaDoItem(d.ciencias, 'pendencia', p.id, p.versao).euAtual(eu)),
   ].length;
   const medicoes = d.medicoes ?? [];
+  // Abas opcionais seguem a montagem; Início, Atualizações e Mensagens ficam sempre.
   const abas: [Aba, string, number?][] = [
-    ['inicio', 'Início'], ['cronograma', 'Etapas'], ...(d.ambientes.length ? [['ambientes', 'Ambientes'] as [Aba, string]] : []), ...(d.fotos.length ? [['fotos', cfg.galeria, d.fotos.length] as [Aba, string, number]] : []),
-    ...(medicoes.length ? [['medicoes', 'Medições', medicoes.filter((m) => m.estado === 'enviada').length] as [Aba, string, number]] : []),
+    ['inicio', 'Início'], ...(m.abas.cronograma ? [['cronograma', 'Etapas'] as [Aba, string]] : []),
+    ...(m.abas.ambientes && d.ambientes.length ? [['ambientes', 'Ambientes'] as [Aba, string]] : []),
+    ...(m.abas.fotos && d.fotos.length ? [['fotos', cfg.galeria, d.fotos.length] as [Aba, string, number]] : []),
+    ...(medicoes.length && (m.abas.medicoes || medicoes.some((x) => x.estado === 'enviada')) ? [['medicoes', 'Medições', medicoes.filter((x) => x.estado === 'enviada').length] as [Aba, string, number]] : []),
     ['atualizacoes', 'Atualizações', eu ? semCiencia : undefined], ['mensagens', 'Mensagens', d.comentarios.length],
   ];
   function irPara(a: Aba) {
@@ -159,7 +174,9 @@ function PortalVisao({ d, token, recarregar, sair }: { d: DadosPortal; token: st
     <div className="portal">
       {d.previa && (
         <div className="portal-previa" role="status">
-          <Icone nome="olho" /> <span><strong>Prévia:</strong> é exatamente o que o cliente vê agora. Envios estão desligados aqui.</span>
+          <Icone nome="olho" /> <span>{rascunho
+            ? <><strong>Prévia do rascunho:</strong> é como o portal fica depois de publicar. Muda sozinha enquanto você monta.</>
+            : <><strong>Prévia:</strong> é exatamente o que o cliente vê agora. Envios estão desligados aqui.</>}</span>
         </div>
       )}
       <header className="portal-topo">
@@ -259,69 +276,107 @@ const ICONE_ABA: Record<Aba, string> = {
 };
 
 function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
-  const { d, perfil, cfg } = ctx;
+  const { d, perfil, m } = ctx;
   const decisoes = d.pendencias.filter((p) => p.estado === 'aberta' && p.responsavel === 'cliente');
-  const medicaoAberta = (d.medicoes ?? []).find((m) => m.estado === 'enviada');
+  const medicaoAberta = (d.medicoes ?? []).find((x) => x.estado === 'enviada');
   const ultimas = d.fotos.slice(0, 8);
   const fases = useMemo(() => calcularJornada(perfil, d.etapas, Number(d.progresso.executado), ctx.nomeServico),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [perfil, d.etapas, d.progresso.executado]);
+  const titulo = (id: BlocoId) => tituloBloco(m, id, perfil) ?? '';
+  // Cada bloco na ordem montada pela ROSAE; o que não tem conteúdo simplesmente não aparece.
+  const blocos: Record<BlocoId, () => ReactNode> = {
+    boas_vindas: () => d.obra.boas_vindas && <p className="portal-boas-vindas">{d.obra.boas_vindas}</p>,
+    novidade: () => <Novidade ctx={ctx} irPara={irPara} />,
+    agora: () => <Agora ctx={ctx} fases={fases} />,
+    aguardando: () => (medicaoAberta || decisoes.length > 0) && (
+      <section className="portal-card portal-destaque portal-aguardando">
+        <h2><Icone nome="alerta" /> {titulo('aguardando')}</h2>
+        <ul className="portal-lista">
+          {medicaoAberta && (
+            <li className="portal-linha">
+              <span><strong>Medição nº {medicaoAberta.numero}</strong><span className="muted"> · {fmtPct(medicaoAberta.percentual_atual)} executado até {formatarData(medicaoAberta.data_corte)}</span></span>
+              <button className="btn-primario" onClick={() => irPara('medicoes')}>Conferir</button>
+            </li>
+          )}
+          {decisoes.map((p) => (
+            <li key={p.id} className="portal-linha">
+              <span><strong>{p.titulo}</strong>{p.prazo && <span className="muted"> · até {formatarData(p.prazo)}</span>}</span>
+              <button className="btn-secundario" onClick={() => irPara('atualizacoes')}>Responder</button>
+            </li>
+          ))}
+        </ul>
+      </section>
+    ),
+    jornada: () => <Jornada ctx={ctx} perfil={perfil} fases={fases} />,
+    ambientes: () => d.ambientes.length > 0 && (
+      <section className="portal-card">
+        <div className="portal-linha"><h2>{titulo('ambientes')}</h2>{m.abas.ambientes && <button className="btn-link" onClick={() => irPara('ambientes')}>Explorar</button>}</div>
+        <div className="portal-ambientes-mini">
+          {d.ambientes.map((a) => (
+            <div key={a.id}><div className="portal-linha"><span>{a.nome}</span><strong>{Math.round(Number(a.executado))}%</strong></div><Barra valor={Number(a.executado)} rotulo={a.nome} /></div>
+          ))}
+        </div>
+      </section>
+    ),
+    galeria: () => ultimas.length > 0 && (
+      <section className="portal-card">
+        <div className="portal-linha"><h2>{titulo('galeria')}</h2>{m.abas.fotos && <button className="btn-link" onClick={() => irPara('fotos')}>Ver todas</button>}</div>
+        <div className="portal-faixa">
+          {ultimas.map((f) => (
+            <button key={f.id} className="portal-mini" onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir imagem ${f.legenda ?? ''} de ${formatarData(f.tirada_em)}`}>
+              <ImagemPortal token={ctx.token} id={f.id} alt={f.legenda ?? `Imagem ${doTrabalho(perfil)}`} />
+            </button>
+          ))}
+        </div>
+      </section>
+    ),
+    correr_bem: () => <ParaCorrerBem ctx={ctx} />,
+    duvidas: () => <Duvidas ctx={ctx} irPara={irPara} />,
+  };
   return (
     <div className="portal-stack">
-      {d.obra.boas_vindas && <p className="portal-boas-vindas">{d.obra.boas_vindas}</p>}
-
-      <Agora ctx={ctx} fases={fases} />
-
-      {(medicaoAberta || decisoes.length > 0) && (
-        <section className="portal-card portal-destaque portal-aguardando">
-          <h2><Icone nome="alerta" /> Aguardando você</h2>
-          <ul className="portal-lista">
-            {medicaoAberta && (
-              <li className="portal-linha">
-                <span><strong>Medição nº {medicaoAberta.numero}</strong><span className="muted"> · {fmtPct(medicaoAberta.percentual_atual)} executado até {formatarData(medicaoAberta.data_corte)}</span></span>
-                <button className="btn-primario" onClick={() => irPara('medicoes')}>Conferir</button>
-              </li>
-            )}
-            {decisoes.map((p) => (
-              <li key={p.id} className="portal-linha">
-                <span><strong>{p.titulo}</strong>{p.prazo && <span className="muted"> · até {formatarData(p.prazo)}</span>}</span>
-                <button className="btn-secundario" onClick={() => irPara('atualizacoes')}>Responder</button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <Jornada ctx={ctx} perfil={perfil} fases={fases} />
-
-      {cfg.campo && perfil !== 'reforma' && d.ambientes.length > 0 && (
-        <section className="portal-card">
-          <div className="portal-linha"><h2>Por ambiente</h2><button className="btn-link" onClick={() => irPara('ambientes')}>Explorar</button></div>
-          <div className="portal-ambientes-mini">
-            {d.ambientes.map((a) => (
-              <div key={a.id}><div className="portal-linha"><span>{a.nome}</span><strong>{Math.round(Number(a.executado))}%</strong></div><Barra valor={Number(a.executado)} rotulo={a.nome} /></div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {ultimas.length > 0 && (
-        <section className="portal-card">
-          <div className="portal-linha"><h2>{cfg.galeria} recentes</h2><button className="btn-link" onClick={() => irPara('fotos')}>Ver todas</button></div>
-          <div className="portal-faixa">
-            {ultimas.map((f) => (
-              <button key={f.id} className="portal-mini" onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir imagem ${f.legenda ?? ''} de ${formatarData(f.tirada_em)}`}>
-                <ImagemPortal token={ctx.token} id={f.id} alt={f.legenda ?? `Imagem ${doTrabalho(perfil)}`} />
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <ParaCorrerBem ctx={ctx} />
-      <Duvidas ctx={ctx} irPara={irPara} />
+      {m.blocos.filter((b) => b.visivel).map((b) => <Fragment key={b.id}>{blocos[b.id]()}</Fragment>)}
     </div>
   );
+}
+
+/** A novidade mais recente publicada pela ROSAE, em destaque, com as fotos escolhidas. */
+function Novidade({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
+  const { d } = ctx;
+  const r = [...d.registros].filter((x) => x.tipo === 'andamento' || x.tipo === 'decisao').sort((a, b) => b.publicado_em.localeCompare(a.publicado_em))[0];
+  if (!r) return null;
+  const fotos = fotosDoRegistro(d.fotos, r).slice(0, 4);
+  const titulo = tituloBloco(ctx.m, 'novidade', ctx.perfil);
+  return (
+    <section className="portal-card portal-novidade" aria-label={titulo ?? 'Novidade'}>
+      <div className="pn-topo">
+        <span className="pj-kicker">{titulo} · {haQuanto(r.publicado_em, ctx.hoje)}</span>
+        {r.id === 'rascunho' && <span className="selo info">Rascunho</span>}
+      </div>
+      {r.titulo && <h2>{r.titulo}</h2>}
+      {r.texto && <p className="portal-texto pn-texto">{r.texto}</p>}
+      {fotos.length > 0 && (
+        <div className={`pn-fotos n${fotos.length}`}>
+          {fotos.map((f) => (
+            <button key={f.id} onClick={() => ctx.abrirFoto(f)} aria-label={`Abrir foto de ${formatarData(f.tirada_em)}`}>
+              <ImagemPortal token={ctx.token} id={f.id} grande={fotos.length === 1} alt={f.legenda ?? 'Foto da novidade'} />
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="portal-linha pn-rodape">
+        <span className="muted small">{formatarData(r.data)}{r.etapa_id && ctx.nomeEtapa(r.etapa_id) ? ` · ${ctx.nomeEtapa(r.etapa_id)}` : ''}</span>
+        <button className="btn-link" onClick={() => irPara('atualizacoes')}>Ver todas as atualizações</button>
+      </div>
+    </section>
+  );
+}
+
+/** Fotos de um registro: as enviadas junto com ele e as escolhidas para a novidade. */
+function fotosDoRegistro(fotos: FotoPortal[], r: Pick<RegistroPortal, 'id' | 'detalhes'>): FotoPortal[] {
+  const escolhidas = fotosDaNovidade(r.detalhes);
+  return fotos.filter((f) => f.registro_id === r.id || escolhidas.includes(f.id));
 }
 
 /** O momento atual em uma frase: a fase, o que acontece, como o cliente participa e o próximo marco. */
@@ -357,33 +412,34 @@ function Agora({ ctx, fases }: { ctx: Ctx; fases: FaseCalculada[] }) {
 
 /** O que costumamos pedir neste tipo de serviço e os cuidados durante a execução. */
 function ParaCorrerBem({ ctx }: { ctx: Ctx }) {
-  const { cfg, perfil } = ctx;
+  const { cfg, perfil, textos } = ctx;
+  if (!textos.pedimos.length && !textos.cuidados.length) return null;
   return (
     <section className="portal-card portal-colabora">
-      <h2>Para tudo correr bem</h2>
+      <h2>{tituloBloco(ctx.m, 'correr_bem', perfil)}</h2>
       <div className="pc-grade">
         <div>
           <h3>O que costumamos pedir a você</h3>
-          <ul className="pc-lista">{cfg.pedimos.map((x) => <li key={x}>{x}</li>)}</ul>
+          <ul className="pc-lista">{textos.pedimos.map((x) => <li key={x}>{x}</li>)}</ul>
         </div>
-        {cfg.cuidados.length > 0 && (
+        {textos.cuidados.length > 0 && (
           <div>
             <h3>Cuidados durante a obra</h3>
-            <ul className="pc-lista cuidado">{cfg.cuidados.map((x) => <li key={x}>{x}</li>)}</ul>
+            <ul className="pc-lista cuidado">{textos.cuidados.map((x) => <li key={x}>{x}</li>)}</ul>
           </div>
         )}
       </div>
-      <p className="portal-nota">Lista geral para {PERFIS[perfil].nome.toLowerCase()}. O que for preciso {cfg.trabalho === 'obra' ? 'na' : 'no'} {seuTrabalho(perfil)} chega como decisão em “Aguardando você”, com prazo.</p>
+      <p className="portal-nota">{ctx.m.pedimos || ctx.m.cuidados ? `Lista preparada para ${seuTrabalho(perfil)}.` : `Lista geral para ${PERFIS[perfil].nome.toLowerCase()}.`} O que for preciso {cfg.trabalho === 'obra' ? 'na' : 'no'} {seuTrabalho(perfil)} chega como decisão em “Aguardando você”, com prazo.</p>
     </section>
   );
 }
 
 function Duvidas({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
-  const { cfg } = ctx;
+  const { cfg, textos } = ctx;
   return (
     <section className="portal-card portal-duvidas">
-      <h2>Dúvidas frequentes</h2>
-      {cfg.duvidas.map((q) => <details key={q.p}><summary>{q.p}</summary><p>{q.r}</p></details>)}
+      <h2>{tituloBloco(ctx.m, 'duvidas', ctx.perfil)}</h2>
+      {textos.duvidas.map((q) => <details key={q.p}><summary>{q.p}</summary><p>{q.r}</p></details>)}
       <details className="pd-termos">
         <summary>Termos técnicos, em palavras simples</summary>
         <dl>{cfg.termos.map((x) => <div key={x.t}><dt>{x.t}</dt><dd>{x.d}</dd></div>)}</dl>
@@ -732,14 +788,14 @@ function Atualizacoes({ ctx }: { ctx: Ctx }) {
           </div>
           {it.r.titulo && <h3>{it.r.titulo}</h3>}
           {it.r.texto && <p className="portal-texto">{it.r.texto}</p>}
-          {Object.keys(it.r.detalhes ?? {}).length > 0 && (
+          {DETALHE.some(([k]) => it.r.detalhes?.[k]) && (
             <dl className="portal-detalhes">
               {DETALHE.filter(([k]) => it.r.detalhes[k]).map(([k, rot]) => <div key={k}><dt>{rot}</dt><dd>{String(it.r.detalhes[k])}</dd></div>)}
               {it.r.detalhes.aprovacao_necessaria === true && <div><dt>Aprovação</dt><dd>É necessária aprovação antes de prosseguir.</dd></div>}
             </dl>
           )}
           {(it.r.servico_id || it.r.etapa_id) && <p className="muted small">{[ctx.nomeServico(it.r.servico_id), ctx.nomeEtapa(it.r.etapa_id)].filter(Boolean).join(' · ')}</p>}
-          <FotosDoRegistro ctx={ctx} id={it.r.id} />
+          <FotosDoRegistro ctx={ctx} r={it.r} />
           <Ciencia ctx={ctx} tipo="registro" id={it.r.id} versao={it.r.versao} />
           <Conversa ctx={ctx} alvo="registro" id={it.r.id} />
         </article>
@@ -763,8 +819,8 @@ function Atualizacoes({ ctx }: { ctx: Ctx }) {
   );
 }
 
-function FotosDoRegistro({ ctx, id }: { ctx: Ctx; id: string }) {
-  const fotos = ctx.d.fotos.filter((f) => f.registro_id === id);
+function FotosDoRegistro({ ctx, r }: { ctx: Ctx; r: RegistroPortal }) {
+  const fotos = fotosDoRegistro(ctx.d.fotos, r);
   if (!fotos.length) return null;
   return (
     <div className="portal-faixa">
