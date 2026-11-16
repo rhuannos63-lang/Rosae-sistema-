@@ -110,8 +110,8 @@ function FormEmpresa({ empresa, aoSalvar }: { empresa: Empresa; aoSalvar: () => 
         {C({ k: 'endereco', rotulo: 'Endereço' })}
         {C({ k: 'telefone', rotulo: 'Telefone / WhatsApp' })}
         {C({ k: 'email', rotulo: 'E-mail comercial', tipo: 'email' })}
-        {C({ k: 'site', rotulo: 'Site' })}
-        {C({ k: 'instagram', rotulo: 'Instagram' })}
+        {C({ k: 'site', rotulo: 'Site', dica: 'Ex.: rosaeengenharia.com. Vai no convite da proposta (e-mail e WhatsApp)' })}
+        {C({ k: 'instagram', rotulo: 'Instagram', dica: 'O @ da ROSAE, ex.: @rosaeengenharia. Vai no convite da proposta' })}
         {C({ k: 'frase_institucional', rotulo: 'Frase institucional' })}
       </div>
       <fieldset>

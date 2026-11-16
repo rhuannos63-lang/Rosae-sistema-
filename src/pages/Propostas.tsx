@@ -27,6 +27,7 @@ import { estadoInicial, OrcamentoGerador, type EstadoGerador } from '../componen
 import { EncaixeAgenda, useFila } from '../components/EncaixeAgenda';
 import { carregarPrecos } from '../lib/orcamentoParametros';
 import { EnviarEmail, HistoricoEmails } from '../components/EnvioEmail';
+import { comConvite } from '../../supabase/functions/_shared/convite';
 import { NovoAditivo } from '../components/NovoAditivo';
 import { QuadroRecebido } from '../components/Recebimentos';
 import { ContratoDoAceite } from '../components/ContratoDoAceite';
@@ -895,7 +896,10 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
     const url = link ?? (await gerarLink());
     if (!url) return;
     const nome = p.pessoa?.nome?.split(' ')[0] ?? '';
-    const texto = `Olá, ${nome}! Segue a proposta ${p.codigo} (versão ${versao.numero}) da ROSAE Engenharia: ${p.titulo}.\n\nPara ver todos os detalhes e responder, acesse:\n${url}\n\nQualquer dúvida, estou à disposição.\nRhuann Rosa · ROSAE Engenharia & Estruturas`;
+    const texto = comConvite(
+      `Olá, ${nome}! Segue a proposta ${p.codigo} (versão ${versao.numero}) da ROSAE Engenharia: ${p.titulo}.\n\nPara ver todos os detalhes e responder, acesse:\n${url}`,
+      'Qualquer dúvida, estou à disposição.\nRhuann Rosa · ROSAE Engenharia & Estruturas',
+      ehAditivo ? null : carga.empresa);
     const destino = canal === 'whatsapp' ? p.pessoa?.telefone ?? '' : p.pessoa?.email ?? '';
     const alvo = canal === 'whatsapp'
       ? linkWhatsApp(destino, texto) ?? `https://wa.me/?text=${encodeURIComponent(texto)}`
@@ -925,7 +929,10 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
     } finally { setGerando(null); }
   }
 
-  const textoPdf = () => `Olá, ${p.pessoa?.nome?.split(' ')[0] ?? ''}! Segue em anexo a proposta ${p.codigo} da ROSAE Engenharia: ${p.titulo}.\n\nPara aprovar, é só tocar em “Aceitar esta proposta” dentro do PDF. Qualquer dúvida, estou à disposição.\nRhuann Rosa · ROSAE Engenharia & Estruturas`;
+  const textoPdf = () => comConvite(
+    `Olá, ${p.pessoa?.nome?.split(' ')[0] ?? ''}! Segue em anexo a proposta ${p.codigo} da ROSAE Engenharia: ${p.titulo}.\n\nPara aprovar, é só tocar em “Aceitar esta proposta” dentro do PDF.`,
+    'Qualquer dúvida, estou à disposição.\nRhuann Rosa · ROSAE Engenharia & Estruturas',
+    ehAditivo ? null : carga.empresa);
 
   /** Compartilha o arquivo pronto. No celular abre a lista de apps com o PDF anexado. */
   async function compartilharPdf(arquivo: { blob: Blob; nome: string }) {
@@ -1051,7 +1058,7 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
       {email && (
         <EnviarEmail aditivo={ehAditivo} versaoId={versao.id} codigo={p.codigo} versao={versao.numero} titulo={p.titulo} cliente={p.pessoa?.nome ?? ''} emailCliente={p.pessoa?.email ?? null}
           aoFechar={() => setEmail(false)} aoEnviar={() => { setEmails((n) => n + 1); aoMudar(); }} abrirNoAplicativo={() => enviar('email')}
-          anexo={async () => { const a = await gerarPdf(); return a ? { nome: a.nome, base64: await paraBase64(a.blob) } : null; }} />
+          anexo={async () => { const a = await gerarPdf(); return a ? { nome: a.nome, base64: await paraBase64(a.blob) } : null; }} empresa={carga.empresa} />
       )}
       {pdfAberto && pdf && (
         <Modal titulo="PDF pronto para enviar" aoFechar={() => setPdfAberto(false)}
