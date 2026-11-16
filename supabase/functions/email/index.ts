@@ -89,7 +89,8 @@ async function enviar(db: SupabaseClient, adm: SupabaseClient, c: Record<string,
   if (link.error) return falhar(link.error.message, 409);
   const url = `${c.origem}/p/${link.data as string}`;
   const empresa = ((await db.rpc('empresa_publica')).data ?? {}) as Empresa;
-  const { html, texto } = montarEmail(envio.mensagem, url, empresa);
+  // O convite para o site e o Instagram vai por padrão; a tela pode desligar neste envio.
+  const { html, texto } = montarEmail(envio.mensagem, url, empresa, (c as Record<string, unknown>).convite !== false);
 
   const anexo = c.anexo_base64 ? { nome: c.anexo_nome, base64: c.anexo_base64 } : null;
   let provedorId: string;
