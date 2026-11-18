@@ -4,7 +4,7 @@
 import { ratear, type Centavos } from './dinheiro';
 import {
   APRESENTACAO_PADRAO, conteudoVazio, novoId, parcelasPorPercentual, textoPrazo,
-  type Conteudo, type Etapa, type Item, type ModeloServico, type OpcaoProposta, type ParcelaProposta, type Pergunta as PerguntaFaq, type Responsabilidade, type Topico, type ValoresManuais,
+  type Ambiente, type Conteudo, type Etapa, type Item, type ModeloServico, type OpcaoProposta, type ParcelaProposta, type Pergunta as PerguntaFaq, type Responsabilidade, type Topico, type ValoresManuais,
 } from './proposta';
 import { acrescimoDas, codigosDe, CONDICAO_OCUPADO, type Acrescimo, type CondicaoObra } from './condicoes';
 
@@ -28,6 +28,8 @@ export type Linha = {
   modelo?: string; quantidade?: number; unidade?: string; principal?: boolean;
   /** Em proposta com vários serviços: a qual serviço a linha pertence (posição na lista). */
   servico?: number;
+  /** Andar a que a linha pertence (reforma por pavimento). Linhas sem andar vão para "Todos os andares". */
+  pavimento?: string;
 };
 
 type Base = {
@@ -415,6 +417,44 @@ const reforco: Definicao = {
 // ---------------------------------------------------------------------
 // 3. Reforma
 // ---------------------------------------------------------------------
+type AndarReforma = { nome: string; area: number; servicos: string };
+
+/** Andares informados no orçamento de reforma: nome, área e o que será feito. Um andar só = lista vazia. */
+export function andaresDaReforma(r: Respostas): AndarReforma[] {
+  const qtd = Math.min(30, Math.round(n(r, 'pavimentos')));
+  if (qtd < 2) return [];
+  const lista = (id: string) => s(r, id).split(/[;\n]/).map((x) => x.trim());
+  const areas = lista('areas_andar').map((x) => Number(x.replace(/^[^:]*:/, '').replace(/[^\d,.]/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.')) || 0);
+  const servicos = lista('servicos_andar').map((x) => x.replace(/^\s*\d+\s*[ºo°]?\s*(andar)?\s*[:\-–]\s*/i, ''));
+  const total = n(r, 'area');
+  const informada = areas.slice(0, qtd).reduce((t, x) => t + x, 0);
+  const faltam = Array.from({ length: qtd }, (_, i) => !(areas[i] > 0)).filter(Boolean).length;
+  const resto = faltam > 0 && total > informada ? (total - informada) / faltam : 0;
+  return Array.from({ length: qtd }, (_, i) => ({
+    nome: `${i + 1}º andar`,
+    area: areas[i] > 0 ? areas[i] : resto || (informada ? 0 : total / qtd),
+    servicos: servicos[i] ?? '',
+  }));
+}
+
+/** Linha de execução da reforma: uma só, ou uma por andar com o valor proporcional à área. */
+function linhasDeExecucao(andares: AndarReforma[], area: number, valor: number, custo: number, intensidade: string, int: string, amb: string): Linha[] {
+  const oQue = `preparação, ${int === 'pesada' ? 'demolições, ' : ''}${int !== 'leve' ? 'instalações, revestimentos, ' : ''}acabamentos e pintura`;
+  if (andares.length < 2) {
+    return [{ titulo: 'Execução da reforma (mão de obra especializada)', principal: true, descricao: `Serviços de ${intensidade} em ${fmtN(area, 2)} m²${amb ? ` (${amb})` : ''}: ${oQue}, com equipes parceiras coordenadas pela ROSAE.`, valor: arred10(valor), custo: Math.round(custo), pacote: 1, modelo: 'Reforma', quantidade: area, unidade: 'm2' }];
+  }
+  const soma = andares.reduce((t, x) => t + x.area, 0) || andares.length;
+  const pesos = andares.map((x) => Math.max(0, Math.round(((x.area || soma / andares.length) / soma) * 1e6)));
+  const valores = ratear(Math.round(arred10(valor) * 100), pesos);
+  const custos = ratear(Math.round(custo), pesos);
+  return andares.map((x, i) => ({
+    titulo: `Execução da reforma do ${x.nome}`, principal: i === 0, pavimento: x.nome,
+    descricao: `${x.servicos ? `${x.servicos.charAt(0).toUpperCase()}${x.servicos.slice(1)}` : `Serviços de ${intensidade}: ${oQue}`}${x.area ? ` em ${fmtN(x.area, 2)} m²` : ''}, com equipes parceiras coordenadas pela ROSAE.`,
+    valor: valores[i] / 100, custo: custos[i], pacote: 1 as const, modelo: 'Reforma',
+    ...(x.area ? { quantidade: x.area, unidade: 'm2' } : {}),
+  }));
+}
+
 const reforma: Definicao = {
   tipo: 'reforma',
   nome: 'Reforma',
@@ -422,6 +462,9 @@ const reforma: Definicao = {
   campos: [
     { id: 'area', rotulo: 'Área a reformar', tipo: 'numero', unidade: 'm²', obrigatorio: true },
     { id: 'ambientes', rotulo: 'Ambientes', tipo: 'texto', placeholder: 'Ex.: cozinha, 2 banheiros, sala' },
+    { id: 'pavimentos', rotulo: 'Quantos andares a reforma tem', tipo: 'numero', min: 1, ajuda: 'Com 2 ou mais, a proposta sai andar por andar, com o que será feito e o valor de cada um.' },
+    { id: 'areas_andar', rotulo: 'Área de cada andar (m²)', tipo: 'texto', placeholder: 'Ex.: 56; 50; 55; 18', ajuda: 'Na ordem dos andares, separadas por ponto e vírgula. Vazio = área dividida igualmente.', se: (r) => Number(r.pavimentos) > 1 },
+    { id: 'servicos_andar', rotulo: 'O que será feito em cada andar', tipo: 'texto', placeholder: 'Ex.: pintura e piso da entrada; pintura e laminado; varanda e forro; caixa d\'água', ajuda: 'Um andar por vez, separados por ponto e vírgula. Depois você detalha cada serviço na proposta.', se: (r) => Number(r.pavimentos) > 1 },
     {
       id: 'intensidade', rotulo: 'Intensidade', tipo: 'escolha', opcoes: [
         { valor: 'leve', rotulo: 'Leve', descricao: 'Pintura, acabamentos, pequenos reparos' },
@@ -457,7 +500,8 @@ const reforma: Definicao = {
   ],
   padrao: { area: null, ambientes: '', intensidade: 'media', padrao: 'medio', materiais: 'rosae', condominio: true, estrutural: false, ocupado: false, pagamento: 'etapas', parcelas: 4, distancia_km: 0, urgencia: false },
   calcular(r, p) {
-    const area = n(r, 'area');
+    const andares = andaresDaReforma(r);
+    const area = n(r, 'area') || andares.reduce((t, x) => t + x.area, 0);
     const int = s(r, 'intensidade', 'media');
     const pad = s(r, 'padrao', 'medio');
     const rosaeCompra = s(r, 'materiais', 'rosae') === 'rosae';
@@ -467,7 +511,7 @@ const reforma: Definicao = {
     const mat = area * q(p, `mat_${pad}`) * fMat;
     const amb = s(r, 'ambientes');
     const linhas: Linha[] = [
-      { titulo: 'Execução da reforma (mão de obra especializada)', principal: true, descricao: `Serviços de ${rotuloDe(reforma.campos, 'intensidade', int).toLowerCase()} intensidade em ${fmtN(area, 2)} m²${amb ? ` (${amb})` : ''}: preparação, ${int === 'pesada' ? 'demolições, ' : ''}${int !== 'leve' ? 'instalações, revestimentos, ' : ''}acabamentos e pintura, com equipes parceiras coordenadas pela ROSAE.`, valor: arred10(mo * (1 + q(p, 'bdi') / 100)), custo: Math.round(mo), pacote: 1, modelo: 'Reforma', quantidade: area, unidade: 'm2' },
+      ...linhasDeExecucao(andares, area, mo * (1 + q(p, 'bdi') / 100), mo, `${rotuloDe(reforma.campos, 'intensidade', int).toLowerCase()} intensidade`, int, amb),
       { titulo: 'Gestão técnica e responsabilidade de execução', descricao: 'Planejamento, cronograma, compras, coordenação das equipes, conferência de qualidade por etapa e ART de execução.', valor: arred10(area * q(p, 'gestao_m2')), custo: 0, pacote: 1 },
     ];
     if (rosaeCompra) linhas.push({ titulo: `Materiais padrão ${rotuloDe(reforma.campos, 'padrao', pad).toLowerCase()}`, descricao: 'Materiais básicos e de acabamento especificados, cotados e comprados pela ROSAE, com entrega programada conforme o cronograma.', valor: arred10(mat * (1 + q(p, 'bdi_material') / 100)), custo: Math.round(mat), pacote: 1 });
@@ -486,9 +530,11 @@ const reforma: Definicao = {
     if (!rosaeCompra) avisos.push(`Cliente compra os materiais: estimativa informada a ele de R$ ${fmtN(arred10(mat))} para planejar.`);
     if (b(r, 'estrutural')) avisos.push('Há intervenção estrutural: o projeto de adequação precisa ser concluído antes das demolições.');
     const visitas = Math.max(2, Math.round(dias / 7) * 2);
+    const porAndar = andares.length > 1;
+    if (porAndar) for (const l of linhas) if (!l.pavimento) l.pavimento = 'Todos os andares';
     return {
       linhas, visitas: [visitas, visitas, visitas], avisos,
-      titulo: `Reforma · ${fmtN(area)} m²${amb ? ` · ${amb}` : ''}`,
+      titulo: `Reforma${porAndar ? ` · ${andares.length} andares` : ''} · ${fmtN(area)} m²${amb ? ` · ${amb}` : ''}`,
       etapas: [
         { nome: 'Preparação e proteções', descricao: int === 'pesada' ? 'Proteções, demolições e retirada de entulho' : 'Proteções e preparação das superfícies', dias: ds[0], percentual: pesos[0] },
         { nome: 'Infraestrutura', descricao: 'Instalações, regularizações e bases', dias: ds[1], percentual: pesos[1] },
@@ -496,7 +542,8 @@ const reforma: Definicao = {
         { nome: 'Entrega', descricao: 'Limpeza, vistoria final com você e ajustes', dias: ds[3], percentual: pesos[3] },
       ],
       dados: [
-        { rotulo: 'Área', valor: `${fmtN(area, 2)} m²` }, ...(amb ? [{ rotulo: 'Ambientes', valor: amb }] : []),
+        { rotulo: 'Área', valor: `${fmtN(area, 2)} m²${porAndar ? ` (${andares.map((x) => `${x.nome.replace(' andar', '')} ${fmtN(x.area, 2)}`).join(' · ')})` : ''}` },
+        ...(porAndar ? [{ rotulo: 'Andares', valor: String(andares.length) }] : []), ...(amb ? [{ rotulo: 'Ambientes', valor: amb }] : []),
         { rotulo: 'Intensidade', valor: rotuloDe(reforma.campos, 'intensidade', int) }, { rotulo: 'Acabamento', valor: rotuloDe(reforma.campos, 'padrao', pad) },
         { rotulo: 'Materiais', valor: rosaeCompra ? 'Fornecidos pela ROSAE' : 'Comprados pelo cliente' }, { rotulo: 'Condomínio', valor: sn(b(r, 'condominio')) },
         { rotulo: 'Intervenção estrutural', valor: sn(b(r, 'estrutural')) }, { rotulo: 'Imóvel ocupado', valor: sn(b(r, 'ocupado')) },
@@ -1300,6 +1347,18 @@ function itensDasLinhas(linhas: Linha[], etapas: Etapa[], biblioteca: ModeloServ
   });
 }
 
+/** Reforma por andar: um grupo por andar, na ordem das linhas; "Todos os andares" fica por último. */
+function ambientesPorAndar(linhas: Linha[], itens: Item[]): Ambiente[] | null {
+  if (!linhas.some((l) => l.pavimento)) return null;
+  const grupos = new Map<string, Item[]>();
+  linhas.forEach((l, k) => {
+    const nome = l.pavimento || 'Todos os andares';
+    grupos.set(nome, [...(grupos.get(nome) ?? []), itens[k]]);
+  });
+  const ordem = Array.from(grupos.keys()).sort((a, b) => Number(a === 'Todos os andares') - Number(b === 'Todos os andares'));
+  return ordem.map((nome) => ({ id: novoId(), nome: nome === 'Todos os andares' ? 'Gestão e serviços gerais' : 'Serviços', pavimento: nome, itens: grupos.get(nome)! }));
+}
+
 /** Gera o orçamento completo. pacote = qual opção vai como valor da proposta (as outras aparecem para comparação). */
 export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, pacoteEscolhido: 1 | 2 | 3 = 2, ctx: Contexto = {}): Orcamento {
   const def = DEFINICOES[tipo];
@@ -1350,7 +1409,7 @@ export function gerarOrcamento(tipo: TipoServico, r: Respostas, p: Parametros, p
     apresentacao: vazio.apresentacao || APRESENTACAO_PADRAO,
     necessidade: ctx.necessidade?.trim() || vazio.necessidade || '',
     local: ctx.local ?? vazio.local,
-    ambientes: [{ id: novoId(), nome: def.nome, itens }],
+    ambientes: ambientesPorAndar(principal.linhas, itens) ?? [{ id: novoId(), nome: def.nome, itens }],
     inclusoes: inclusos,
     exclusoes: [...base.exclusoes, ...foraDoPacote],
     responsabilidades: base.responsabilidades,

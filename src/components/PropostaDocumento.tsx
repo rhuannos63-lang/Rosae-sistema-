@@ -10,7 +10,7 @@ import {
   ajustarTotal, alternarPagina, areaDaProposta, compromissosPadrao, CONDICOES_GERAIS_PADRAO, dataEntrega, datasDasEtapas, definirTotalItem,
   incluirAmbiente, incluirEtapa, incluirItem, incluirParcela, mudarEtapa, mudarItem, mudarQuantidade, paginaOculta, paraCentavos, selosPadrao,
   textoParcelamento, tirarAmbiente, tirarDaLista, tirarEtapa, tirarItem, tirarPacote, tirarParcela, totalAmbiente, totalConteudo, totalItem,
-  valorPorMetro, PAGINAS_OPCIONAIS, UNIDADES, type Conteudo, type Item,
+  valorPorMetro, pavimentos, temPavimentos, tituloGrupo, PAGINAS_OPCIONAIS, UNIDADES, type Conteudo, type Item, type Pavimento,
 } from '../core/proposta';
 
 export type EmpresaPublica = {
@@ -369,7 +369,80 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
     ),
   });
 
-  paginasEscopo.forEach((pg, k) => {
+  // Proposta por pavimento: uma folha por grupo de cada andar, com onde, o que será feito, medida e valor.
+  const porAndar = temPavimentos(c);
+  const andares: Pavimento[] = porAndar ? pavimentos(c) : [];
+  const mudarAmb = (ai: number, campo: 'nome' | 'pavimento' | 'nota') => (s: string) => mudar((x) => ({ ...x, ambientes: x.ambientes.map((a, j) => (j === ai ? { ...a, [campo]: s } : a)) }));
+  const novoGrupo = (pavimento: string, nome?: string) => mudar((x) => {
+    const y = incluirAmbiente(x, nome);
+    const u = y.ambientes.length - 1;
+    return { ...y, ambientes: y.ambientes.map((a, j) => (j === u ? { ...a, pavimento } : a)) };
+  });
+  if (porAndar) {
+    andares.forEach((pav) => {
+      pav.grupos.forEach(({ ai, amb, total: totalGrupo }, gi) => {
+        const ultimoGrupo = gi === pav.grupos.length - 1;
+        const temOnde = !!ed || amb.itens.some((i) => i.onde?.trim());
+        const blocos = partes(amb.itens.map((item, ii) => ({ item, ii })), 11);
+        blocos.forEach((bl, k) => {
+          const ultimo = k === blocos.length - 1;
+          const titulo = ed
+            ? <><T v={amb.pavimento ?? ''} set={mudarAmb(ai, 'pavimento')} ph="Andar" /> · <T v={amb.nome} set={(s) => { if (s) mudarAmb(ai, 'nome')(s); }} ph="Grupo" /></>
+            : tituloGrupo(amb);
+          paginas.push({
+            id: 'escopo', nome: tituloGrupo(amb),
+            titulo: blocos.length > 1 ? <>{titulo} ({k + 1}/{blocos.length})</> : titulo,
+            conteudo: (
+              <div className="andar">
+                {k === 0 && (amb.nota || ed) && <T tag="p" className="andar-nota" v={amb.nota ?? ''} set={mudarAmb(ai, 'nota')} multi ph="Frase curta sobre este grupo (opcional)" />}
+                <table className="tabela-doc tabela-andar">
+                  <thead><tr><th>Serviço</th>{temOnde && <th className="onde">Onde</th>}<th>O que será feito</th><th className="num medida">Medida</th><th className="num">Valor</th></tr></thead>
+                  <tbody>
+                    {bl.map(({ item, ii }) => (
+                      <tr key={item.id ?? ii}>
+                        <td className="andar-servico"><T v={item.titulo} set={(s) => s && mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, titulo: s })))} ph="Serviço" /><X rotulo={`Tirar "${item.titulo}"`} aoClicar={() => mudar((x) => tirarItem(x, ai, ii))} />{!ed && item.onde && <small className="onde-movel">{item.onde}</small>}</td>
+                        {temOnde && <td className="onde"><T v={item.onde ?? ''} set={(s) => mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, onde: s })))} ph="Onde" /></td>}
+                        <td><T v={item.descricao ?? ''} set={(s) => mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, descricao: s })))} multi ph="O que será feito" /></td>
+                        <td className="num muted">{ed ? <N v={item.quantidade} set={(n) => mudar((x) => mudarQuantidade(x, ai, ii, n))} sufixo={` ${UNIDADES[item.unidade] ?? item.unidade}`} /> : qtd(item)}</td>
+                        <td className="num"><V v={totalItem(item)} set={mudarValor(ai, ii)} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {ultimo && <div className="andar-rodape"><span>Total · {tituloGrupo(amb)}</span><b className="num">{formatar(totalGrupo)}</b></div>}
+                {ultimo && <Mais aoClicar={() => mudar((x) => incluirItem(x, ai))}>Incluir serviço neste grupo</Mais>}
+                {ultimo && ultimoGrupo && pav.grupos.length > 1 && (
+                  <div className="andar-totais">
+                    {pav.grupos.map((g) => <div key={g.ai}><span>{g.amb.nome}</span><b className="num">{formatar(g.total)}</b></div>)}
+                    <div className="andar-total"><span>Total do {pav.nome}</span><b className="num">{formatar(pav.total)}</b></div>
+                  </div>
+                )}
+              </div>
+            ),
+          });
+        });
+      });
+    });
+    if (ed) {
+      const ultimoAndar = andares[andares.length - 1]?.nome ?? '1º andar';
+      const proximo = `${andares.filter((p) => /andar/i.test(p.nome) && !/todos/i.test(p.nome)).length + 1}º andar`;
+      paginas.push({
+        id: 'escopo', nome: 'Incluir andar ou grupo',
+        titulo: 'Incluir andar ou grupo',
+        conteudo: (
+          <div className="stack">
+            <p className="muted">Cada grupo pertence a um andar. Os grupos do mesmo andar saem juntos e somam o total do andar. Esta folha não aparece para o cliente.</p>
+            <div className="cronograma-acoes">
+              <Mais aoClicar={() => novoGrupo(ultimoAndar)}>Grupo no {ultimoAndar}</Mais>
+              <Mais aoClicar={() => novoGrupo(proximo, 'Serviços')}>{proximo}</Mais>
+              <Mais aoClicar={() => novoGrupo('Área externa e fachadas', 'Serviços')}>Área externa</Mais>
+              <Mais aoClicar={() => novoGrupo('Todos os andares', 'Canteiro e revisões')}>Todos os andares</Mais>
+            </div>
+          </div>
+        ),
+      });
+    }
+  } else paginasEscopo.forEach((pg, k) => {
     paginas.push({
       id: 'escopo', nome: 'Escopo dos serviços',
       titulo: paginasEscopo.length > 1 ? `Escopo dos serviços (${k + 1}/${paginasEscopo.length})` : 'Escopo dos serviços',
@@ -569,7 +642,31 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
     </div>
   );
 
-  paginasValores.forEach((pg, k) => {
+  const pagamentoNaTabela = porAndar ? parcelas.length > 0 && parcelas.length <= 5 && andares.length <= 8 && !c.condicao_especial : pagamentoJunto;
+  if (porAndar) {
+    paginas.push({
+      id: 'investimento', nome: 'Investimento por andar',
+      titulo: 'Investimento por andar',
+      conteudo: (
+        <div className={pagamentoNaTabela ? 'investimento' : ''}>
+          <table className="tabela-doc tabela-andares">
+            <thead><tr><th>Andar</th><th>O que entra</th><th className="num">Valor</th></tr></thead>
+            <tbody>
+              {andares.map((pav) => (
+                <tr key={pav.nome}>
+                  <td><b>{pav.nome}</b></td>
+                  <td className="andares-grupos">{pav.grupos.map((g) => g.amb.nome).join(' · ')}</td>
+                  <td className="num">{formatar(pav.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr><td>Total</td><td /><td className="num"><V v={total / 100} set={(cent) => mudar((x) => ajustarTotal(x, cent))} /></td></tr></tfoot>
+          </table>
+          {pagamentoNaTabela && blocoPagamento(true)}
+        </div>
+      ),
+    });
+  } else paginasValores.forEach((pg, k) => {
     const ultima = k === paginasValores.length - 1;
     const junto = ultima && pagamentoJunto;
     paginas.push({
@@ -600,7 +697,7 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
     });
   });
 
-  if (parcelas.length > 0 && !pagamentoJunto) {
+  if (parcelas.length > 0 && !pagamentoNaTabela) {
     paginas.push({
       id: 'pagamento', nome: 'Condições de pagamento',
       titulo: 'Condições de pagamento',

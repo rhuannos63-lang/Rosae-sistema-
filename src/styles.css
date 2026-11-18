@@ -464,6 +464,22 @@ h3.nao { color: var(--desfavoravel) !important; }
 .tabela-doc tr.amb td { font-weight: 600; color: var(--verde-escuro); background: var(--fundo); }
 .tabela-doc tfoot td { font-weight: 700; font-size: calc(1.8 * var(--cq, 1cqw)); border-bottom: 0; border-top: 2px solid var(--verde); }
 .tabela-doc .num { text-align: right; white-space: nowrap; }
+/* Proposta por andar */
+.andar { display: flex; flex-direction: column; gap: calc(1.2 * var(--cq, 1cqw)); }
+.andar-nota { margin: 0; color: var(--texto-2); font-size: calc(1.45 * var(--cq, 1cqw)); max-width: 80ch; }
+.tabela-doc thead th { text-align: left; font-weight: 600; font-size: calc(1.1 * var(--cq, 1cqw)); text-transform: uppercase; letter-spacing: .06em; color: var(--texto-3); padding: calc(.5 * var(--cq, 1cqw)) calc(.8 * var(--cq, 1cqw)); border-bottom: 1px solid var(--verde); }
+.tabela-doc thead th.num { text-align: right; }
+.tabela-andar td { vertical-align: top; }
+.tabela-andar .onde-movel { display: none; }
+.tabela-andar .andar-servico { font-weight: 600; color: var(--verde-escuro); white-space: nowrap; }
+.andar-rodape { display: flex; justify-content: space-between; gap: 1em; font-weight: 700; font-size: calc(1.5 * var(--cq, 1cqw)); padding: calc(.55 * var(--cq, 1cqw)) calc(.8 * var(--cq, 1cqw)); border-top: 2px solid var(--verde); margin-top: calc(-1.2 * var(--cq, 1cqw)); }
+.tabela-andares .andares-grupos { color: var(--texto-2); font-size: calc(1.2 * var(--cq, 1cqw)); }
+.andar-totais { display: grid; grid-template-columns: repeat(auto-fit, minmax(14%, 1fr)); gap: calc(1 * var(--cq, 1cqw)); margin-top: auto; }
+.andar-totais > div { display: flex; flex-direction: column; gap: calc(.3 * var(--cq, 1cqw)); padding: calc(1 * var(--cq, 1cqw)) calc(1.2 * var(--cq, 1cqw)); border: 1px solid var(--linha); border-radius: calc(.8 * var(--cq, 1cqw)); }
+.andar-totais span { font-size: calc(1.05 * var(--cq, 1cqw)); text-transform: uppercase; letter-spacing: .06em; color: var(--texto-3); }
+.andar-totais b { font-size: calc(1.7 * var(--cq, 1cqw)); }
+.andar-totais .andar-total { background: var(--verde-escuro); border-color: var(--verde-escuro); }
+.andar-totais .andar-total :is(span, b) { color: #fff; }
 .investimento { display: grid; grid-template-columns: 1.4fr 1fr; gap: calc(3 * var(--cq, 1cqw)); align-items: start; }
 .pagamento { background: var(--fundo); border-radius: calc(1 * var(--cq, 1cqw)); padding: calc(1.8 * var(--cq, 1cqw)); }
 .pagamento ul { list-style: none; padding: 0 !important; }
@@ -1656,6 +1672,11 @@ a.bi-faixa-item:hover { background: var(--verde-tinta); }
   .documento-proposta:not(.para-pdf) .escopo-qtd { grid-column: 2; grid-row: 2; }
   .documento-proposta:not(.para-pdf) .slide-corpo ul.em-colunas, .entregaveis-ed { columns: 1; }
   .documento-proposta:not(.para-pdf) .tabela-doc td.muted { display: none; }
+  .documento-proposta:not(.para-pdf) .tabela-andar th.medida { display: none; }
+  .documento-proposta:not(.para-pdf) .tabela-andar .andar-servico { white-space: normal; }
+  .documento-proposta:not(.para-pdf) .tabela-andar .onde { display: none; }
+  .documento-proposta:not(.para-pdf) .tabela-andar .onde-movel { display: block; font-weight: 400; color: var(--texto-2); }
+  .documento-proposta:not(.para-pdf) .andar-totais { grid-template-columns: 1fr 1fr; }
   .documento-proposta:not(.para-pdf) .assinatura { border-left: 0; padding-left: 0; border-top: 1px solid var(--linha); padding-top: calc(2 * var(--cq)); }
   .documento-proposta:not(.para-pdf) .marca-rascunho { position: static; margin: 3cqw 0 0 5cqw; justify-self: start; width: fit-content; }
 }

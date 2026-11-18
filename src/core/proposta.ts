@@ -16,10 +16,18 @@ export type Item = {
   complexidade?: string | null;
   fator?: number; // multiplicador da complexidade (1 = sem ajuste)
   total: number; // reais, sempre recalculado por totalItem
+  // Onde o serviço é feito (ex.: "Quartos e circulação"). Aparece na tabela por pavimento.
+  onde?: string;
   // Etapas que a obra recebe ao converter (o orçamento automático preenche com as durações).
   etapas?: { nome: string; descricao?: string; percentual?: number | null; duracao_dias?: number | null }[];
 };
-export type Ambiente = { id: string; nome: string; itens: Item[] };
+export type Ambiente = {
+  id: string; nome: string; itens: Item[];
+  // Andar ou área a que o grupo pertence (ex.: "1º andar", "Área externa"). Com ele, a proposta sai andar por andar.
+  pavimento?: string;
+  // Frase curta abaixo do título do grupo (ex.: "Na cozinha as paredes são de azulejo: entra só o teto").
+  nota?: string;
+};
 export type Responsabilidade = { parte: string; itens: string[] };
 export type Etapa = { nome: string; descricao?: string; prazo_dias?: number | null; percentual?: number | null };
 export type ParcelaProposta = { descricao: string; valor: number; quando?: string };
@@ -153,6 +161,44 @@ export function totalAmbiente(a: Ambiente): Centavos {
 
 export function totalConteudo(c: Conteudo): Centavos {
   return somar(c.ambientes.map(totalAmbiente));
+}
+
+/** Um pavimento com os seus grupos, na ordem em que aparecem na proposta. */
+export type Pavimento = { nome: string; grupos: { ai: number; amb: Ambiente; total: Centavos }[]; total: Centavos };
+
+export const SEM_PAVIMENTO = 'Outros serviços';
+
+/** A proposta está organizada por pavimento quando algum grupo tem andar definido. */
+export function temPavimentos(c: Pick<Conteudo, 'ambientes'>): boolean {
+  return c.ambientes.some((a) => !!a.pavimento?.trim());
+}
+
+/** Agrupa os grupos por pavimento, na ordem da primeira aparição. Grupos sem andar vão para "Outros serviços". */
+export function pavimentos(c: Pick<Conteudo, 'ambientes'>): Pavimento[] {
+  const mapa = new Map<string, Pavimento>();
+  c.ambientes.forEach((amb, ai) => {
+    const nome = amb.pavimento?.trim() || SEM_PAVIMENTO;
+    const p = mapa.get(nome) ?? { nome, grupos: [], total: 0 };
+    const total = totalAmbiente(amb);
+    p.grupos.push({ ai, amb, total });
+    p.total += total;
+    mapa.set(nome, p);
+  });
+  return Array.from(mapa.values());
+}
+
+/** Título do grupo na proposta: "2º andar · Pintura"; quando o grupo tem o mesmo nome do andar, só o nome. */
+export function tituloGrupo(a: Pick<Ambiente, 'nome' | 'pavimento'>): string {
+  const p = a.pavimento?.trim();
+  if (!p || p.toLowerCase() === a.nome.trim().toLowerCase()) return a.nome;
+  if (/^servi[cç]os$/i.test(a.nome.trim())) return p;
+  return `${p} · ${a.nome}`;
+}
+
+/** Os pavimentos sugeridos ao montar uma reforma de n andares. */
+export function nomesPavimentos(n: number, extras: { externa?: boolean; todos?: boolean } = {}): string[] {
+  const andares = Array.from({ length: Math.max(1, Math.min(30, Math.round(n) || 1)) }, (_, i) => `${i + 1}º andar`);
+  return [...andares, ...(extras.externa ? ['Área externa e fachadas'] : []), ...(extras.todos ? ['Todos os andares'] : [])];
 }
 
 export function somaParcelas(c: Conteudo): Centavos {
