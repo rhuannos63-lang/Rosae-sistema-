@@ -33,6 +33,7 @@ import { ContratoDoAceite } from '../components/ContratoDoAceite';
 import { baixarArquivo, compartilharArquivo, gerarPdfProposta, nomeDoPdf, paraBase64 } from '../lib/pdfProposta';
 import type { Orcamento } from '../core/orcamento';
 import { ComposicaoProposta } from '../components/ComposicaoProposta';
+import { MontadorObra } from '../components/MontadorObra';
 import { PADROES, type Padrao, type Uso } from '../core/composicao';
 import { codigosDe } from '../core/condicoes';
 import { carregarCondicoes } from '../lib/composicoes';
@@ -182,7 +183,7 @@ type Carga = {
 };
 
 const ABAS = [
-  ['auto', 'Orçamento automático'], ['revisao', 'Editar na página e emitir'], ['geral', 'Apresentação'], ['escopo', 'Escopo e valores'], ['incluso', 'Incluso / não incluso'], ['resp', 'Responsabilidades'],
+  ['auto', 'Orçamento automático'], ['andar', 'Montar andar por andar'], ['revisao', 'Editar na página e emitir'], ['geral', 'Apresentação'], ['escopo', 'Escopo e valores'], ['incluso', 'Incluso / não incluso'], ['resp', 'Responsabilidades'],
   ['prazo', 'Etapas e prazo'], ['pagamento', 'Pagamento'], ['condicoes', 'Premissas'], ['custos', 'Custos internos'],
 ] as const;
 type Aba = (typeof ABAS)[number][0];
@@ -422,7 +423,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
       <nav className="abas" aria-label="Partes da proposta">
         {ABAS.filter(([k]) => k !== 'custos' || podeFinanceiro).map(([k, r], i) => (
           <Fragment key={k}>
-            {i === 2 && <span className="abas-grupo">Ajustes por formulário</span>}
+            {i === 3 && <span className="abas-grupo">Ajustes por formulário</span>}
             <button className={`${aba === k ? 'ativo' : ''}${k === 'revisao' ? ' aba-principal' : ''}`} onClick={() => setAba(k)}><span className="n">{i + 1}</span>{r}</button>
           </Fragment>
         ))}
@@ -450,6 +451,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
             setAba('revisao');
           }} />
         )}
+        {aba === 'andar' && <MontadorObra c={c} setC={setCValores} podeEditarPrecos={podeFinanceiro} />}
         {aba === 'geral' && <AbaGeral c={c} setC={setC} biblioteca={carga.biblioteca} irPara={setAba} aditivo={carga.proposta.tipo === 'aditivo'} />}
         {aba === 'escopo' && <AbaEscopo c={c} setC={setCValores} biblioteca={carga.biblioteca} />}
         {aba === 'incluso' && (

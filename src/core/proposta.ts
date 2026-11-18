@@ -18,6 +18,10 @@ export type Item = {
   total: number; // reais, sempre recalculado por totalItem
   // Onde o serviço é feito (ex.: "Quartos e circulação"). Aparece na tabela por pavimento.
   onde?: string;
+  // Medidas usadas no montador (pintura: paredes e teto em m²).
+  medidas?: { parede?: number; teto?: number };
+  // Serviço do catálogo do montador de onde o item saiu (para gravar o preço como padrão).
+  catalogo?: string;
   // Etapas que a obra recebe ao converter (o orçamento automático preenche com as durações).
   etapas?: { nome: string; descricao?: string; percentual?: number | null; duracao_dias?: number | null }[];
 };
