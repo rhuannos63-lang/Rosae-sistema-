@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { andaresDaReforma, gerarOrcamento, parametrosPadrao, respostasPadrao } from './orcamento';
-import { conteudoVazio, pavimentos, prepararParaSalvar, somaParcelas, temPavimentos, tituloGrupo, totalConteudo, type Conteudo } from './proposta';
+import { conteudoVazio, nomeGrupo, pavimentos, tituloServico, prepararParaSalvar, somaParcelas, temPavimentos, tituloGrupo, totalConteudo, type Conteudo } from './proposta';
 
 const item = (titulo: string, valor: number, onde = '') => ({ id: titulo, titulo, onde, descricao: '', unidade: 'vb', quantidade: 1, preco_unitario: valor, total: valor });
 
@@ -29,6 +29,13 @@ describe('proposta por pavimento', () => {
     expect(tituloGrupo(c.ambientes[1])).toBe('Área externa e fachadas');
     expect(tituloGrupo({ nome: 'Serviços', pavimento: '2º andar' })).toBe('2º andar');
     expect(tituloGrupo(c.ambientes[3])).toBe('Avulso');
+  });
+
+  it('aceita grupo e serviço já com andar e onde no nome (propostas feitas antes do campo)', () => {
+    expect(nomeGrupo({ nome: '2º andar · Pintura', pavimento: '2º andar' })).toBe('Pintura');
+    expect(tituloGrupo({ nome: '2º andar · Pintura', pavimento: '2º andar' })).toBe('2º andar · Pintura');
+    expect(tituloServico({ titulo: 'Teto · Banheiro social', onde: 'Banheiro social' })).toBe('Teto');
+    expect(tituloServico({ titulo: 'Teto', onde: 'Banheiro social' })).toBe('Teto');
   });
 
   it('proposta sem andar continua como antes', () => {

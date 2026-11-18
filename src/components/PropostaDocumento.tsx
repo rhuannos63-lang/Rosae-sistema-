@@ -10,7 +10,7 @@ import {
   ajustarTotal, alternarPagina, areaDaProposta, compromissosPadrao, CONDICOES_GERAIS_PADRAO, dataEntrega, datasDasEtapas, definirTotalItem,
   incluirAmbiente, incluirEtapa, incluirItem, incluirParcela, mudarEtapa, mudarItem, mudarQuantidade, paginaOculta, paraCentavos, selosPadrao,
   textoParcelamento, tirarAmbiente, tirarDaLista, tirarEtapa, tirarItem, tirarPacote, tirarParcela, totalAmbiente, totalConteudo, totalItem,
-  valorPorMetro, pavimentos, temPavimentos, tituloGrupo, PAGINAS_OPCIONAIS, UNIDADES, type Conteudo, type Item, type Pavimento,
+  valorPorMetro, nomeGrupo, pavimentos, temPavimentos, tituloGrupo, tituloServico, PAGINAS_OPCIONAIS, UNIDADES, type Conteudo, type Item, type Pavimento,
 } from '../core/proposta';
 
 export type EmpresaPublica = {
@@ -400,7 +400,7 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
                   <tbody>
                     {bl.map(({ item, ii }) => (
                       <tr key={item.id ?? ii}>
-                        <td className="andar-servico"><T v={item.titulo} set={(s) => s && mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, titulo: s })))} ph="Serviço" /><X rotulo={`Tirar "${item.titulo}"`} aoClicar={() => mudar((x) => tirarItem(x, ai, ii))} />{!ed && item.onde && <small className="onde-movel">{item.onde}</small>}</td>
+                        <td className="andar-servico"><T v={ed ? item.titulo : tituloServico(item)} set={(s) => s && mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, titulo: s })))} ph="Serviço" /><X rotulo={`Tirar "${item.titulo}"`} aoClicar={() => mudar((x) => tirarItem(x, ai, ii))} />{!ed && item.onde && <small className="onde-movel">{item.onde}</small>}</td>
                         {temOnde && <td className="onde"><T v={item.onde ?? ''} set={(s) => mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, onde: s })))} ph="Onde" /></td>}
                         <td><T v={item.descricao ?? ''} set={(s) => mudar((x) => mudarItem(x, ai, ii, (i) => ({ ...i, descricao: s })))} multi ph="O que será feito" /></td>
                         <td className="num muted">{ed ? <N v={item.quantidade} set={(n) => mudar((x) => mudarQuantidade(x, ai, ii, n))} sufixo={` ${UNIDADES[item.unidade] ?? item.unidade}`} /> : qtd(item)}</td>
@@ -413,7 +413,7 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
                 {ultimo && <Mais aoClicar={() => mudar((x) => incluirItem(x, ai))}>Incluir serviço neste grupo</Mais>}
                 {ultimo && ultimoGrupo && pav.grupos.length > 1 && (
                   <div className="andar-totais">
-                    {pav.grupos.map((g) => <div key={g.ai}><span>{g.amb.nome}</span><b className="num">{formatar(g.total)}</b></div>)}
+                    {pav.grupos.map((g) => <div key={g.ai}><span>{nomeGrupo(g.amb)}</span><b className="num">{formatar(g.total)}</b></div>)}
                     <div className="andar-total"><span>Total do {pav.nome}</span><b className="num">{formatar(pav.total)}</b></div>
                   </div>
                 )}
@@ -655,7 +655,7 @@ export function PropostaDocumento({ d, edicao, escolha, pdf }: { d: DadosDocumen
               {andares.map((pav) => (
                 <tr key={pav.nome}>
                   <td><b>{pav.nome}</b></td>
-                  <td className="andares-grupos">{pav.grupos.map((g) => g.amb.nome).join(' · ')}</td>
+                  <td className="andares-grupos">{pav.grupos.map((g) => nomeGrupo(g.amb)).join(' · ')}</td>
                   <td className="num">{formatar(pav.total)}</td>
                 </tr>
               ))}

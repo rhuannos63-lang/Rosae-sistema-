@@ -187,12 +187,26 @@ export function pavimentos(c: Pick<Conteudo, 'ambientes'>): Pavimento[] {
   return Array.from(mapa.values());
 }
 
+/** Nome do grupo sem o andar na frente ("1º andar · Pintura" com andar "1º andar" vira "Pintura"). */
+export function nomeGrupo(a: Pick<Ambiente, 'nome' | 'pavimento'>): string {
+  const p = a.pavimento?.trim();
+  const n = a.nome.trim();
+  return p && n.toLowerCase().startsWith(`${p.toLowerCase()} · `) ? n.slice(p.length + 3) : n;
+}
+
 /** Título do grupo na proposta: "2º andar · Pintura"; quando o grupo tem o mesmo nome do andar, só o nome. */
 export function tituloGrupo(a: Pick<Ambiente, 'nome' | 'pavimento'>): string {
   const p = a.pavimento?.trim();
-  if (!p || p.toLowerCase() === a.nome.trim().toLowerCase()) return a.nome;
-  if (/^servi[cç]os$/i.test(a.nome.trim())) return p;
-  return `${p} · ${a.nome}`;
+  const n = nomeGrupo(a);
+  if (!p || p.toLowerCase() === n.toLowerCase()) return n;
+  if (/^servi[cç]os$/i.test(n)) return p;
+  return `${p} · ${n}`;
+}
+
+/** Nome do serviço sem o "onde" no fim, quando ele já aparece na coluna Onde ("Teto · Banheiro" vira "Teto"). */
+export function tituloServico(i: Pick<Item, 'titulo' | 'onde'>): string {
+  const o = i.onde?.trim();
+  return o && i.titulo.endsWith(` · ${o}`) ? i.titulo.slice(0, -(o.length + 3)) : i.titulo;
 }
 
 /** Os pavimentos sugeridos ao montar uma reforma de n andares. */
