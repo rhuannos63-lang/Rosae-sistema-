@@ -16,6 +16,8 @@ if [ -z "${DATABASE_URL:-}" ]; then
   trap cleanup EXIT
   DATABASE_URL="postgresql://postgres@/postgres?host=$TMP&port=54329"
 fi
+# As regras de data do banco usam o dia de São Paulo; os testes usam o mesmo relógio (senão falham das 21h à meia-noite).
+export PGTZ=America/Sao_Paulo
 PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -X)
 "${PSQL[@]}" -f "$DIR/00_stub_supabase.sql"
 for f in "$ROOT"/migrations/*.sql; do "${PSQL[@]}" -f "$f"; done

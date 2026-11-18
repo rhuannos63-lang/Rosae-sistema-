@@ -33,10 +33,11 @@ import { ContratoDoAceite } from '../components/ContratoDoAceite';
 import { baixarArquivo, compartilharArquivo, gerarPdfProposta, nomeDoPdf, paraBase64 } from '../lib/pdfProposta';
 import type { Orcamento } from '../core/orcamento';
 import { ComposicaoProposta } from '../components/ComposicaoProposta';
+import { MontadorObra } from '../components/MontadorObra';
 import { PADROES, type Padrao, type Uso } from '../core/composicao';
 import { codigosDe } from '../core/condicoes';
 import { carregarCondicoes } from '../lib/composicoes';
-import { definirTotalItem, mudarItem as mudarItemConteudo } from '../core/proposta';
+import { definirTotalItem, mudarItem as mudarItemConteudo, nomesPavimentos } from '../core/proposta';
 
 type Filtro = 'com_cliente' | 'rascunho' | 'aprovada' | 'recusada' | 'todas' | Situacao;
 const FILTROS: { id: Filtro; rotulo: string }[] = [
@@ -182,7 +183,7 @@ type Carga = {
 };
 
 const ABAS = [
-  ['auto', 'Orçamento automático'], ['revisao', 'Editar na página e emitir'], ['geral', 'Apresentação'], ['escopo', 'Escopo e valores'], ['incluso', 'Incluso / não incluso'], ['resp', 'Responsabilidades'],
+  ['auto', 'Orçamento automático'], ['andar', 'Montar andar por andar'], ['revisao', 'Editar na página e emitir'], ['geral', 'Apresentação'], ['escopo', 'Escopo e valores'], ['incluso', 'Incluso / não incluso'], ['resp', 'Responsabilidades'],
   ['prazo', 'Etapas e prazo'], ['pagamento', 'Pagamento'], ['condicoes', 'Premissas'], ['custos', 'Custos internos'],
 ] as const;
 type Aba = (typeof ABAS)[number][0];
@@ -422,7 +423,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
       <nav className="abas" aria-label="Partes da proposta">
         {ABAS.filter(([k]) => k !== 'custos' || podeFinanceiro).map(([k, r], i) => (
           <Fragment key={k}>
-            {i === 2 && <span className="abas-grupo">Ajustes por formulário</span>}
+            {i === 3 && <span className="abas-grupo">Ajustes por formulário</span>}
             <button className={`${aba === k ? 'ativo' : ''}${k === 'revisao' ? ' aba-principal' : ''}`} onClick={() => setAba(k)}><span className="n">{i + 1}</span>{r}</button>
           </Fragment>
         ))}
@@ -450,6 +451,7 @@ function EditorVersao({ carga, versao, anterior, podeFinanceiro, aoEmitir }: { c
             setAba('revisao');
           }} />
         )}
+        {aba === 'andar' && <MontadorObra c={c} setC={setCValores} podeEditarPrecos={podeFinanceiro} />}
         {aba === 'geral' && <AbaGeral c={c} setC={setC} biblioteca={carga.biblioteca} irPara={setAba} aditivo={carga.proposta.tipo === 'aditivo'} />}
         {aba === 'escopo' && <AbaEscopo c={c} setC={setCValores} biblioteca={carga.biblioteca} />}
         {aba === 'incluso' && (
@@ -609,6 +611,11 @@ function AbaGeral({ c, setC, biblioteca, irPara, aditivo }: { c: Conteudo; setC:
   );
 }
 
+/** Andares já usados na proposta, seguidos dos mais comuns. */
+function unicosAndares(c: Conteudo): string[] {
+  return Array.from(new Set([...c.ambientes.map((a) => a.pavimento?.trim() ?? '').filter(Boolean), ...nomesPavimentos(5, { externa: true, todos: true }), 'Térreo', 'Cobertura', 'Subsolo']));
+}
+
 function AbaEscopo({ c, setC, biblioteca }: { c: Conteudo; setC: SetC; biblioteca: ModeloServico[] }) {
   const porId = useMemo(() => new Map(biblioteca.map((m) => [m.id, m])), [biblioteca]);
   const mudarAmb = (id: string, f: (a: Ambiente) => Ambiente) => setC((x) => ({ ...x, ambientes: x.ambientes.map((a) => (a.id === id ? f(a) : a)) }));
@@ -623,20 +630,26 @@ function AbaEscopo({ c, setC, biblioteca }: { c: Conteudo; setC: SetC; bibliotec
   return (
     <div className="stack">
       {c.ambientes.length > 0 && <TotalProposta c={c} setC={setC} />}
-      <p className="muted small" style={{ margin: 0 }}>Organize por ambiente (sala, cozinha…) ou use um único bloco “Escopo geral”. Ao escolher um serviço da biblioteca, os textos padrão dele entram nas outras partes.</p>
+      <p className="muted small" style={{ margin: 0 }}>Organize por ambiente (sala, cozinha…) ou use um único bloco “Escopo geral”. Em reforma de casa ou prédio, preencha o andar de cada grupo: a proposta sai andar por andar, com o valor de cada um. Ao escolher um serviço da biblioteca, os textos padrão dele entram nas outras partes.</p>
+      <datalist id="lista-andares">{unicosAndares(c).map((n) => <option key={n} value={n} />)}</datalist>
       {c.ambientes.map((a, ai) => (
         <div key={a.id} className="bloco-ambiente">
           <div className="row" style={{ flexWrap: 'nowrap' }}>
+            <input value={a.pavimento ?? ''} onChange={(e) => mudarAmb(a.id, (x) => ({ ...x, pavimento: e.target.value }))} aria-label="Andar" placeholder="Andar (opcional)" list="lista-andares" style={{ maxWidth: 190 }} />
             <input className="titulo-amb" value={a.nome} onChange={(e) => mudarAmb(a.id, (x) => ({ ...x, nome: e.target.value }))} aria-label="Nome do ambiente" />
             <span className="num muted">{formatar(totalAmbiente(a))}</span>
             <button className="btn-link" aria-label="Remover ambiente" onClick={() => window.confirm(`Remover "${a.nome}" e seus itens?`) && setC((x) => ({ ...x, ambientes: x.ambientes.filter((y) => y.id !== a.id) }))}><Icone nome="fechar" /></button>
           </div>
+          {(a.pavimento || a.nota) && <input value={a.nota ?? ''} onChange={(e) => mudarAmb(a.id, (x) => ({ ...x, nota: e.target.value }))} aria-label="Frase do grupo" placeholder="Frase curta para o cliente sobre este grupo (opcional)" />}
           {a.itens.map((i, ii) => {
             const m = i.modelo_id ? porId.get(i.modelo_id) : undefined;
             return (
               <div key={i.id} className="item-escopo">
                 <div className="grid" style={{ gridTemplateColumns: '1fr', gap: 6 }}>
-                  <input value={i.titulo} onChange={(e) => mudarItem(a.id, i.id, { titulo: e.target.value })} aria-label="Serviço" style={{ fontWeight: 600 }} />
+                  <div className="row" style={{ flexWrap: 'nowrap' }}>
+                    <input value={i.titulo} onChange={(e) => mudarItem(a.id, i.id, { titulo: e.target.value })} aria-label="Serviço" style={{ fontWeight: 600, flex: 1 }} />
+                    {a.pavimento && <input value={i.onde ?? ''} onChange={(e) => mudarItem(a.id, i.id, { onde: e.target.value })} aria-label="Onde" placeholder="Onde (ex.: quartos)" style={{ flex: 1 }} />}
+                  </div>
                   <textarea rows={2} value={i.descricao ?? ''} onChange={(e) => mudarItem(a.id, i.id, { descricao: e.target.value })} aria-label="Descrição para o cliente" placeholder="Descrição que o cliente vai ler" />
                 </div>
                 <div className="linha-valores">
