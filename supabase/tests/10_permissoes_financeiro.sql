@@ -85,7 +85,7 @@ select public.salvar_lancamento(jsonb_build_object(
   'valor_total', '1000.00', 'data_competencia', '2026-10-10',
   'parcelas', jsonb_build_array(
     jsonb_build_object('numero', 1, 'valor', '333.34', 'vencimento', '2026-10-15'),
-    jsonb_build_object('numero', 2, 'valor', '333.33', 'vencimento', '2026-11-15'),
+    jsonb_build_object('numero', 2, 'valor', '333.33', 'vencimento', (now() at time zone 'America/Sao_Paulo')::date + 30),
     jsonb_build_object('numero', 3, 'valor', '333.33', 'vencimento', '2099-12-15'))));
 select pg_temp.igual((select codigo from public.lancamento where descricao = 'Contrato obra um'), 'CR-000001', 'código CR');
 select pg_temp.igual((select sum(valor) from public.parcela), 1000.00::numeric, 'soma das parcelas');
