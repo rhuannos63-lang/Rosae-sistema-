@@ -917,13 +917,21 @@ function Converter({ proposta, versaoId }: { proposta: Proposta; versaoId: strin
   return (
     <div className="stack" style={{ marginTop: 10 }}>
       {feito ? (
-        <Link className="btn-secundario" to={`/obras/${obraId}`}>{proposta.tipo === 'aditivo' ? 'Aditivo já incorporado · abrir obra' : 'Abrir a obra criada'}</Link>
+        <>
+          <div className="aviso ok" style={{ margin: 0 }}>
+            <span>O valor aceito já está em <b>A receber</b>, com as parcelas das condições aprovadas. Gerar contrato é opcional.</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Link className="btn-secundario" to="/financeiro?tipo=receber&situacao=abertas">Ver em A receber</Link>
+            <Link className="btn-secundario" to={`/obras/${obraId}`}>{proposta.tipo === 'aditivo' ? 'Abrir a obra' : 'Abrir o serviço / obra'}</Link>
+          </div>
+        </>
       ) : (
         <>
           <button className="btn-primario" onClick={converter} disabled={rodando}>{proposta.tipo === 'aditivo' ? 'Incorporar aditivo à obra' : 'Converter em obra'}</button>
           <p className="muted small" style={{ margin: 0 }}>{proposta.tipo === 'aditivo'
             ? 'Cria os serviços, etapas e a previsão de recebimento do aditivo na obra. O contrato original fica como está.'
-            : 'Cria a obra com ambientes, serviços e quantidades da versão aprovada, orçamento-base com o valor vendido, etapas e materiais sugeridos e a previsão de recebimentos. A proposta aprovada fica guardada como referência. Pode clicar de novo: não duplica.'}</p>
+            : 'Normalmente isto acontece sozinho no aceite. Se não aconteceu, este botão cria a obra com os serviços, as etapas e o valor em A receber. Pode clicar de novo: não duplica.'}</p>
         </>
       )}
       <Erro mensagem={erro} />

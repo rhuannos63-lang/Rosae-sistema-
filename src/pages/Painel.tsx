@@ -26,7 +26,7 @@ function KpisComerciais({ c: bruto }: { c: Comercial | null | undefined }) {
   for (const k of ['enviadas', 'em_negociacao', 'aprovadas_periodo', 'rascunhos', 'oportunidades_abertas', 'acoes_atrasadas'] as const) c[k] = n(bruto[k]);
   return (
     <>
-      <Kpi rotulo="Propostas em aberto" valor={String(c.enviadas + c.em_negociacao)} det={<>{c.em_negociacao} em negociação · {c.rascunhos} rascunho(s) · {c.aprovadas_periodo} aprovada(s) no período</>} para="/propostas" />
+      <Kpi rotulo="Aceitos no período" valor={String(c.aprovadas_periodo)} det="Orçamentos aceitos pelos clientes" para="/propostas?estado=aprovada" />
       <Kpi rotulo="Oportunidades" valor={String(c.oportunidades_abertas)} det={c.acoes_atrasadas > 0 ? <span style={{ color: 'var(--desfavoravel)' }}>{c.acoes_atrasadas} com ação atrasada</span> : 'Nenhuma ação atrasada'} para="/comercial" ajuda="Contatos em andamento no funil. Formulários do site e cliques no WhatsApp do período aparecem no Comercial." />
     </>
   );
@@ -189,52 +189,52 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
   const metaVen = ind.meta_vendas === null ? null : c('meta_vendas') * meses;
   const resultadoCaixa = c('recebido') - c('pago_obras') - c('pago_empresa');
   const ca = (k: string) => (anterior ? doBanco(anterior[k] as string) : null);
-  const caixaDe = (i: Indicadores) => doBanco(i.recebido as string) - doBanco(i.pago_obras as string) - doBanco(i.pago_empresa as string);
   const rotulosSerie = serie.map((s) => nomeMesCurto(s.mes));
   const tend = (f: (s: Serie) => Centavos): Tendencia => ({ valores: serie.map(f), rotulos: rotulosSerie });
   const tRec = tend((s) => doBanco(s.recebido));
   const tVen = tend((s) => doBanco(s.vendido));
-  const tRes = tend((s) => doBanco(s.recebido) - doBanco(s.pago));
 
   return (
     <>
       {ind.gerencial && (
         <div className="aviso info" style={{ marginBottom: 14 }}>
           <span>
-            Valores <b>gerenciais (estimados)</b>: ainda não há regra de reconhecimento de receita configurada. Vendido, recebido e resultado são números diferentes e aparecem separados.
+            Valores <b>gerenciais (estimados)</b>: ainda não há regra de reconhecimento de receita configurada. Aceito, a receber, recebido e resultado são números diferentes e aparecem separados.
           </span>
         </div>
       )}
-      <div className="bi-kpis">
+      <div className={`bi-kpis${c('recebido') === 0 ? ' tres' : ''}`}>
         <KpiBI
-          rotulo="Recebido de clientes" centavos={c('recebido')} anterior={ca('recebido')} rotuloAnt={rotuloAnt} tendencia={tRec}
-          para={`/contas?grupo=recebido&${qs}`}
-          ajuda="Dinheiro que de fato entrou de clientes no período (recebimentos registrados, já descontados estornos). Não inclui transferências entre suas contas nem rendimentos."
-        />
-        <KpiBI
-          rotulo="Vendido (contratado)" centavos={c('vendido')} anterior={ca('vendido')} rotuloAnt={rotuloAnt} tendencia={tVen}
+          rotulo="Aceito pelos clientes" centavos={c('vendido')} anterior={ca('vendido')} rotuloAnt={rotuloAnt} tendencia={tVen}
           para="/propostas?estado=aprovada"
-          ajuda="Propostas e aditivos aceitos pelo cliente no período (versão aprovada), mais obras lançadas sem proposta pela data de contratação. Vendido não é dinheiro em caixa."
+          ajuda="Orçamentos e aditivos que o cliente aceitou no período, mais obras lançadas sem proposta. O que está só orçado (ainda sem aceite) não entra aqui: fica no Comercial. No aceite o valor já vai para A receber, com ou sem contrato."
         />
         <KpiBI
-          rotulo="Resultado de caixa" centavos={resultadoCaixa} anterior={anterior ? caixaDe(anterior) : null} rotuloAnt={rotuloAnt} tendencia={tRes}
-          para={`/contas?grupo=operacional&${qs}`}
-          ajuda="Critério: regime de caixa, só o que entrou e saiu no período (recebido − pago em obras − despesas da empresa). Não é lucro contábil."
+          rotulo="A receber" centavos={c('a_receber')}
+          det={c('a_receber_vencido') > 0 ? <span style={{ color: 'var(--desfavoravel)' }}>{formatar(c('a_receber_vencido'))} vencido</span> : 'Tudo o que foi aceito e ainda não entrou · nada vencido'}
+          para="/financeiro?tipo=receber&situacao=abertas"
+          ajuda="Soma das parcelas em aberto dos orçamentos aceitos (e de outros lançamentos a receber). Hoje, independente do período."
         />
+        {c('recebido') !== 0 && (
+          <KpiBI
+            rotulo="Recebido de clientes" centavos={c('recebido')} anterior={ca('recebido')} rotuloAnt={rotuloAnt} tendencia={tRec}
+            para={`/contas?grupo=recebido&${qs}`}
+            ajuda="Dinheiro que de fato entrou de clientes no período (recebimentos registrados, já descontados estornos). Não inclui transferências entre suas contas nem rendimentos."
+          />
+        )}
         <KpiBI
           rotulo="Saldo nas contas" centavos={c('saldo_contas')} det="Hoje, somando todas as contas ativas" para="/contas"
         />
       </div>
 
       <Faixa itens={[
-        { rotulo: 'A receber', valor: formatar(c('a_receber')), det: c('a_receber_vencido') > 0 ? `${formatar(c('a_receber_vencido'))} vencido` : 'Nada vencido', alerta: c('a_receber_vencido') > 0, para: '/financeiro?tipo=receber&situacao=abertas' },
+        { rotulo: 'Resultado de caixa', valor: formatar(resultadoCaixa), det: 'Entrou − saiu no período', alerta: resultadoCaixa < 0, para: `/contas?grupo=operacional&${qs}` },
         { rotulo: 'A pagar', valor: formatar(c('a_pagar')), det: `${formatar(c('a_pagar_7_dias'))} em 7 dias`, para: '/financeiro?tipo=pagar&situacao=abertas' },
         { rotulo: 'Pago em obras', valor: formatar(c('pago_obras')), det: 'Material e parceiros', para: `/contas?grupo=pago_obras&${qs}` },
         { rotulo: 'Despesas da empresa', valor: formatar(c('pago_empresa')), det: 'Pagas no período', para: `/contas?grupo=pago_empresa&${qs}` },
         { rotulo: 'Pró-labore', valor: formatar(c('retiradas')), det: 'Retiradas', para: `/contas?grupo=retiradas&${qs}` },
         { rotulo: 'Obras ativas', valor: String(n(ind.obras_ativas)), det: 'Contratadas ou em execução', para: '/obras' },
         ...(ind.comercial ? [
-          { rotulo: 'Propostas em aberto', valor: String(ind.comercial.enviadas + ind.comercial.em_negociacao), det: `${ind.comercial.aprovadas_periodo} aprovada(s)`, para: '/propostas' },
           { rotulo: 'Oportunidades', valor: String(ind.comercial.oportunidades_abertas), det: ind.comercial.acoes_atrasadas > 0 ? `${ind.comercial.acoes_atrasadas} atrasada(s)` : 'Em dia', alerta: ind.comercial.acoes_atrasadas > 0, para: '/comercial' },
         ] : []),
         ...(c('outras_entradas') !== 0 ? [{ rotulo: 'Outras entradas', valor: formatar(c('outras_entradas')), det: 'Rendimentos e aportes', para: `/contas?grupo=outras&${qs}` }] : []),
@@ -253,7 +253,7 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
           </div>
           <div className="bi-medidores">
             <Medidor rotulo="Recebimentos" valor={c('recebido')} meta={metaRec} formatar={formatarCompacto} />
-            <Medidor rotulo="Vendas" valor={c('vendido')} meta={metaVen} formatar={formatarCompacto} />
+            <Medidor rotulo="Aceitos" valor={c('vendido')} meta={metaVen} formatar={formatarCompacto} />
           </div>
         </div>
       </div>
@@ -272,7 +272,7 @@ function Comparativo({ atual, anterior, anoAnterior, rotulo, rotuloAnt, rotuloAn
   const v = (i: Indicadores, k: string) => doBanco(i[k] as string);
   const caixa = (i: Indicadores) => v(i, 'recebido') - v(i, 'pago_obras') - v(i, 'pago_empresa');
   const linhas: { rotulo: string; f: (i: Indicadores) => Centavos; custo?: boolean }[] = [
-    { rotulo: 'Vendido', f: (i) => v(i, 'vendido') },
+    { rotulo: 'Aceito pelos clientes', f: (i) => v(i, 'vendido') },
     { rotulo: 'Recebido de clientes', f: (i) => v(i, 'recebido') },
     { rotulo: 'Pago em obras', f: (i) => v(i, 'pago_obras'), custo: true },
     { rotulo: 'Despesas da empresa', f: (i) => v(i, 'pago_empresa'), custo: true },
