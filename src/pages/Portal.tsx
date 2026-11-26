@@ -8,6 +8,7 @@ import { novaChave } from '../lib/consulta';
 import { Carregando } from '../components/ui';
 import { Icone } from '../components/Icone';
 import { CenaServico } from '../components/CenaServico';
+import { ListaArquivosEntrega, type ArquivoEntrega } from './EntregaPublica';
 import { calcularJornada, faseAtual, perfilDaObra, PERFIS, type FaseCalculada, type Perfil } from '../core/jornada';
 import { formatarData, formatarDataHora, hoje as hojeISO } from '../core/datas';
 import { SERVICO, haQuanto, linhaDoTempo, proximoMarco, seuTrabalho, doTrabalho, type ConfigServico } from '../core/portalServico';
@@ -271,6 +272,8 @@ function Inicio({ ctx, irPara }: { ctx: Ctx; irPara: (a: Aba) => void }) {
       {d.obra.boas_vindas && <p className="portal-boas-vindas">{d.obra.boas_vindas}</p>}
 
       <Agora ctx={ctx} fases={fases} />
+
+      <DocumentosPortal token={ctx.token} />
 
       {(medicaoAberta || decisoes.length > 0) && (
         <section className="portal-card portal-destaque portal-aguardando">
@@ -997,5 +1000,26 @@ function Mensagens({ ctx }: { ctx: Ctx }) {
         </section>
       )}
     </div>
+  );
+}
+
+/** Documentos que a ROSAE entregou (projeto, laudo, processo), para baixar quando quiser. */
+function DocumentosPortal({ token }: { token: string | null }) {
+  const [lista, setLista] = useState<{ id: string; titulo: string; criado_em: string; arquivos: ArquivoEntrega[] }[]>([]);
+  useEffect(() => {
+    if (!token) return;
+    supabase.rpc('portal_entregas', { p_token: token }).then((r) => { if (!r.error) setLista((r.data ?? []) as typeof lista); });
+  }, [token]);
+  if (!lista.length) return null;
+  return (
+    <section className="portal-card portal-destaque">
+      <h2><Icone nome="documento" /> Seus documentos</h2>
+      {lista.map((e) => (
+        <div key={e.id} style={{ marginTop: 10 }}>
+          <strong>{e.titulo}</strong><span className="muted small"> · {formatarData(e.criado_em.slice(0, 10))}</span>
+          <ListaArquivosEntrega arquivos={e.arquivos} acesso={{ portal: token! }} />
+        </div>
+      ))}
+    </section>
   );
 }

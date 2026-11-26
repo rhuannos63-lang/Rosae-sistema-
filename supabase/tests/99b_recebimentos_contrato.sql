@@ -43,7 +43,8 @@ select pg_temp.como('00000000-0000-0000-0000-00000000000a');
 -- Aceite: aparece como fechado, nada recebido, e nenhum movimento de caixa foi criado.
 select pg_temp.igual((pg_temp.contrato((select v from t where k = 'p'))->>'fechado')::numeric, 10000.00, 'fechado = orçamento aceito');
 select pg_temp.igual((pg_temp.contrato((select v from t where k = 'p'))->>'recebido')::numeric, 0::numeric, 'aceite não conta como recebido');
-select pg_temp.igual(pg_temp.contrato((select v from t where k = 'p'))->>'obra_id', null, 'ainda sem obra');
+-- Desde o PR #26 o aceite já cria a obra e o a receber (sem contrato).
+select pg_temp.igual(pg_temp.contrato((select v from t where k = 'p'))->>'obra_id' is not null, true, 'aceite já criou a obra');
 insert into t values ('mov0', (select count(*) from public.movimento)::text);
 
 -- Validações.
@@ -54,10 +55,10 @@ select pg_temp.deve_falhar($$select public.registrar_recebimento_contrato((selec
 select pg_temp.como('00000000-0000-0000-0000-00000000000a');
 select pg_temp.igual((select count(*) from public.movimento)::text, (select v from t where k = 'mov0'), 'recusas não criaram movimento');
 
--- Negociou outra forma: recebeu 3.000 primeiro. O orçamento vira obra e a previsão é abatida.
+-- Negociou outra forma: recebeu 3.000 primeiro. A previsão é abatida na obra criada no aceite.
 insert into t select 'r1', public.registrar_recebimento_contrato((select v::uuid from t where k = 'p'), null,
   (select id from public.conta_bancaria where nome = 'Conta principal'), 3000, current_date - 2, 'PIX', 'rec-1')::text;
-select pg_temp.igual(((select v from t where k = 'r1')::jsonb->>'obra_criada')::boolean, true, 'obra criada no primeiro recebimento');
+select pg_temp.igual(((select v from t where k = 'r1')::jsonb->>'obra_criada')::boolean, false, 'obra já existia (criada no aceite)');
 insert into t select 'o', (select v from t where k = 'r1')::jsonb->>'obra_id';
 select pg_temp.igual((pg_temp.contrato((select v from t where k = 'p'))->>'recebido')::numeric, 3000.00, 'recebido 3.000');
 select pg_temp.igual((pg_temp.contrato((select v from t where k = 'p'))->>'falta_receber')::numeric, 7000.00, 'falta 7.000');

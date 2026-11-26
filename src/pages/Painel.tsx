@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
+import { BotaoRecebimento } from '../components/Recebimentos';
 import { Ajuda, Carregando, Erro } from '../components/ui';
 import { Icone } from '../components/Icone';
 import { doBanco, formatar, type Centavos } from '../core/dinheiro';
@@ -114,7 +115,7 @@ export function Painel() {
   const [ref, setRef] = useState(hoje());
   const p = periodo(tipo, ref);
 
-  const { dados, erro, carregando } = useConsulta(async () => {
+  const { dados, erro, carregando, recarregar } = useConsulta(async () => {
     const pa = periodo(tipo, deslocarPeriodo(tipo, ref, -1));
     const py = periodo(tipo, deslocarPeriodo('ano', ref, -1));
     const [ind, serie, empresa, ant, anoAnt] = await Promise.all([
@@ -137,6 +138,7 @@ export function Painel() {
   return (
     <>
       <Topo titulo={`${saudacao()}, ${primeiroNome}`} sub={<>Situação da ROSAE · {p.rotulo}</>}>
+        {podeFinanceiro && <BotaoRecebimento rotulo="Recebi um pagamento" aoMudar={() => recarregar()} />}
         <div className="segmentado" role="group" aria-label="Período">
           {(['mes', 'semestre', 'ano'] as TipoPeriodo[]).map((t) => (
             <button key={t} className={tipo === t ? 'ativo' : ''} onClick={() => setTipo(t)}>

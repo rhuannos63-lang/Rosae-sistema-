@@ -370,3 +370,8 @@ import_map = "./functions/deno.json"
 [functions.arquivos]
 verify_jwt = false
 import_map = "./functions/deno.json"
+
+# Entrega de documentos: o cliente baixa sem login (o banco confere o link); o envio por e-mail confere o login dentro da função.
+[functions.entrega]
+verify_jwt = false
+import_map = "./functions/deno.json"

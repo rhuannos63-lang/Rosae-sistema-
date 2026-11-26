@@ -22,6 +22,7 @@ export type Pessoa = {
   id: string; codigo: string; tipo_pessoa: 'fisica' | 'juridica'; nome: string; documento: string | null; telefone: string | null;
   email: string | null; eh_cliente: boolean; eh_fornecedor: boolean; eh_prestador: boolean; especialidade: string | null;
   chave_pix: string | null; endereco: string | null; observacoes: string | null; arquivado: boolean; criado_em: string;
+  entregue_em?: string | null; encerrada_em?: string | null;
 };
 
 export type StatusObra = 'em_negociacao' | 'aprovada' | 'contratada' | 'em_execucao' | 'concluida_fisicamente' | 'encerrada_financeiramente' | 'cancelada';
@@ -31,8 +32,8 @@ export const STATUS_OBRA: Record<StatusObra, string> = {
   aprovada: 'Aprovada',
   contratada: 'Contratada',
   em_execucao: 'Em execução',
-  concluida_fisicamente: 'Concluída (física)',
-  encerrada_financeiramente: 'Encerrada (financeiro)',
+  concluida_fisicamente: 'Entregue',
+  encerrada_financeiramente: 'Encerrada',
   cancelada: 'Cancelada',
 };
 

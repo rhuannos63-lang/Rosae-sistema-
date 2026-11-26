@@ -7,7 +7,7 @@ import { useConsulta, ok, novaChave } from '../lib/consulta';
 import { Ajuda, CampoValor, Erro, Modal, useToast } from './ui';
 import { Icone } from './Icone';
 import { doBanco, formatar, paraBanco, type Centavos } from '../core/dinheiro';
-import { formatarData, hoje } from '../core/datas';
+import { formatarData, hoje, somarDias } from '../core/datas';
 import type { ContaBancaria, VMovimento } from '../lib/tipos';
 import { agruparRecebimentos, faltaReceber, percentualRecebido } from '../core/recebimentos';
 
@@ -28,6 +28,7 @@ export function RegistrarRecebimento({ contrato, aoFechar, aoSalvar }: { contrat
   const toast = useToast();
   const contas = useConsulta(async () => ok(await supabase.from('conta_bancaria').select('*').eq('ativa', true).order('ordem')) as ContaBancaria[], []);
   const falta = faltaReceber(contrato);
+  const vencido = doBanco(contrato.previsto_vencido);
   const [valor, setValor] = useState<Centavos | null>(null);
   const [data, setData] = useState(hoje());
   const [conta, setConta] = useState('');
@@ -62,17 +63,28 @@ export function RegistrarRecebimento({ contrato, aoFechar, aoSalvar }: { contrat
       rodape={<><button type="button" className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" form="form-rec" disabled={salvando}>{salvando ? 'Registrando…' : 'Confirmar recebimento'}</button></>}>
       <form id="form-rec" className="stack" onSubmit={salvar}>
         <div className="aviso info"><span><b>{contrato.titulo}</b>{contrato.cliente ? ` · ${contrato.cliente}` : ''}<br />Fechado {formatar(doBanco(contrato.fechado))} · já recebido {formatar(doBanco(contrato.recebido))} · falta {formatar(falta)}</span></div>
-        <div className="grid grid-2">
-          <label className="campo">Quanto entrou<CampoValor valor={valor} aoMudar={setValor} obrigatorio autoFocus /></label>
-          <label className="campo">Quando entrou<input type="date" value={data} max={hoje()} onChange={(e) => setData(e.target.value)} required /></label>
+        <label className="campo">Quanto entrou<CampoValor valor={valor} aoMudar={setValor} obrigatorio autoFocus /></label>
+        {falta > 0 && (
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: -6 }}>
+            {vencido > 0 && vencido < falta && <button type="button" className={`chip-link${valor === vencido ? ' ativo' : ''}`} onClick={() => setValor(vencido)}>Parcela vencida ({formatar(vencido)})</button>}
+            <button type="button" className={`chip-link${valor === falta ? ' ativo' : ''}`} onClick={() => setValor(falta)}>Tudo o que falta ({formatar(falta)})</button>
+            {falta >= 200 && <button type="button" className={`chip-link${valor === Math.round(falta / 2) ? ' ativo' : ''}`} onClick={() => setValor(Math.round(falta / 2))}>Metade ({formatar(Math.round(falta / 2))})</button>}
+          </div>
+        )}
+        <div className="campo">
+          Quando entrou
+          <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <button type="button" className={`chip-link${data === hoje() ? ' ativo' : ''}`} onClick={() => setData(hoje())}>Hoje</button>
+            <button type="button" className={`chip-link${data === somarDias(hoje(), -1) ? ' ativo' : ''}`} onClick={() => setData(somarDias(hoje(), -1))}>Ontem</button>
+            <input type="date" aria-label="Outra data" value={data} max={hoje()} onChange={(e) => setData(e.target.value || hoje())} required style={{ maxWidth: 170 }} />
+          </div>
         </div>
-        {falta > 0 && <div className="row"><button type="button" className="chip-link" onClick={() => setValor(falta)}>Usar o que falta ({formatar(falta)})</button></div>}
-        <label className="campo">
+        {(contas.dados?.length ?? 0) > 1 && <label className="campo">
           Entrou em qual conta?
           <select value={contaEscolhida} onChange={(e) => setConta(e.target.value)}>
             {(contas.dados ?? []).map((c) => <option key={c.id} value={c.id}>{c.nome}{c.instituicao ? ` (${c.instituicao})` : ''}</option>)}
           </select>
-        </label>
+        </label>}
         <label className="campo">Forma / observação<input value={forma} onChange={(e) => setForma(e.target.value)} placeholder="PIX, transferência, dinheiro, entrada combinada…" /></label>
         <p className="muted small" style={{ margin: 0 }}>
           Vale o que foi combinado com o cliente, mesmo que seja diferente das parcelas da proposta. O valor abate da previsão em aberto, da mais antiga para a mais nova.
@@ -167,5 +179,66 @@ export function QuadroRecebido({ propostaId, obraId, aoMudar, compacto }: { prop
       <Erro mensagem={erro} />
       {aberto && <RegistrarRecebimento contrato={c} aoFechar={() => setAberto(false)} aoSalvar={() => { setAberto(false); recarregar(); aoMudar?.(); }} />}
     </div>
+  );
+}
+
+/**
+ * "Registrar recebimento" em qualquer lugar: com a obra (ou o orçamento) já sabida, abre direto;
+ * sem, pergunta de qual contrato foi, com os que têm saldo primeiro.
+ */
+export function BotaoRecebimento({ obraId, propostaId, aoMudar, rotulo = 'Registrar recebimento', classe = 'btn-primario' }: {
+  obraId?: string | null; propostaId?: string | null; aoMudar?: (obraId: string) => void; rotulo?: string; classe?: string;
+}) {
+  const toast = useToast();
+  const [aberto, setAberto] = useState(false);
+  const [escolhido, setEscolhido] = useState<Contrato | null>(null);
+  const [lista, setLista] = useState<Contrato[] | null>(null);
+  const [busca, setBusca] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function abrir() {
+    setErro(null);
+    const todos = await carregarContratos().catch((e) => { setErro(mensagemErro(e)); return null; });
+    if (!todos) return;
+    const direto = todos.find((c) => (propostaId && c.proposta_id === propostaId) || (!propostaId && obraId && c.obra_id === obraId));
+    if (obraId || propostaId) {
+      if (!direto) return toast('Esta obra ainda não tem valor fechado. Lance o valor do contrato no Financeiro da obra.');
+      setEscolhido(direto);
+    } else {
+      setLista([...todos].sort((a, b) => Number(faltaReceber(b) > 0) - Number(faltaReceber(a) > 0) || (b.data_fechamento ?? '').localeCompare(a.data_fechamento ?? '')));
+      setAberto(true);
+    }
+  }
+  const b = busca.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const filtrados = (lista ?? []).filter((c) => !b || [c.titulo, c.codigo, c.cliente, c.obra_nome].some((x) => x?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(b)));
+
+  return (
+    <>
+      <button type="button" className={classe} onClick={abrir}><Icone nome="mais" /> {rotulo}</button>
+      <Erro mensagem={erro} />
+      {aberto && !escolhido && (
+        <Modal titulo="De quem você recebeu?" aoFechar={() => setAberto(false)}>
+          <div className="stack">
+            <input type="search" placeholder="Buscar cliente ou obra" value={busca} onChange={(e) => setBusca(e.target.value)} autoFocus />
+            {filtrados.length === 0 ? <p className="muted">Nenhum contrato encontrado. Quando o cliente aceita um orçamento, ele aparece aqui.</p> : (
+              <ul className="lista-escolha">
+                {filtrados.slice(0, 40).map((c) => (
+                  <li key={c.proposta_id ?? c.obra_id}>
+                    <button type="button" onClick={() => setEscolhido(c)}>
+                      <span><b>{c.cliente ?? c.titulo}</b><span className="muted small"> · {c.obra_nome ?? c.titulo}</span></span>
+                      <span className="small num">{faltaReceber(c) > 0 ? <>falta <b>{formatar(faltaReceber(c))}</b></> : <span className="muted">quitado</span>}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </Modal>
+      )}
+      {escolhido && (
+        <RegistrarRecebimento contrato={escolhido} aoFechar={() => { setEscolhido(null); setAberto(false); }}
+          aoSalvar={(id) => { setEscolhido(null); setAberto(false); aoMudar?.(id); }} />
+      )}
+    </>
   );
 }

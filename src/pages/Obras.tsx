@@ -24,6 +24,10 @@ import { QuadroRecebido } from '../components/Recebimentos';
 import { NovoAditivo } from '../components/NovoAditivo';
 import { MenuAcoes } from '../components/MenuAcoes';
 import { ObraResumo } from '../components/ObraResumo';
+import { CicloObra } from '../components/CicloObra';
+import { EntregasObra } from '../components/EntregaDocumentos';
+import { perfilDaObra } from '../core/jornada';
+import { entregaPorDocumento } from '../core/entrega';
 import { NOME_TIPO, TIPOS, type TipoServico } from '../core/orcamento';
 
 /** Nome do serviço para exibir: o código interno ("reforma") vira "Reforma". */
@@ -320,6 +324,8 @@ export function ObraDetalhe() {
         </MenuAcoes>
       </Topo>
 
+      {ehAdm && <CicloObra obra={obra} podeFinanceiro={podeFinanceiro} aoMudar={recarregar} />}
+
       <nav className="abas-obra" aria-label="Seções da obra">
         {abas.map(([k, rot]) => (
           <button key={k} className={aba === k ? 'ativo' : ''} aria-current={aba === k ? 'page' : undefined} onClick={() => setParams(k === 'visao' ? {} : { aba: k }, { replace: true })}>{rot}</button>
@@ -347,8 +353,9 @@ export function ObraDetalhe() {
         </div>
         <AmbientesServicos obraId={obra.id} ambientes={dados.ambientes} servicos={dados.servicos} ligacoes={dados.ligacoes} aoMudar={recarregar} ehAdm={ehAdm} />
       </div>}
+      {aba === 'visao' && ehAdm && <EntregasObra obra={obra} mostrarVazio={entregaPorDocumento(perfilDaObra(obra.tipo_servico, obra.tipo_servico))} />}
 
-      {aba === 'cronograma' && <Cronograma obraId={obra.id} servicos={dados.servicos} ehAdm={ehAdm} />}
+      {aba === 'cronograma' && <Cronograma obraId={obra.id} servicos={dados.servicos} ehAdm={ehAdm} tipoServico={obra.tipo_servico} aoMudar={recarregar} />}
       {aba === 'materiais' && <Materiais obraId={obra.id} servicos={dados.servicos} ambientes={dados.ambientes} ehAdm={ehAdm} podeFinanceiro={podeFinanceiro} />}
       {aba === 'diario' && <Registros obraId={obra.id} servicos={dados.servicos} ambientes={dados.ambientes} ehAdm={ehAdm} />}
       {aba === 'fichas' && <FichasObra obraId={obra.id} servicos={dados.servicos} ehAdm={ehAdm} />}
