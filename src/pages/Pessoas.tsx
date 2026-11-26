@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { textoLimpo } from '../core/textoArquivo';
 import { useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok, todas, useAosPoucos } from '../lib/consulta';
@@ -220,7 +221,7 @@ export function PessoaForm({ pessoa, aoFechar, aoSalvar, aoExcluir, padrao }: { 
     const limpo = Object.fromEntries(
       (Object.keys(vazia) as (keyof typeof vazia)[]).map((k) => [k, typeof f[k] === 'string' ? (f[k] as string).trim() || null : f[k]]),
     );
-    limpo.nome = f.nome.trim();
+    limpo.nome = textoLimpo(f.nome);
     const r = pessoa
       ? await supabase.from('pessoa').update(limpo).eq('id', pessoa.id).select().single()
       : await supabase.from('pessoa').insert(limpo).select().single();

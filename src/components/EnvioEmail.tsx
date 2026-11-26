@@ -6,6 +6,7 @@ import { useConsulta, ok } from '../lib/consulta';
 import { Carregando, Erro, Modal, useToast } from './ui';
 import { Icone } from './Icone';
 import { formatarDataHora } from '../core/datas';
+import { nomeDoPdf } from '../lib/pdfProposta';
 import { redesDaEmpresa, type RedesEmpresa } from '../../supabase/functions/_shared/convite';
 
 export type EnvioEmail = {
@@ -134,7 +135,7 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
             <div className="previa-email-cab"><span className="muted small">Para</span> {dest || '—'}<br /><span className="muted small">Assunto</span> <b>{assunto}</b></div>
             <div className="previa-email-corpo">
               {mensagem.trim().split(/\n{2,}/).map((p, k) => <p key={k}>{p}</p>)}
-              {comPdf && anexo && <span className="previa-email-anexo"><Icone nome="anexo" /> Proposta {codigo} v{versao}.pdf</span>}
+              {comPdf && anexo && <span className="previa-email-anexo"><Icone nome="anexo" /> {nomeDoPdf({ codigo, versao, cliente })}</span>}
               <span className="previa-email-botao">Aceitar ou pedir ajuste</span>
               {convite && temRedes && (
                 <div className="previa-email-convite">

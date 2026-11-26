@@ -32,15 +32,27 @@ export function normalizarInstagram(bruto: string | null | undefined): Redes['in
   return { url: `https://www.instagram.com/${nome}/`, arroba: `@${nome}` };
 }
 
+/** Site e Instagram oficiais da ROSAE: valem quando o cadastro da empresa está em branco. */
+export const SITE_PADRAO = 'rosaeengenharia.com';
+export const INSTAGRAM_PADRAO = '@eng.rhuannrosa';
+
+/** Redes para o convite. Sem empresa (ex.: aditivo) não há convite; campo em branco usa o oficial da ROSAE. */
 export function redesDaEmpresa(e: RedesEmpresa | null | undefined): Redes {
-  return { site: normalizarSite(e?.site), instagram: normalizarInstagram(e?.instagram) };
+  if (!e) return { site: null, instagram: null };
+  return {
+    site: normalizarSite(e.site?.trim() ? e.site : SITE_PADRAO),
+    instagram: normalizarInstagram(e.instagram?.trim() ? e.instagram : INSTAGRAM_PADRAO),
+  };
 }
 
-/** Frase de abertura do convite, conforme o que estiver cadastrado. */
-function chamada(r: Redes): string {
-  if (r.site && r.instagram) return 'Enquanto avalia a proposta, que tal conhecer melhor a ROSAE? No site estão todos os nossos serviços e, no Instagram, o dia a dia das obras e os projetos entregues.';
-  if (r.site) return 'Enquanto avalia a proposta, que tal conhecer melhor a ROSAE? No site estão todos os nossos serviços e a forma como trabalhamos.';
-  return 'Enquanto avalia a proposta, que tal conhecer melhor a ROSAE? No Instagram mostramos o dia a dia das obras e os projetos entregues.';
+/** Frase de abertura do convite, conforme o que estiver cadastrado: mostra confiança e dá um motivo para clicar. */
+export function chamada(r: Redes): string {
+  const abre = 'Enquanto avalia a proposta, convido você a conhecer de perto quem vai cuidar do seu projeto.';
+  const site = 'No site estão todos os nossos serviços e como conduzimos cada etapa, do cálculo à entrega.';
+  const insta = 'No Instagram você acompanha obras reais, bastidores e projetos entregues. Vale seguir para ver o padrão de execução da ROSAE.';
+  if (r.site && r.instagram) return `${abre} ${site} ${insta}`;
+  if (r.site) return `${abre} ${site}`;
+  return `${abre} ${insta}`;
 }
 
 /** Bloco de texto para WhatsApp e para a versão em texto do e-mail. Vazio se nada estiver cadastrado. */
@@ -48,8 +60,8 @@ export function conviteTexto(e: RedesEmpresa | null | undefined): string {
   const r = redesDaEmpresa(e);
   if (!r.site && !r.instagram) return '';
   const linhas = [chamada(r)];
-  if (r.site) linhas.push(`Serviços: ${r.site.url}`);
-  if (r.instagram) linhas.push(`Instagram: ${r.instagram.url} (${r.instagram.arroba})`);
+  if (r.site) linhas.push(`Conheça nossos serviços: ${r.site.url}`);
+  if (r.instagram) linhas.push(`Veja nossas obras no Instagram (${r.instagram.arroba}): ${r.instagram.url}`);
   return linhas.join('\n');
 }
 
@@ -70,7 +82,7 @@ export function conviteHtml(e: RedesEmpresa | null | undefined, cor = '#5b6b2e')
     `<a href="${escapar(url)}" style="display:inline-block;margin:0 8px 8px 0;border:1.5px solid ${cor};color:${cor};text-decoration:none;font-weight:bold;font-size:14px;padding:10px 18px;border-radius:999px">${escapar(rotulo)}</a>`;
   const botoes = [
     r.site ? botao(r.site.url, 'Conhecer os serviços') : '',
-    r.instagram ? botao(r.instagram.url, `Instagram ${r.instagram.arroba}`) : '',
+    r.instagram ? botao(r.instagram.url, `Ver obras no Instagram ${r.instagram.arroba}`) : '',
   ].join('');
   return `<tr><td style="padding:0 28px 24px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f7f2;border:1px solid #e2e4da;border-radius:10px"><tr><td style="padding:18px 20px">

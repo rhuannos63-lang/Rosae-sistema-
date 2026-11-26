@@ -92,7 +92,8 @@ async function enviar(db: SupabaseClient, adm: SupabaseClient, c: Record<string,
   // O convite para o site e o Instagram vai por padrão; a tela pode desligar neste envio.
   const { html, texto } = montarEmail(envio.mensagem, url, empresa, (c as Record<string, unknown>).convite !== false);
 
-  const anexo = c.anexo_base64 ? { nome: c.anexo_nome, base64: c.anexo_base64 } : null;
+  // Nome do anexo com acentos na forma composta ("ç" num caractere só), como o Gmail e o Windows esperam.
+  const anexo = c.anexo_base64 ? { nome: String(c.anexo_nome || 'Proposta.pdf').normalize('NFC'), base64: c.anexo_base64 } : null;
   let provedorId: string;
   if (provedor() === 'gmail') {
     const nome = (empresa.nome || 'ROSAE Engenharia & Estruturas').replace(/["<>]/g, '');

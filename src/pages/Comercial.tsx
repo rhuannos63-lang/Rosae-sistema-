@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { textoLimpo } from '../core/textoArquivo';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { supabase, supabaseUrl, supabaseChave, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok, todas } from '../lib/consulta';
@@ -273,7 +274,7 @@ export function OportunidadeForm({ estados, op, aoFechar, aoSalvar }: { estados:
     const pessoa = pessoas.dados?.find((p) => p.id === pessoaId);
     const reg = {
       pessoa_id: pessoaId,
-      titulo: f.titulo.trim() || `${f.tipo_servico || 'Contato'} · ${pessoa?.nome ?? ''}`,
+      titulo: textoLimpo(f.titulo) || textoLimpo(`${f.tipo_servico || 'Contato'} · ${pessoa?.nome ?? ''}`),
       origem: f.origem,
       indicado_por: f.indicado_por.trim() || null,
       tipo_servico: f.tipo_servico || null,

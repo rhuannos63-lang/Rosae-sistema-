@@ -31,7 +31,7 @@ import { comConvite } from '../../supabase/functions/_shared/convite';
 import { NovoAditivo } from '../components/NovoAditivo';
 import { QuadroRecebido } from '../components/Recebimentos';
 import { ContratoDoAceite } from '../components/ContratoDoAceite';
-import { baixarArquivo, compartilharArquivo, gerarPdfProposta, nomeDoPdf, paraBase64 } from '../lib/pdfProposta';
+import { baixarArquivo, compartilharArquivo, gerarPdfProposta, nomeDoPdf, paraBase64, tituloDaProposta } from '../lib/pdfProposta';
 import type { Orcamento } from '../core/orcamento';
 import { ComposicaoProposta } from '../components/ComposicaoProposta';
 import { MontadorObra } from '../components/MontadorObra';
@@ -905,14 +905,30 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
     return url;
   }
 
-  async function enviar(canal: 'whatsapp' | 'email') {
-    const url = link ?? (await gerarLink());
-    if (!url) return;
+  /** Mensagem com o link da proposta e o convite para o site e o Instagram (aditivo vai sem convite). */
+  function textoComLink(url: string): string {
     const nome = p.pessoa?.nome?.split(' ')[0] ?? '';
-    const texto = comConvite(
+    return comConvite(
       `Olá, ${nome}! Segue a proposta ${p.codigo} (versão ${versao.numero}) da ROSAE Engenharia: ${p.titulo}.\n\nPara ver todos os detalhes e responder, acesse:\n${url}`,
       'Qualquer dúvida, estou à disposição.\nRhuann Rosa · ROSAE Engenharia & Estruturas',
       ehAditivo ? null : carga.empresa);
+  }
+
+  /** Copia a mensagem pronta (link + convite) para colar no WhatsApp Web ou onde preferir, e marca como enviada. */
+  async function copiarMensagem() {
+    const url = link ?? (await gerarLink());
+    if (!url) return;
+    try { await navigator.clipboard.writeText(textoComLink(url)); } catch { return setErro('O navegador não deixou copiar. Use “Mandar só o link”.'); }
+    const r = await supabase.rpc('registrar_envio_proposta', { p_versao: versao.id, p_canal: 'whatsapp', p_destinatario: p.pessoa?.telefone || null });
+    if (r.error) return setErro(mensagemErro(r.error));
+    toast('Mensagem copiada com o link, o site e o Instagram. Cole na conversa do cliente.');
+    aoMudar();
+  }
+
+  async function enviar(canal: 'whatsapp' | 'email') {
+    const url = link ?? (await gerarLink());
+    if (!url) return;
+    const texto = textoComLink(url);
     const destino = canal === 'whatsapp' ? p.pessoa?.telefone ?? '' : p.pessoa?.email ?? '';
     const alvo = canal === 'whatsapp'
       ? linkWhatsApp(destino, texto) ?? `https://wa.me/?text=${encodeURIComponent(texto)}`
@@ -1029,6 +1045,7 @@ function VersaoEmitida({ carga, versao, anterior, ehUltima, aoMudar, aoEditar }:
           <div className="row" style={{ marginTop: 12 }}>
             <button className="btn-secundario" disabled={!!gerando} onClick={async () => { const a = await gerarPdf(); if (a) baixarArquivo(a.blob, a.nome); }}><Icone nome="baixar" /> Baixar PDF</button>
             {ehUltima && p.estado !== 'aprovada' && <button className="btn-link" onClick={() => enviar('whatsapp')}>Mandar só o link</button>}
+            {ehUltima && p.estado !== 'aprovada' && <button className="btn-link" onClick={copiarMensagem}>Copiar mensagem</button>}
             {ehUltima && p.estado !== 'aprovada' && !verLink && <button className="btn-link" onClick={async () => { if (link || (await gerarLink())) setVerLink(true); }}>Ver link</button>}
             {anterior && <button className="btn-link" onClick={() => setComparar(true)}>Comparar com v{anterior.numero}</button>}
             {ehUltima && <button className="btn-link" onClick={revogar}>Desativar links</button>}
@@ -1326,7 +1343,7 @@ export function PropostaImprimir() {
   useEffect(() => {
     if (!doc || iniciado.current) return;
     iniciado.current = true;
-    document.title = `${doc.codigo} v${doc.versao} · ROSAE`;
+    document.title = tituloDaProposta(doc);
     baixar(doc);
   }, [doc, baixar]);
   if (carregando) return <Carregando />;

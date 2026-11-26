@@ -2,6 +2,7 @@
 // apresentação), iguais em qualquer tela, com os botões "Aceitar" clicáveis.
 import { createRoot } from 'react-dom/client';
 import { PropostaDocumento, type DadosDocumento } from '../components/PropostaDocumento';
+import { nomeDeArquivo, textoLimpo } from '../core/textoArquivo';
 
 const LARGURA_PX = 1600;
 const LARGURA_MM = 338.67;
@@ -10,10 +11,15 @@ const ALTURA_MM = 190.5;
 const quadro = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/** Nome de arquivo seguro: "Proposta PRO-2026-014 v1 - Marina Duarte.pdf". */
+/** Nome do arquivo com acentos certos: "Proposta PROP-2026-0011 v1 - Gaffer Soluções Metálicas.pdf". */
 export function nomeDoPdf(d: Pick<DadosDocumento, 'codigo' | 'versao' | 'cliente'>): string {
-  const cliente = d.cliente.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
-  return `Proposta ${d.codigo} v${d.versao}${cliente ? ` - ${cliente}` : ''}.pdf`;
+  const cliente = textoLimpo(d.cliente);
+  return nomeDeArquivo(`Proposta ${d.codigo} v${d.versao}${cliente ? ` - ${cliente}` : ''}`);
+}
+
+/** Título da proposta para a aba do navegador e para "Salvar como PDF" (o Chrome usa o título como nome do arquivo). */
+export function tituloDaProposta(d: Pick<DadosDocumento, 'codigo' | 'versao' | 'cliente'>): string {
+  return nomeDoPdf(d).replace(/\.pdf$/, '');
 }
 
 /**
@@ -37,7 +43,7 @@ export async function gerarPdfProposta(d: DadosDocumento, opcoes: { aceite?: str
 
     const folhas = Array.from(host.querySelectorAll<HTMLElement>('.slide'));
     const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [LARGURA_MM, ALTURA_MM], compress: true });
-    pdf.setProperties({ title: `Proposta ${d.codigo} · ${d.titulo}`, subject: d.titulo, author: d.empresa?.nome ?? 'ROSAE Engenharia & Estruturas', creator: d.empresa?.nome ?? 'ROSAE Engenharia & Estruturas' });
+    pdf.setProperties({ title: textoLimpo(`Proposta ${d.codigo} · ${d.titulo}${d.cliente ? ` · ${d.cliente}` : ''}`), subject: textoLimpo(d.titulo), author: d.empresa?.nome ?? 'ROSAE Engenharia & Estruturas', creator: d.empresa?.nome ?? 'ROSAE Engenharia & Estruturas' });
     const fontes = await getFontEmbedCSS(host).catch(() => undefined);
     for (let k = 0; k < folhas.length; k++) {
       const folha = folhas[k];

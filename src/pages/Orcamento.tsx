@@ -1,5 +1,5 @@
 // Novo orçamento (automático) e tabela de preços do orçamento.
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { ok, useConsulta } from '../lib/consulta';
@@ -12,6 +12,9 @@ import { carregarPrecos, salvarPrecos, type TabelaPrecos } from '../lib/orcament
 import { carregarCondicoes } from '../lib/composicoes';
 import { paraBanco } from '../core/dinheiro';
 import { prepararParaSalvar, type ModeloServico } from '../core/proposta';
+import { textoLimpo } from '../core/textoArquivo';
+import { buscarClientes, clientesParecidos } from '../core/clienteBusca';
+import { formatarDataHora } from '../core/datas';
 import {
   DEFINICOES, gerarOrcamento, gerarOrcamentoServicos, nomeDosServicos, parametrosDe, parametrosPadrao, respostasPadrao, TIPOS,
   type Orcamento, type Parametros, type TipoServico,
@@ -20,6 +23,21 @@ import {
 const reaisTexto = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 type PessoaMin = { id: string; nome: string; telefone: string | null; email: string | null };
+/** Rascunho do formulário guardado no aparelho: fechar a tela ou cair a internet não perde o que foi digitado. */
+type Rascunho = {
+  estado: EstadoGerador; modoCliente: 'existente' | 'novo'; clienteId: string; novo: { nome: string; telefone: string; email: string };
+  necessidade: string; local: string; titulo: string; salvoEm: string;
+};
+const chaveRascunho = (opId: string | null) => `rosae.novoOrcamento${opId ? `.${opId}` : ''}`;
+function lerRascunho(opId: string | null): Rascunho | null {
+  try {
+    const r = JSON.parse(localStorage.getItem(chaveRascunho(opId)) ?? 'null') as Rascunho | null;
+    if (!r?.salvoEm || Date.now() - Date.parse(r.salvoEm) > 30 * 86_400_000) return null;
+    return r;
+  } catch { return null; }
+}
+const temConteudo = (r: Omit<Rascunho, 'salvoEm'>) => !!(r.estado.tipo || r.clienteId || r.novo.nome.trim() || r.necessidade.trim() || r.titulo.trim());
+
 type Op = { id: string; titulo: string; pessoa_id: string; resumo: string | null; local_obra: string | null; estado_id: string };
 
 /** Grava o orçamento gerado como proposta (versão 1 em rascunho) e os custos internos. */
@@ -61,28 +79,56 @@ export function NovoOrcamento() {
   const [titulo, setTitulo] = useState('');
   const [erro, setErro] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
+  const [pendente, setPendente] = useState<Rascunho | null>(() => lerRascunho(opId));
+
+  // Guarda o que foi digitado (só depois de decidir sobre o rascunho anterior, para não apagá-lo).
+  useEffect(() => {
+    if (pendente) return;
+    const r = { estado, modoCliente, clienteId, novo, necessidade, local, titulo };
+    const t = setTimeout(() => {
+      try {
+        if (temConteudo(r)) localStorage.setItem(chaveRascunho(opId), JSON.stringify({ ...r, salvoEm: new Date().toISOString() }));
+        else localStorage.removeItem(chaveRascunho(opId));
+      } catch { /* aparelho sem espaço: segue sem rascunho */ }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [pendente, opId, estado, modoCliente, clienteId, novo, necessidade, local, titulo]);
+
+  function continuarRascunho(r: Rascunho) {
+    setEstado(estadoInicial(r.estado as Parameters<typeof estadoInicial>[0]));
+    setModoCliente(r.modoCliente); setClienteId(r.clienteId); setNovo(r.novo);
+    setNecessidade(r.necessidade); setLocal(r.local); setTitulo(r.titulo);
+    setPendente(null);
+  }
+  function descartarRascunho() {
+    try { localStorage.removeItem(chaveRascunho(opId)); } catch { /* nada */ }
+    setPendente(null);
+  }
 
   const op = dados?.op ?? null;
   const contexto = useMemo(() => ({ necessidade: necessidade || op?.resumo || '', local: local || op?.local_obra || '', biblioteca: dados?.biblioteca, condicoes: dados?.condicoes }), [necessidade, local, op, dados?.biblioteca, dados?.condicoes]);
   if (carregando && !dados) return <Carregando />;
   if (erroCarga || !dados) return <Erro mensagem={erroCarga ?? 'Erro ao carregar.'} />;
-  const filtradas = dados.pessoas.filter((p) => !busca || p.nome.toLowerCase().includes(busca.toLowerCase())).slice(0, 50);
+  const filtradas = buscarClientes(dados.pessoas, busca);
+  const parecidos = modoCliente === 'novo' && !op ? clientesParecidos(dados.pessoas, novo) : [];
+  const usarCadastro = (id: string) => { setModoCliente('existente'); setClienteId(id); setBusca(''); setNovo({ nome: '', telefone: '', email: '' }); };
   const clienteNome = op ? dados.pessoas.find((p) => p.id === op.pessoa_id)?.nome : modoCliente === 'novo' ? novo.nome : dados.pessoas.find((p) => p.id === clienteId)?.nome;
 
   async function gerar(o: Orcamento) {
     setErro(null);
     if (!op && modoCliente === 'existente' && !clienteId) return setErro('Escolha o cliente.');
-    if (!op && modoCliente === 'novo' && novo.nome.trim().length < 2) return setErro('Informe o nome do cliente.');
+    if (!op && modoCliente === 'novo' && textoLimpo(novo.nome).length < 2) return setErro('Informe o nome do cliente.');
+    if (!op && modoCliente === 'novo' && novo.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novo.email.trim())) return setErro('O e-mail do cliente parece incompleto. Confira ou deixe em branco.');
     if (o.principal.valor <= 0) return setErro('Preencha os dados do serviço para calcular o valor.');
     setGravando(true);
     try {
       let pessoaId = op?.pessoa_id ?? clienteId;
       if (!op && modoCliente === 'novo') {
-        pessoaId = (ok(await supabase.from('pessoa').insert({ nome: novo.nome.trim(), telefone: novo.telefone || null, email: novo.email || null, eh_cliente: true }).select('id').single()) as { id: string }).id;
+        pessoaId = (ok(await supabase.from('pessoa').insert({ nome: textoLimpo(novo.nome), telefone: novo.telefone.trim() || null, email: novo.email.trim().toLowerCase() || null, eh_cliente: true }).select('id').single()) as { id: string }).id;
       }
       const estados = ok(await supabase.from('estado_funil').select('id, nome, ordem, tipo')) as { id: string; nome: string; ordem: number; tipo: string }[];
       const prep = estados.find((x) => x.nome === 'Proposta em preparação');
-      const nomeProposta = titulo.trim() || o.titulo;
+      const nomeProposta = textoLimpo(titulo) || textoLimpo(o.titulo);
       let oportunidadeId = op?.id;
       if (!oportunidadeId) {
         oportunidadeId = (ok(await supabase.from('oportunidade').insert({
@@ -96,6 +142,7 @@ export function NovoOrcamento() {
       const pid = (ok(await supabase.from('proposta').insert({ oportunidade_id: oportunidadeId, pessoa_id: pessoaId, titulo: nomeProposta }).select('id').single()) as { id: string }).id;
       const vid = ok(await supabase.rpc('nova_versao_proposta', { p_proposta: pid })) as string;
       await gravarOrcamento(o, vid, podeFinanceiro);
+      try { localStorage.removeItem(chaveRascunho(opId)); } catch { /* nada */ }
       toast('Proposta criada. Revise a apresentação e emita quando estiver pronta.');
       navegar(`/propostas/${pid}?aba=revisao`);
     } catch (e) {
@@ -109,6 +156,16 @@ export function NovoOrcamento() {
     <>
       <Topo titulo="Novo orçamento" sub="Escolha o serviço e preencha os dados: a proposta sai pronta.">
       </Topo>
+      {pendente && (
+        <div className="aviso info" style={{ marginBottom: 12 }}>
+          <Icone nome="documento" />
+          <span>Você tem um orçamento começado em {formatarDataHora(pendente.salvoEm)}{pendente.novo.nome || dados.pessoas.find((x) => x.id === pendente.clienteId)?.nome ? ` para ${pendente.novo.nome || dados.pessoas.find((x) => x.id === pendente.clienteId)?.nome}` : ''}. Quer continuar de onde parou?</span>
+          <span className="row" style={{ gap: 8, marginLeft: 'auto' }}>
+            <button type="button" className="btn-primario" onClick={() => continuarRascunho(pendente)}>Continuar</button>
+            <button type="button" className="btn-link" onClick={descartarRascunho}>Começar do zero</button>
+          </span>
+        </div>
+      )}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="grid grid-2">
           <div className="stack" style={{ gap: 10 }}>
@@ -123,9 +180,10 @@ export function NovoOrcamento() {
                 </div>
                 {modoCliente === 'existente' ? (
                   <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <input placeholder="Buscar pelo nome" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar cliente" />
+                    <input placeholder="Buscar por nome, telefone ou e-mail" value={busca} aria-label="Buscar cliente"
+                      onChange={(e) => { setBusca(e.target.value); const achados = buscarClientes(dados.pessoas, e.target.value); if (e.target.value.trim() && achados.length === 1) setClienteId(achados[0].id); }} />
                     <select value={clienteId} onChange={(e) => setClienteId(e.target.value)} aria-label="Cliente">
-                      <option value="">Escolha…</option>
+                      <option value="">{busca.trim() && !filtradas.length ? 'Nenhum cliente com esse nome' : 'Escolha…'}</option>
                       {filtradas.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
                     </select>
                   </div>
@@ -134,6 +192,13 @@ export function NovoOrcamento() {
                     <input placeholder="Nome" value={novo.nome} onChange={(e) => setNovo({ ...novo, nome: e.target.value })} aria-label="Nome do cliente" />
                     <input placeholder="WhatsApp" inputMode="tel" value={novo.telefone} onChange={(e) => setNovo({ ...novo, telefone: e.target.value })} aria-label="WhatsApp" />
                     <input placeholder="E-mail" type="email" value={novo.email} onChange={(e) => setNovo({ ...novo, email: e.target.value })} aria-label="E-mail" />
+                  </div>
+                )}
+                {parecidos.length > 0 && (
+                  <div className="aviso info">
+                    <span>Já existe cadastro parecido: {parecidos.map((x, i) => (
+                      <span key={x.id}>{i > 0 && ', '}<b>{x.nome}</b>{x.telefone ? ` · ${x.telefone}` : ''} <button type="button" className="btn-link" onClick={() => usarCadastro(x.id)}>Usar este</button></span>
+                    ))}. Assim o histórico do cliente fica num lugar só.</span>
                   </div>
                 )}
               </>
