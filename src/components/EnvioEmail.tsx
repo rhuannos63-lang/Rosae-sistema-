@@ -6,6 +6,8 @@ import { useConsulta, ok } from '../lib/consulta';
 import { Carregando, Erro, Modal, useToast } from './ui';
 import { Icone } from './Icone';
 import { formatarDataHora } from '../core/datas';
+import { nomeDoPdf } from '../lib/pdfProposta';
+import { redesDaEmpresa, type RedesEmpresa } from '../../supabase/functions/_shared/convite';
 
 export type EnvioEmail = {
   id: string; versao_id: string; destinatario: string; assunto: string; mensagem: string;
@@ -48,21 +50,31 @@ function novaChave() {
 }
 
 /** Janela de envio: confere destinatário, assunto e mensagem, mostra a prévia e envia uma única vez. */
-export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCliente, aoFechar, aoEnviar, abrirNoAplicativo, anexo }: {
+export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCliente, aoFechar, aoEnviar, abrirNoAplicativo, anexo, aditivo, empresa }: {
+  /** Aditivo de contrato: texto próprio, pedindo o aceite para formalizar. */
+  aditivo?: boolean;
   versaoId: string; codigo: string; versao: number; titulo: string; cliente: string; emailCliente: string | null;
   aoFechar: () => void; aoEnviar: () => void; abrirNoAplicativo: () => void;
   /** Gera o PDF da proposta para ir anexado. */
   anexo?: () => Promise<{ nome: string; base64: string } | null>;
+  /** Site e Instagram da empresa, para o convite no fim do e-mail. */
+  empresa?: RedesEmpresa | null;
 }) {
   const toast = useToast();
   const status = useConsulta(() => statusEmail(), []);
   const primeiro = cliente.split(' ')[0] ?? '';
   const [dest, setDest] = useState(emailCliente ?? '');
-  const [assunto, setAssunto] = useState(`Proposta ${codigo} · ROSAE Engenharia & Estruturas`);
-  const [mensagem, setMensagem] = useState(anexo
+  const [assunto, setAssunto] = useState(aditivo ? `Aditivo ${codigo} para formalizar · ROSAE Engenharia & Estruturas` : `Proposta ${codigo} · ROSAE Engenharia & Estruturas`);
+  const [mensagem, setMensagem] = useState(aditivo
+    ? `Olá, ${primeiro}!\n\nConforme conversamos, segue${anexo ? ' em anexo' : ''} o aditivo ${codigo}: ${titulo}.\n\nNele estão o que será acrescentado, o valor, o impacto no prazo e a forma de pagamento. O contrato original continua valendo em todas as demais condições.\n\nPara formalizar, é só tocar no botão abaixo${anexo ? ' ou em “Aceitar” dentro do PDF' : ''} e confirmar o aceite.\n\nQualquer dúvida, estou à disposição.`
+    : anexo
     ? `Olá, ${primeiro}!\n\nSegue em anexo a proposta ${codigo} (versão ${versao}): ${titulo}.\n\nNo PDF estão o escopo, o que está e o que não está incluso, prazos e condições. Para aprovar, é só tocar em “Aceitar esta proposta” dentro do arquivo ou no botão abaixo.\n\nQualquer dúvida, estou à disposição.`
     : `Olá, ${primeiro}!\n\nSegue a proposta ${codigo} (versão ${versao}): ${titulo}.\n\nNo botão abaixo estão o escopo, o que está e o que não está incluso, prazos e condições. Por lá você também pode aceitar ou pedir ajustes.\n\nQualquer dúvida, estou à disposição.`);
   const [comPdf, setComPdf] = useState(!!anexo);
+  const redes = redesDaEmpresa(empresa);
+  const temRedes = !!(redes.site || redes.instagram);
+  // Proposta nova: convida a conhecer a ROSAE. Aditivo vai a quem já é cliente, então começa desligado.
+  const [convite, setConvite] = useState(temRedes && !aditivo);
   const chave = useMemo(novaChave, []);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -75,7 +87,7 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
     try {
       const arquivo = comPdf && anexo ? await anexo() : null;
       if (comPdf && anexo && !arquivo) throw new Error('Não consegui gerar o PDF para anexar. Tente de novo.');
-      const r = await chamar({ acao: 'enviar', versao_id: versaoId, destinatario: dest.trim(), assunto, mensagem, chave, origem: window.location.origin, ...(arquivo ? { anexo_nome: arquivo.nome, anexo_base64: arquivo.base64 } : {}) });
+      const r = await chamar({ acao: 'enviar', versao_id: versaoId, destinatario: dest.trim(), assunto, mensagem, chave, origem: window.location.origin, convite: convite && temRedes, ...(arquivo ? { anexo_nome: arquivo.nome, anexo_base64: arquivo.base64 } : {}) });
       toast(r.envio?.estado === 'enviando' ? 'Esse envio já está em andamento.' : r.repetido ? 'Esse e-mail já tinha sido enviado. Nada foi duplicado.' : `E-mail enviado ao provedor para ${dest.trim()}. A entrega aparece no histórico.`);
       aoEnviar();
       aoFechar();
@@ -87,7 +99,7 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
 
   const s = status.dados;
   return (
-    <Modal titulo="Enviar a proposta por e-mail" aoFechar={aoFechar} largo
+    <Modal titulo={aditivo ? "Enviar o aditivo por e-mail" : "Enviar a proposta por e-mail"} aoFechar={aoFechar} largo
       rodape={s?.configurado ? (
         <>
           <button className="btn-link" onClick={aoFechar}>Cancelar</button>
@@ -112,6 +124,9 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
             </label>
             <label className="campo">Assunto<input value={assunto} onChange={(e) => setAssunto(e.target.value)} maxLength={200} /></label>
             <label className="campo">Mensagem<textarea rows={9} value={mensagem} onChange={(e) => setMensagem(e.target.value)} maxLength={5000} /></label>
+            {temRedes
+              ? <label className="check"><input type="checkbox" checked={convite} onChange={(e) => setConvite(e.target.checked)} /> Convidar o cliente a conhecer o site e o Instagram da ROSAE</label>
+              : <p className="muted small" style={{ margin: 0 }}>Cadastre o site e o Instagram em Configurações › Empresa para o e-mail convidar o cliente a conhecer a ROSAE.</p>}
             {anexo && <label className="check"><input type="checkbox" checked={comPdf} onChange={(e) => setComPdf(e.target.checked)} /> Anexar a proposta em PDF (deitada, com botão de aceite)</label>}
             <p className="muted small" style={{ margin: 0 }}>Sai de <b>{s.remetente}</b>. O botão “Aceitar ou pedir ajuste” entra no fim da mensagem, sem endereço aparente.</p>
             <Erro mensagem={erro} />
@@ -120,8 +135,17 @@ export function EnviarEmail({ versaoId, codigo, versao, titulo, cliente, emailCl
             <div className="previa-email-cab"><span className="muted small">Para</span> {dest || '—'}<br /><span className="muted small">Assunto</span> <b>{assunto}</b></div>
             <div className="previa-email-corpo">
               {mensagem.trim().split(/\n{2,}/).map((p, k) => <p key={k}>{p}</p>)}
-              {comPdf && anexo && <span className="previa-email-anexo"><Icone nome="anexo" /> Proposta {codigo} v{versao}.pdf</span>}
+              {comPdf && anexo && <span className="previa-email-anexo"><Icone nome="anexo" /> {nomeDoPdf({ codigo, versao, cliente })}</span>}
               <span className="previa-email-botao">Aceitar ou pedir ajuste</span>
+              {convite && temRedes && (
+                <div className="previa-email-convite">
+                  <span className="previa-email-convite-titulo">Conheça a ROSAE</span>
+                  <span className="previa-email-convite-botoes">
+                    {redes.site && <span>Conhecer os serviços</span>}
+                    {redes.instagram && <span>Instagram {redes.instagram.arroba}</span>}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

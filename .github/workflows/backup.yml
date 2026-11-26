@@ -1,17 +1,35 @@
 name: Backup diário
-# Copia o banco inteiro todo dia, criptografa e guarda 30 dias no próprio repositório privado.
+# Todo dia às 3h (Brasília):
+#  1. Copia o banco inteiro (estrutura, dados e papéis) e criptografa (AES-256).
+#  2. Com o Cloudflare R2 ligado (segredos R2_*): guarda o backup no R2 (diário por 35 dias e
+#     um por mês por 10 anos), copia para lá as fotos e arquivos novos e, se o espaço grátis
+#     do Supabase apertar, tira de lá os arquivos mais antigos (o sistema passa a lê-los do R2).
+#  3. Sem o R2: guarda o backup aqui no GitHub por 30 dias; no dia 1 inclui todos os arquivos.
+#  4. Registra o resultado no sistema (Configurações › Dados e segurança).
 # Também mantém o Supabase gratuito ativo (ele pausa após 7 dias sem uso).
 on:
   schedule:
     - cron: '0 6 * * *' # 03:00 em Brasília
   workflow_dispatch:
+    inputs:
+      com_arquivos:
+        description: 'Sem R2: incluir todos os arquivos neste backup'
+        type: boolean
+        default: false
+concurrency: backup
 jobs:
   backup:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       BACKUP_SENHA: ${{ secrets.BACKUP_SENHA || secrets.SUPABASE_DB_PASSWORD }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
     steps:
       - uses: actions/checkout@v4
       - name: Projeto
@@ -19,10 +37,22 @@ jobs:
         run: |
           REF=$(jq -r .projeto_ref src/config.publico.json)
           if [ "$REF" = "null" ] || [ -z "$SUPABASE_DB_PASSWORD" ]; then
-            echo "Supabase ainda não configurado; sem backup hoje."; echo "ok=nao" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=$REF" >> "$GITHUB_OUTPUT"; echo "ok=sim" >> "$GITHUB_OUTPUT"
+            echo "Supabase ainda não configurado; sem backup hoje."; echo "ok=nao" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"; echo "ok=sim" >> "$GITHUB_OUTPUT"
+          if [ -n "$R2_ACCOUNT_ID" ] && [ -n "$R2_BUCKET" ] && [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "r2=sim" >> "$GITHUB_OUTPUT"; echo "Destino: Cloudflare R2"
+          else
+            echo "r2=nao" >> "$GITHUB_OUTPUT"; echo "Destino: GitHub (30 dias). Ligue o R2 para guardar 10 anos."
+          fi
+          # Chave de serviço (só para este job; nunca aparece no log).
+          curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" > chaves.json || true
+          SEC=$(jq -r '([.[] | select(.type == "secret")] + [.[] | select(.name == "service_role")])[0].api_key // empty' chaves.json 2>/dev/null)
+          rm -f chaves.json
+          if [ -n "$SEC" ]; then echo "::add-mask::$SEC"; echo "SUPABASE_SECRET=$SEC" >> "$GITHUB_ENV"; fi
+          echo "SUPABASE_URL=https://$REF.supabase.co" >> "$GITHUB_ENV"
+          echo "DIA=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+          echo "MES=$(date -u +%Y-%m)" >> "$GITHUB_ENV"
       - uses: supabase/setup-cli@v1
         if: steps.p.outputs.ok == 'sim'
         with:
@@ -36,14 +66,74 @@ jobs:
           supabase db dump --password "$SUPABASE_DB_PASSWORD" --data-only -f backup/dados.sql
           supabase db dump --password "$SUPABASE_DB_PASSWORD" --role-only -f backup/papeis.sql
           test -s backup/estrutura.sql
+      - name: Incluir os arquivos (sem R2, dia 1 ou pedido à mão)
+        if: steps.p.outputs.ok == 'sim' && steps.p.outputs.r2 == 'nao' && env.SUPABASE_SECRET != '' && (inputs.com_arquivos || endsWith(env.DIA, '-01'))
+        run: node scripts/backup-arquivos.mjs baixar backup/arquivos
       - name: Criptografar
         if: steps.p.outputs.ok == 'sim'
         run: |
-          tar czf - backup | gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_SENHA" --symmetric --cipher-algo AES256 -o "rosae-backup-$(date -u +%Y-%m-%d).tar.gz.gpg"
+          tar czf - backup | gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_SENHA" --symmetric --cipher-algo AES256 -o "rosae-backup-$DIA.tar.gz.gpg"
           rm -rf backup
+          echo "BYTES=$(stat -c %s rosae-backup-$DIA.tar.gz.gpg)" >> "$GITHUB_ENV"
+
+      # ---------------- Com o Cloudflare R2 ----------------
+      - name: Guardar no R2 (diário 35 dias, mensal 10 anos)
+        if: steps.p.outputs.ok == 'sim' && steps.p.outputs.r2 == 'sim'
+        run: |
+          E="https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com"
+          A="rosae-backup-$DIA.tar.gz.gpg"
+          aws s3 cp "$A" "s3://$R2_BUCKET/backups/diario/$A" --endpoint-url "$E" --only-show-errors
+          if ! aws s3 ls "s3://$R2_BUCKET/backups/mensal/rosae-backup-$MES" --endpoint-url "$E" >/dev/null 2>&1; then
+            aws s3 cp "$A" "s3://$R2_BUCKET/backups/mensal/rosae-backup-$MES.tar.gz.gpg" --endpoint-url "$E" --only-show-errors
+            echo "TIPO=mensal" >> "$GITHUB_ENV"; echo "Backup do mês guardado (fica 10 anos)."
+          fi
+          # Limpeza: diários com mais de 35 dias e mensais com mais de 10 anos.
+          LIM_D=$(date -u -d '35 days ago' +%Y-%m-%d); LIM_M=$(date -u -d '10 years ago' +%Y-%m)
+          aws s3 ls "s3://$R2_BUCKET/backups/diario/" --endpoint-url "$E" | awk '{print $4}' | while read -r f; do
+            d=$(echo "$f" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}') || continue
+            if [[ "$d" < "$LIM_D" ]]; then aws s3 rm "s3://$R2_BUCKET/backups/diario/$f" --endpoint-url "$E" --only-show-errors; fi
+          done
+          aws s3 ls "s3://$R2_BUCKET/backups/mensal/" --endpoint-url "$E" | awk '{print $4}' | while read -r f; do
+            m=$(echo "$f" | grep -oE '[0-9]{4}-[0-9]{2}') || continue
+            if [[ "$m" < "$LIM_M" ]]; then aws s3 rm "s3://$R2_BUCKET/backups/mensal/$f" --endpoint-url "$E" --only-show-errors; fi
+          done
+          # O site lê do R2 as fotos antigas: libera a leitura pelo navegador (só GET e só com endereço assinado).
+          cat > cors.json <<'JSON'
+          {"CORSRules":[{"AllowedOrigins":["*"],"AllowedMethods":["GET","HEAD"],"AllowedHeaders":["*"],"MaxAgeSeconds":3600}]}
+          JSON
+          aws s3api put-bucket-cors --bucket "$R2_BUCKET" --cors-configuration file://cors.json --endpoint-url "$E" || echo "::warning::Não consegui ajustar o CORS do R2."
+          rm -f cors.json
+      - name: Copiar fotos e arquivos novos para o R2
+        id: copiar
+        if: steps.p.outputs.ok == 'sim' && steps.p.outputs.r2 == 'sim' && env.SUPABASE_SECRET != ''
+        continue-on-error: true
+        run: |
+          node scripts/backup-arquivos.mjs copiar
+          echo "COPIADOS=$(jq -r .copiados resumo.json)" >> "$GITHUB_ENV"
+      - name: Liberar espaço no Supabase (arquivo frio)
+        id: arquivar
+        if: steps.p.outputs.ok == 'sim' && steps.p.outputs.r2 == 'sim' && env.SUPABASE_SECRET != ''
+        continue-on-error: true
+        run: |
+          node scripts/backup-arquivos.mjs arquivar
+          echo "ARQUIVADOS=$(jq -r .arquivados resumo.json)" >> "$GITHUB_ENV"
+
+      # ---------------- Sem o R2 ----------------
       - uses: actions/upload-artifact@v4
-        if: steps.p.outputs.ok == 'sim'
+        if: steps.p.outputs.ok == 'sim' && steps.p.outputs.r2 == 'nao'
         with:
           name: rosae-backup-${{ github.run_id }}
           path: rosae-backup-*.tar.gz.gpg
           retention-days: 30
+
+      - name: Registrar no sistema
+        if: always() && steps.p.outputs.ok == 'sim' && env.SUPABASE_SECRET != ''
+        run: |
+          DEST=$([ "${{ steps.p.outputs.r2 }}" = "sim" ] && echo r2 || echo github)
+          OK=$([ "${{ job.status }}" = "success" ] && [ "${{ steps.copiar.outcome }}" != "failure" ] && [ "${{ steps.arquivar.outcome }}" != "failure" ] && echo true || echo false)
+          DET=$([ "$OK" = "true" ] && echo "" || echo "Veja o log em Actions › Backup diário.")
+          jq -n --arg t "${TIPO:-diario}" --arg d "$DEST" --argjson b "${BYTES:-0}" --argjson c "${COPIADOS:-0}" --argjson a "${ARQUIVADOS:-0}" --argjson ok "$OK" --arg det "$DET" \
+            '{p_tipo:$t, p_destino:$d, p_bytes:$b, p_copiados:$c, p_arquivados:$a, p_ok:$ok, p_detalhe:(if $det == "" then null else $det end)}' > reg.json
+          curl -sS -o /dev/null -w "registro do backup: %{http_code}\n" -X POST "$SUPABASE_URL/rest/v1/rpc/registrar_backup" \
+            -H "apikey: $SUPABASE_SECRET" -H "Authorization: Bearer $SUPABASE_SECRET" -H "content-type: application/json" -d @reg.json
+          rm -f reg.json

@@ -21,13 +21,16 @@ grant execute on all functions in schema pg_temp to anon, authenticated;
 
 -- Tabela de preços
 select pg_temp.como('00000000-0000-0000-0000-00000000000a');
-select pg_temp.igual((select count(*) from public.orcamento_parametro), 6::bigint, 'seis tipos de serviço');
+select pg_temp.igual((select count(*) from public.orcamento_parametro), 8::bigint, 'oito tipos de serviço');
+select pg_temp.igual((select count(*) from public.modelo_servico where nome in ('Projeto arquitetônico', 'Regularização de imóvel')), 2::bigint, 'arquitetônico e regularização na biblioteca');
+update public.orcamento_parametro set valores = '{"preco_m2": 50}' where tipo = 'projeto_arquitetonico';
+select pg_temp.igual((select (valores->>'preco_m2')::numeric from public.orcamento_parametro where tipo = 'projeto_arquitetonico'), 50::numeric, 'admin grava preço do arquitetônico');
 update public.orcamento_parametro set valores = '{"preco_m2": 26}' where tipo = 'projeto_estrutural';
 select pg_temp.igual((select (valores->>'preco_m2')::numeric from public.orcamento_parametro where tipo = 'projeto_estrutural'), 26::numeric, 'admin grava preço');
 select pg_temp.igual((select count(*) from public.modelo_servico where nome = 'Perícia técnica de engenharia'), 1::bigint, 'perícia na biblioteca');
 
 select pg_temp.como('00000000-0000-0000-0000-00000000000b'); -- administrativo sem financeiro
-select pg_temp.igual((select count(*) from public.orcamento_parametro), 6::bigint, 'administrativo lê preços');
+select pg_temp.igual((select count(*) from public.orcamento_parametro), 8::bigint, 'administrativo lê preços');
 
 select pg_temp.como('00000000-0000-0000-0000-00000000000d'); -- campo
 select pg_temp.igual((select count(*) from public.orcamento_parametro), 0::bigint, 'campo não lê preços');

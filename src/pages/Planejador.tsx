@@ -26,7 +26,7 @@ export function Planejador() {
   const disp = c('disponivel');
   return (
     <>
-      <Topo titulo="Planejador de destinação" sub="Sugestão gerencial de quanto do dinheiro em conta está livre depois dos compromissos. Nada é movimentado automaticamente." />
+      <Topo titulo="Planejador de destinação" sub="Quanto do dinheiro em conta está livre depois dos compromissos." />
       {!dados.configurado && (
         <div className="aviso" style={{ marginBottom: 14 }}>
           <span>Defina a provisão de tributos e a reserva mínima {ehAdmin ? <Link to="/configuracoes">em Configurações → Metas</Link> : 'em Configurações → Metas'} para o cálculo ficar completo.</span>

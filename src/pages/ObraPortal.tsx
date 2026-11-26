@@ -2,6 +2,7 @@
 // para o portal, mensagens e ciências. Nada é publicado sem um clique aqui.
 import { useMemo, useState } from 'react';
 import { supabase, mensagemErro } from '../lib/supabase';
+import { urlAssinada } from '../lib/arquivos';
 import { useConsulta, ok } from '../lib/consulta';
 import { Ajuda, Carregando, Erro, Modal, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
@@ -27,8 +28,9 @@ async function paraBase64(b: Blob): Promise<string> {
 /** Cópia para o cliente: reduzida e regravada (sai sem os metadados da câmera, como localização). */
 export async function prepararCopiaPortal(original: Blob) {
   const arquivo = new File([original], 'foto.jpg', { type: original.type || 'image/jpeg' });
-  const grande = await comprimirImagem(arquivo, 1600, 0.8);
-  const mini = await comprimirImagem(arquivo, 480, 0.72);
+  // A cópia do portal fica no banco (500 MB no plano grátis): 1280 px já é nítida em qualquer tela.
+  const grande = await comprimirImagem(arquivo, 1280, 0.76);
+  const mini = await comprimirImagem(arquivo, 400, 0.7);
   return { imagem: await paraBase64(grande.blob), miniatura: await paraBase64(mini.blob), largura: grande.largura, altura: grande.altura };
 }
 
@@ -69,7 +71,7 @@ export function PortalObra({ obra, aoMudar }: { obra: ObraPortalCampos; aoMudar:
   async function publicarFoto(f: Foto) {
     setOcupado(f.id);
     try {
-      const url = urls[f.caminho] ?? (await supabase.storage.from('documentos').createSignedUrl(f.caminho, 600)).data?.signedUrl;
+      const url = urls[f.caminho] ?? (await urlAssinada(f.caminho, 600));
       if (!url) throw new Error('Não consegui abrir a foto original.');
       const resp = await fetch(url);
       if (!resp.ok) throw new Error('Não consegui baixar a foto original.');

@@ -356,7 +356,7 @@ export function Assistente() {
   }, []);
   return (
     <>
-      <Topo titulo="Assistente IA" sub="Pergunte, lance e registre conversando, aqui ou no WhatsApp. Nada é gravado sem a sua confirmação.">
+      <Topo titulo="Assistente IA" sub="Pergunte e lance conversando, aqui ou no WhatsApp.">
         <div className="segmentado" role="tablist" aria-label="Seções do assistente">
           {([['conversa', 'Conversa'], ['whatsapp', 'WhatsApp'], ['ligar', 'Ligar']] as const).map(([k, r]) => (
             <button key={k} role="tab" aria-selected={aba === k} className={aba === k ? 'ativo' : ''} onClick={() => setAba(k)}>{r}</button>

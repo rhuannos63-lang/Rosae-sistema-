@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { useAuth } from '../auth/AuthProvider';
@@ -20,8 +19,7 @@ export function Biblioteca() {
   const grupos = Array.from(new Set((dados ?? []).map((m) => m.grupo)));
   return (
     <>
-      <Topo titulo="Biblioteca de serviços" sub="Seus serviços com textos e preços de referência. Cada proposta copia daqui e você ajusta caso a caso.">
-        <Link className="btn-secundario" to="/propostas"><Icone nome="voltar" /> Propostas</Link>
+      <Topo titulo="Biblioteca de serviços" sub="Serviços prontos com textos e preços de referência.">
         <button className="btn-primario" onClick={() => setEditando('novo')}><Icone nome="mais" /> Novo serviço</button>
       </Topo>
       <Erro mensagem={erro} />

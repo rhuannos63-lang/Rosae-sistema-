@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clausulasAplicaveis, montarContrato, textoHonorarios, type Clausula } from './contrato';
+import { clausulasAplicaveis, modeloSugerido, montarContrato, normasDosServicos, servicosDoContrato, textoHonorarios, tituloContrato, type Clausula } from './contrato';
 import { conteudoVazio } from './proposta';
 
 const cl = (codigo: string, texto: string, aplicavel: string[], revisao: 'minuta' | 'revisada' = 'minuta'): Clausula => ({ codigo, titulo: codigo, texto, aplicavel, versao: 1, revisao_juridica: revisao });
@@ -33,5 +33,45 @@ describe('contrato', () => {
   it('texto dos honorários', () => {
     expect(textoHonorarios({})).toBeNull();
     expect(textoHonorarios({ valor_inicial: 500 })?.replace(/\s/g, ' ')).toBe('valor inicial de R$ 500,00');
+  });
+});
+
+describe('contrato por tipo de serviço', () => {
+  const lib: Clausula[] = [
+    { ...cl('objeto', 'Serviços de {servicos}.', ['todos'], 'revisada') },
+    { ...cl('preco', 'Preço {valor_total}.', ['preco_fechado', 'projeto']) },
+    { ...cl('autoria', 'Autoria do projeto.', ['s:projeto', 's:arquitetura']), destaque: true },
+    { ...cl('garantia_obra', 'Cinco anos (art. 618).', ['s:reforma', 's:construcao']) },
+    { ...cl('reajuste', 'INCC.', ['todos', 's:construcao']) },
+    { ...cl('legislacao', 'Normas: {normas}.', ['todos']) },
+  ];
+  it('filtra por serviço e por modelo', () => {
+    expect(clausulasAplicaveis(lib, 'projeto', ['projeto']).map((c) => c.codigo)).toEqual(['objeto', 'preco', 'autoria', 'legislacao']);
+    expect(clausulasAplicaveis(lib, 'preco_fechado', ['reforma']).map((c) => c.codigo)).toEqual(['objeto', 'preco', 'garantia_obra', 'legislacao']);
+    expect(clausulasAplicaveis(lib, 'gestao', ['construcao']).map((c) => c.codigo)).toEqual(['objeto', 'garantia_obra', 'reajuste', 'legislacao']);
+    expect(clausulasAplicaveis(lib, 'preco_fechado').map((c) => c.codigo)).toEqual(['objeto', 'preco', 'legislacao']);
+  });
+  it('tipos de serviço saem do orçamento automático, com os extras', () => {
+    const c = conteudoVazio();
+    c.gerador = { tipo: 'projeto_estrutural', respostas: {}, pacote: 1, em: '', extras: [{ tipo: 'regularizacao', respostas: {} }] };
+    expect(servicosDoContrato(c)).toEqual(['projeto', 'regularizacao']);
+    expect(servicosDoContrato(null, 'Reforma de apartamento')).toEqual(['reforma']);
+  });
+  it('título, normas, serviços e destaque', () => {
+    expect(tituloContrato(['reforma'], 'preco_fechado')).toBe('Contrato de empreitada de reforma');
+    expect(tituloContrato(['projeto'], 'projeto')).toBe('Contrato de prestação de serviços de projeto estrutural');
+    expect(tituloContrato(['projeto', 'reforma'], 'preco_fechado')).toBe('Contrato de prestação de serviços de engenharia');
+    expect(modeloSugerido(['gestao'])).toBe('gestao');
+    const c = conteudoVazio();
+    const r = montarContrato({
+      modelo: 'projeto', proposta: { codigo: 'P', versao: 1, hash: null, conteudo: c, valor_total: 100 },
+      obra: { nome: 'O', endereco: 'Rua' }, contratante: parte, contratada: parte, honorarios: {}, clausulas: lib, servicos: ['projeto', 'arquitetura'],
+    });
+    expect(r.titulo).toBe('Contrato de prestação de serviços de engenharia');
+    expect(r.clausulas[0].texto).toBe('Serviços de projeto estrutural e projeto arquitetônico.');
+    expect(r.clausulas.find((x) => x.codigo === 'autoria')?.destaque).toBe(true);
+    expect(r.clausulas.find((x) => x.codigo === 'legislacao')?.texto).toContain('ABNT NBR 6118');
+    expect(r.clausulas.find((x) => x.codigo === 'legislacao')?.texto).toContain('NBR 16636');
+    expect(normasDosServicos(['projeto', 'reforco']).match(/NBR 6118/g)).toHaveLength(1);
   });
 });

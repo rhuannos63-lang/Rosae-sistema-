@@ -1,5 +1,6 @@
 // Envio de e-mail pelo Resend: montagem da mensagem e leitura das respostas do provedor.
 // Sem acesso a banco: tudo aqui é testável sem rede.
+import { conviteHtml, conviteTexto } from './convite.ts';
 
 export const EMAIL_VALIDO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 export type Estado = 'enviando' | 'enviado' | 'entregue' | 'devolvido' | 'falhou';
@@ -26,10 +27,11 @@ export function validarAnexo(c: { anexo_nome?: unknown; anexo_base64?: unknown }
 
 const escapar = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-export type Empresa = { nome?: string | null; telefone?: string | null; email?: string | null; site?: string | null; responsavel?: string | null; frase?: string | null };
+export type Empresa = { nome?: string | null; telefone?: string | null; email?: string | null; site?: string | null; instagram?: string | null; responsavel?: string | null; frase?: string | null };
 
-/** HTML simples e compatível com os principais leitores de e-mail, com o botão do link da proposta. */
-export function montarEmail(mensagem: string, link: string, e: Empresa): { html: string; texto: string } {
+/** HTML simples e compatível com os principais leitores de e-mail, com o botão do link da proposta
+ * e, quando `convite` não é false, o convite para conhecer o site e o Instagram da empresa. */
+export function montarEmail(mensagem: string, link: string, e: Empresa, convite = true): { html: string; texto: string } {
   const nome = e.nome || 'ROSAE Engenharia & Estruturas';
   const rodape = [e.responsavel, nome, e.telefone, e.email, e.site].filter(Boolean) as string[];
   const paragrafos = mensagem.trim().split(/\n{2,}/).map((p) => `<p style="margin:0 0 14px">${escapar(p).replace(/\n/g, '<br>')}</p>`).join('');
@@ -40,9 +42,11 @@ export function montarEmail(mensagem: string, link: string, e: Empresa): { html:
 <tr><td style="padding:24px 28px;font-size:15px;line-height:1.55">${paragrafos}
 <p style="margin:22px 0"><a href="${escapar(link)}" style="display:inline-block;background:#5b6b2e;color:#ffffff;text-decoration:none;font-weight:bold;padding:13px 22px;border-radius:999px">Aceitar ou pedir ajuste</a></p>
 </td></tr>
+${convite ? conviteHtml(e) : ''}
 <tr><td style="padding:16px 28px;border-top:1px solid #e2e4da;font-size:12px;color:#6b705e">${rodape.map(escapar).join(' · ')}${e.frase ? `<br><i>${escapar(e.frase)}</i>` : ''}</td></tr>
 </table></td></tr></table></body></html>`;
-  const texto = `${mensagem.trim()}\n\nAceitar ou pedir ajuste:\n${link}\n\n${rodape.join(' · ')}`;
+  const blocoConvite = convite ? conviteTexto(e) : '';
+  const texto = `${mensagem.trim()}\n\nAceitar ou pedir ajuste:\n${link}${blocoConvite ? `\n\n${blocoConvite}` : ''}\n\n${rodape.join(' · ')}`;
   return { html, texto };
 }
 

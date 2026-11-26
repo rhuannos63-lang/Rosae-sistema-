@@ -28,6 +28,8 @@ export default defineConfig({
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         runtimeCaching: [],
+        // Avisos push (proposta aceita): notificação no celular e no computador.
+        importScripts: ['/avisos-sw.js'],
       },
     }),
   ],

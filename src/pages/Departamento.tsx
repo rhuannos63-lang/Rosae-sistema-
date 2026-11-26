@@ -8,8 +8,10 @@ import { Icone } from '../components/Icone';
 import { ComoFunciona } from '../components/ComoFunciona';
 import { doBanco, formatar } from '../core/dinheiro';
 import { formatarData, hoje } from '../core/datas';
-import { DEPARTAMENTO_POR_ID, type Departamento as Dep } from '../core/departamentos';
+import { type Departamento as Dep } from '../core/departamentos';
 import type { ItemPendencia } from './Pendencias';
+import { carregarResumoPropostas } from '../lib/propostasSituacao';
+import { detalheComCliente } from '../core/situacaoProposta';
 
 type Numero = { rotulo: string; valor: string; det?: string; alerta?: boolean; para?: string };
 type Resumo = { numeros: Numero[]; selos: Record<string, string>; pendencias: ItemPendencia[] };
@@ -19,12 +21,13 @@ async function carregar(dep: Dep): Promise<Resumo> {
   const fim = hoje();
   const inicio = fim.slice(0, 8) + '01';
   const precisaPainel = dep.id !== 'empresa';
-  const [ind, pen, extra] = await Promise.all([
+  const [ind, pen, extra, props] = await Promise.all([
     precisaPainel ? supabase.rpc('painel_indicadores', { p_inicio: inicio, p_fim: fim }) : Promise.resolve({ data: null, error: null }),
     dep.pendencias.length ? supabase.rpc('central_pendencias') : Promise.resolve({ data: [], error: null }),
     dep.id === 'obras' ? supabase.from('medicao').select('id', { count: 'exact', head: true }).eq('estado', 'enviada')
       : dep.id === 'empresa' ? supabase.from('pessoa').select('id', { count: 'exact', head: true }).eq('arquivado', false)
       : Promise.resolve({ data: null, error: null, count: null }),
+    dep.id === 'comercial' ? carregarResumoPropostas().catch(() => null) : Promise.resolve(null),
   ]);
   const i = (ok(ind) ?? {}) as Record<string, unknown> & { comercial?: Comercial | null; sem_permissao?: boolean };
   const pendencias = ((ok(pen) ?? []) as ItemPendencia[]).filter((p) => dep.pendencias.includes(p.tipo));
@@ -40,11 +43,14 @@ async function carregar(dep: Dep): Promise<Resumo> {
         pendencias,
         numeros: c ? [
           { rotulo: 'Oportunidades abertas', valor: String(c.oportunidades_abertas), det: c.acoes_atrasadas ? `${c.acoes_atrasadas} com ação atrasada` : 'Ações em dia', alerta: c.acoes_atrasadas > 0, para: '/comercial' },
-          { rotulo: 'Propostas em aberto', valor: String((Number(c.enviadas) || 0) + (Number(c.em_negociacao) || 0)), det: `${c.rascunhos} em rascunho`, para: '/propostas' },
-          { rotulo: 'Aprovadas no mês', valor: String(c.aprovadas_periodo), det: 'Viram obra na Gestão de Obras', para: '/propostas' },
+          ...(props ? [
+            { rotulo: 'Enviadas, sem aprovação', valor: String(props.comCliente.qtd), det: `${formatar(props.comCliente.valor)} · ${detalheComCliente(props)}`, alerta: props.vencida.qtd > 0, para: '/propostas' },
+            { rotulo: 'Em preparo', valor: String(props.rascunho.qtd), det: 'Propostas ainda não enviadas', para: '/propostas?situacao=rascunho' },
+            { rotulo: 'Aprovadas no mês', valor: String(props.aprovadasMes), det: 'Viram obra na Gestão de Obras', para: '/propostas?situacao=aprovada' },
+          ] : []),
           numPend,
         ] : [numPend],
-        selos: c ? { '/comercial': `${c.oportunidades_abertas} abertas`, '/propostas': `${c.enviadas + c.em_negociacao} em aberto` } : {},
+        selos: { ...(c ? { '/comercial': `${c.oportunidades_abertas} abertas` } : {}), ...(props ? { '/propostas': `${props.comCliente.qtd} com o cliente` } : {}) },
       };
     case 'obras':
       return {
@@ -142,22 +148,6 @@ export function Departamento() {
             )}
           </section>
         )}
-        <section className="card dep-ligacoes">
-          <h2>Como se liga aos outros</h2>
-          <ul>
-            {dep.ligacoes.map((l) => {
-              const outro = deps.find((d) => d.id === l.com) ?? DEPARTAMENTO_POR_ID[l.com];
-              const acessivel = deps.some((d) => d.id === l.com);
-              const conteudo = (
-                <>
-                  <span className="dep-ligacao-icone"><Icone nome={outro.icone} /></span>
-                  <span><b>{outro.nome}</b><span>{l.texto}</span></span>
-                </>
-              );
-              return <li key={l.com}>{acessivel ? <Link to={`/d/${l.com}`}>{conteudo}<Icone nome="chevron" /></Link> : <div>{conteudo}</div>}</li>;
-            })}
-          </ul>
-        </section>
       </div>
     </div>
   );

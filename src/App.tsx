@@ -4,7 +4,7 @@ import { configurado } from './lib/supabase';
 import { AuthProvider, useAuth } from './auth/AuthProvider';
 import { ToastProvider, Carregando } from './components/ui';
 import { Layout, Mais } from './components/Layout';
-import { Login, PrimeiroAcesso, NaoConfigurado, SemAcesso, DefinirSenha } from './pages/Acesso';
+import { Login, PrimeiroAcesso, NaoConfigurado, SemAcesso, DefinirSenha, CodigoDuasEtapas } from './pages/Acesso';
 import { Painel } from './pages/Painel';
 import { Introducao } from './pages/Ajuda';
 
@@ -29,9 +29,11 @@ const PropostaPublica = preguicoso(() => import('./pages/PropostaPublica'), 'Pro
 const ContratoPublico = preguicoso(() => import('./pages/ContratoPublico'), 'ContratoPublico');
 const NovoOrcamento = preguicoso(() => import('./pages/Orcamento'), 'NovoOrcamento');
 const PrecosOrcamento = preguicoso(() => import('./pages/Orcamento'), 'PrecosOrcamento');
+const Composicoes = preguicoso(() => import('./pages/Composicoes'), 'Composicoes');
 const Agenda = preguicoso(() => import('./pages/Agenda'), 'Agenda');
 const Biblioteca = preguicoso(() => import('./pages/Biblioteca'), 'Biblioteca');
 const Planejador = preguicoso(() => import('./pages/Planejador'), 'Planejador');
+const Recebimentos = preguicoso(() => import('./pages/Recebimentos'), 'Recebimentos');
 const Clausulas = preguicoso(() => import('./pages/ObraContrato'), 'Clausulas');
 const ContratoImprimir = preguicoso(() => import('./pages/ObraContrato'), 'ContratoImprimir');
 const FichaAtual = preguicoso(() => import('./pages/Fichas'), 'FichaAtual');
@@ -52,9 +54,10 @@ const RelatorioClientePrevia = preguicoso(() => import('./pages/Relatorios'), 'R
 const RelatorioClientePortal = preguicoso(() => import('./pages/Relatorios'), 'RelatorioClientePortal');
 
 function Rotas() {
-  const { carregando, sessao, usuario, existeAdmin, podeFinanceiro, ehAdmin, definirSenha } = useAuth();
+  const { carregando, sessao, usuario, existeAdmin, podeFinanceiro, ehAdmin, definirSenha, precisaCodigo } = useAuth();
   if (carregando) return <Carregando />;
   if (!sessao) return <Login />;
+  if (precisaCodigo) return <CodigoDuasEtapas />;
   if (definirSenha) return <DefinirSenha />;
   if (!usuario) return existeAdmin ? <SemAcesso /> : <PrimeiroAcesso />;
   if (!usuario.ativo || usuario.papel === 'cliente') return <SemAcesso cliente={usuario.papel === 'cliente'} />;
@@ -91,6 +94,7 @@ function Rotas() {
             {comercial && <Route path="biblioteca" element={<Biblioteca />} />}
             {comercial && <Route path="orcamento" element={<NovoOrcamento />} />}
             {comercial && <Route path="orcamento/precos" element={<PrecosOrcamento />} />}
+            {podeFinanceiro && <Route path="orcamento/composicoes" element={<Composicoes />} />}
             <Route path="agenda" element={<Agenda />} />
             {podeFinanceiro && <Route path="financeiro" element={<Financeiro />} />}
             {podeFinanceiro && <Route path="financeiro/:id" element={<LancamentoDetalhe />} />}
@@ -98,6 +102,7 @@ function Rotas() {
             {podeFinanceiro && <Route path="notas/:id" element={<NotaDetalhe />} />}
             {podeFinanceiro && <Route path="contas" element={<Contas />} />}
             {podeFinanceiro && <Route path="planejador" element={<Planejador />} />}
+            {podeFinanceiro && <Route path="recebimentos" element={<Recebimentos />} />}
             {ehAdmin && <Route path="configuracoes" element={<Configuracoes />} />}
             {ehAdmin && <Route path="lixeira" element={<Lixeira />} />}
             <Route path="*" element={<Navigate to="/" replace />} />

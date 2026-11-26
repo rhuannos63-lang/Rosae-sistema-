@@ -5,7 +5,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { BuscaRapida, useBuscaRapida } from './BuscaRapida';
 import { ComoFunciona } from './ComoFunciona';
 import { useAparencia, type Modo } from '../lib/aparencia';
-import { departamentosVisiveis, localizar, type Departamento } from '../core/departamentos';
+import { abaAtual, departamentosVisiveis, localizar, type Departamento } from '../core/departamentos';
 
 const PROXIMO: Record<Modo, Modo> = { auto: 'claro', claro: 'escuro', escuro: 'auto' };
 const ROTULO_TEMA: Record<Modo, string> = { auto: 'Tema automático', claro: 'Modo claro', escuro: 'Modo escuro' };
@@ -88,21 +88,32 @@ function MenuDepartamentos({ deps }: { deps: Departamento[] }) {
   );
 }
 
-/** Trilha no topo das páginas: departamento › subpasta, e as outras subpastas ao lado. */
+/** Trilha no topo das páginas: departamento › subpasta. No celular (sem menu lateral) mostra
+ *  as subpastas vizinhas; quando a subpasta junta várias telas, mostra as abas dela. */
 function Trilha({ deps }: { deps: Departamento[] }) {
   const local = useLocation();
   const l = localizar(local.pathname, deps);
   if (!l || !l.sub) return null;
-  const naRaiz = local.pathname === l.sub.para;
+  const aba = abaAtual(local.pathname, l.sub);
+  const raiz = aba ? aba.para : l.sub.para;
+  const naRaiz = local.pathname === raiz;
   return (
     <div className="trilha">
       <nav className="trilha-caminho" aria-label="Você está em">
         <Link to={`/d/${l.dep.id}`}><Icone nome={l.dep.icone} />{l.dep.nome}</Link>
         <Icone nome="chevron" />
-        {naRaiz ? <span aria-current="page">{l.sub.rotulo}</span> : <Link to={l.sub.para}>{l.sub.rotulo}</Link>}
+        {naRaiz && !aba ? <span aria-current="page">{l.sub.rotulo}</span> : <Link to={l.sub.para}>{l.sub.rotulo}</Link>}
+        {aba && <><Icone nome="chevron" />{naRaiz ? <span aria-current="page">{aba.rotulo}</span> : <Link to={aba.para}>{aba.rotulo}</Link>}</>}
       </nav>
-      {naRaiz && l.dep.subpastas.length > 1 && (
-        <div className="trilha-pastas" role="tablist" aria-label={`Subpastas de ${l.dep.nome}`}>
+      {naRaiz && l.sub.abas && l.sub.abas.length > 1 && (
+        <div className="trilha-pastas trilha-abas" role="tablist" aria-label={l.sub.rotulo}>
+          {l.sub.abas.map((a) => (
+            <Link key={a.para} to={a.para} role="tab" aria-selected={a.para === aba?.para} className={a.para === aba?.para ? 'ativo' : ''}>{a.rotulo}</Link>
+          ))}
+        </div>
+      )}
+      {naRaiz && !aba && l.dep.subpastas.length > 1 && (
+        <div className="trilha-pastas so-mobile" role="tablist" aria-label={`Subpastas de ${l.dep.nome}`}>
           {l.dep.subpastas.map((s) => (
             <Link key={s.para} to={s.para} role="tab" aria-selected={s.para === l.sub!.para} className={s.para === l.sub!.para ? 'ativo' : ''}>{s.rotulo}</Link>
           ))}
@@ -121,7 +132,7 @@ export function Layout() {
   const ehMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const destinos: Item[] = [
     { para: '/', rotulo: 'Início', icone: 'inicio' },
-    ...deps.flatMap((d) => [{ para: `/d/${d.id}`, rotulo: d.nome, icone: d.icone }, ...d.subpastas.map((s) => ({ para: s.para, rotulo: `${s.rotulo} · ${d.curto}`, icone: s.icone }))]),
+    ...deps.flatMap((d) => [{ para: `/d/${d.id}`, rotulo: d.nome, icone: d.icone }, ...d.subpastas.flatMap((s) => (s.abas ?? [s]).map((a) => ({ para: a.para, rotulo: `${a.rotulo} · ${d.curto}`, icone: s.icone })))]),
   ];
   // Barra de baixo do celular: Início, até 3 departamentos e "Mais".
   const barra = deps.filter((d) => d.id !== 'empresa').slice(0, 3);

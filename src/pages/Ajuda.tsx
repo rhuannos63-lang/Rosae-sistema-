@@ -19,7 +19,7 @@ export function Ajuda() {
   const lista = AJUDA.filter((t) => !termo || [t.titulo, t.serve, ...t.passos].join(' ').toLowerCase().includes(termo));
   return (
     <>
-      <Topo titulo="Ajuda" sub="Guia por tarefa. Os pontos de interrogação nas telas explicam cada campo.">
+      <Topo titulo="Ajuda" sub="Respostas curtas por tarefa.">
         <button className="btn-secundario" onClick={abrirIntroducao}><Icone nome="ajuda" /> Rever introdução</button>
       </Topo>
       <div className="card" style={{ marginBottom: 12 }}>

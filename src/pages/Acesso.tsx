@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { useAuth } from '../auth/AuthProvider';
 import { Erro } from '../components/ui';
+import { marcarAtividade, SAIU_POR_INATIVIDADE } from '../lib/seguranca';
 
 function Moldura({ children }: { children: React.ReactNode }) {
   return (
@@ -26,12 +27,18 @@ export function Login() {
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [modoRecuperar, setModoRecuperar] = useState(false);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(() => {
+    const min = sessionStorage.getItem(SAIU_POR_INATIVIDADE);
+    if (!min) return null;
+    sessionStorage.removeItem(SAIU_POR_INATIVIDADE);
+    return 'Por segurança, a sessão foi encerrada depois de um tempo sem uso. Entre de novo.';
+  });
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
     setEnviando(true);
+    marcarAtividade(true);
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: senha });
     setEnviando(false);
     if (error) setErro(mensagemErro(error));
@@ -169,6 +176,53 @@ export function DefinirSenha() {
         </label>
         <Erro mensagem={erro} />
         <button className="btn-primario" disabled={enviando} style={{ justifyContent: 'center' }}>Salvar e entrar</button>
+      </form>
+    </Moldura>
+  );
+}
+
+/** Segunda etapa do login: código de 6 dígitos do aplicativo autenticador. */
+export function CodigoDuasEtapas() {
+  const { sair, recarregar } = useAuth();
+  const [codigo, setCodigo] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  async function confirmar(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    setEnviando(true);
+    try {
+      const { data: fatores, error: e1 } = await supabase.auth.mfa.listFactors();
+      if (e1) throw e1;
+      const fator = fatores?.totp?.[0];
+      if (!fator) throw new Error('Nenhum aplicativo autenticador encontrado para esta conta.');
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: fator.id, code: codigo.replace(/\D/g, '') });
+      if (error) throw error;
+      marcarAtividade(true);
+      await recarregar();
+    } catch (er) {
+      const msg = mensagemErro(er);
+      setErro(/invalid|expired|incorrect/i.test(msg) ? 'Código incorreto ou vencido. Confira o relógio do celular e digite o código que aparece agora.' : msg);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <Moldura>
+      <form className="stack" onSubmit={confirmar}>
+        <p style={{ margin: 0 }}><strong>Verificação em 2 etapas</strong><br />Abra o aplicativo autenticador do celular e digite o código de 6 números da ROSAE.</p>
+        <label className="campo">
+          Código
+          <input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9 ]{6,7}" maxLength={7} value={codigo}
+            onChange={(e) => setCodigo(e.target.value)} required autoFocus style={{ fontSize: 22, letterSpacing: 6, textAlign: 'center' }} />
+        </label>
+        <Erro mensagem={erro} />
+        <button className="btn-primario" disabled={enviando || codigo.replace(/\D/g, '').length !== 6} style={{ justifyContent: 'center' }}>
+          {enviando ? 'Conferindo…' : 'Entrar'}
+        </button>
+        <button type="button" className="btn-link" onClick={() => void sair()}>Voltar e entrar com outra conta</button>
       </form>
     </Moldura>
   );

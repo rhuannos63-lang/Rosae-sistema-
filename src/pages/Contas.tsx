@@ -52,7 +52,7 @@ export function Contas() {
 
   return (
     <>
-      <Topo titulo="Contas e movimentos" sub="Saldo de cada conta e cofrinho, e todo dinheiro que entrou ou saiu.">
+      <Topo titulo="Contas e movimentos" sub="Saldo de cada conta e tudo o que entrou ou saiu.">
         <button className="btn-secundario" onClick={() => setTransferir(true)}><Icone nome="transferir" /> Transferir entre contas</button>
       </Topo>
       <Erro mensagem={saldos.erro} />

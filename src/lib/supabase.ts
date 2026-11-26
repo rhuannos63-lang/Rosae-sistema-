@@ -14,6 +14,11 @@ export const configurado = Boolean(url && chave);
 export const supabaseUrl = url ?? '';
 export const supabaseChave = chave ?? '';
 
+// Link de e-mail (criar/recuperar senha) conta como uso agora: não cai na saída por inatividade.
+if (typeof window !== 'undefined' && /access_token=/.test(window.location.hash)) {
+  localStorage.setItem('rosae.ultima_atividade', String(Date.now()));
+}
+
 export const supabase: SupabaseClient = configurado
   ? createClient(url!, chave!, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } })
   : (null as unknown as SupabaseClient);

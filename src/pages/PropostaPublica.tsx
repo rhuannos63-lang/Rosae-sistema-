@@ -2,6 +2,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { variaveisDocumento } from '../lib/aparencia';
 import { baixarArquivo, gerarPdfProposta, nomeDoPdf } from '../lib/pdfProposta';
+import { textoLimpo } from '../core/textoArquivo';
 import { useParams } from 'react-router-dom';
 import { supabase, mensagemErro } from '../lib/supabase';
 import { PropostaDocumento, type EmpresaPublica } from '../components/PropostaDocumento';
@@ -34,7 +35,7 @@ export function PropostaPublica() {
   }
   useEffect(() => { carregar(true); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
-  useEffect(() => { if (d && !d.erro) document.title = `${d.codigo} · ${d.titulo} · ROSAE`; }, [d]);
+  useEffect(() => { if (d && !d.erro) document.title = textoLimpo(`${d.codigo} · ${d.titulo} · ROSAE`); }, [d]);
 
   async function responder(e: React.FormEvent) {
     e.preventDefault();
@@ -48,6 +49,8 @@ export function PropostaPublica() {
     });
     setEnviando(false);
     if (r.error) return setErro(mensagemErro(r.error));
+    // Aceite: avisa a ROSAE no celular e no computador (sem esperar a resposta).
+    if (acao === 'aceitar') void supabase.functions.invoke('avisos', { body: { acao: 'aceites' } }).catch(() => undefined);
     setResposta((r.data as { mensagem: string }).mensagem);
     setAcao(null);
     carregar(false);
