@@ -5,8 +5,6 @@ import { conferirAceitesPendentes } from '../lib/avisos';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
-import { useResumoPropostas } from '../lib/propostasSituacao';
-import { detalheComCliente } from '../core/situacaoProposta';
 import { useAuth } from '../auth/AuthProvider';
 import { Topo } from '../components/Layout';
 import { Ajuda, Carregando, Erro } from '../components/ui';
@@ -26,13 +24,12 @@ type Indicadores = Record<string, string | number | boolean | null | Comercial> 
 const n = (v: unknown) => Number(v ?? 0) || 0;
 
 function KpisComerciais({ c: bruto }: { c: Comercial | null | undefined }) {
-  const r = useResumoPropostas();
   if (!bruto) return null;
   const c = Object.fromEntries(Object.entries(bruto).map(([k, v]) => [k, n(v)])) as Comercial;
   for (const k of ['enviadas', 'em_negociacao', 'aprovadas_periodo', 'rascunhos', 'oportunidades_abertas', 'acoes_atrasadas'] as const) c[k] = n(bruto[k]);
   return (
     <>
-      <Kpi rotulo="Propostas enviadas, sem aprovação" valor={r ? String(r.comCliente.qtd) : '…'} det={r ? <>{detalheComCliente(r)} · {r.rascunho.qtd} em preparo</> : 'Carregando…'} para="/propostas" />
+      <Kpi rotulo="Aceitos no período" valor={String(c.aprovadas_periodo)} det="Orçamentos aceitos pelos clientes" para="/propostas?estado=aprovada" />
       <Kpi rotulo="Oportunidades" valor={String(c.oportunidades_abertas)} det={c.acoes_atrasadas > 0 ? <span style={{ color: 'var(--desfavoravel)' }}>{c.acoes_atrasadas} com ação atrasada</span> : 'Nenhuma ação atrasada'} para="/comercial" ajuda="Contatos em andamento no funil. Formulários do site e cliques no WhatsApp do período aparecem no Comercial." />
     </>
   );
@@ -167,7 +164,6 @@ export function Painel() {
 }
 
 function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes, anterior, rotuloAnt }: { anterior: Indicadores | null; rotuloAnt?: string; ind: Indicadores; serie: Serie[]; empresa: Empresa | null; qs: string; rotulo: string; tipo: TipoPeriodo; ehAdmin: boolean; inicio: string; fim: string; aoAbrirMes: (mes: string) => void }) {
-  const resumoProp = useResumoPropostas();
   if (ind.sem_permissao) {
     return (
       <div className="grid grid-kpi">
@@ -183,42 +179,43 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
   const metaVen = ind.meta_vendas === null ? null : c('meta_vendas') * meses;
   const resultadoCaixa = c('recebido') - c('pago_obras') - c('pago_empresa');
   const ca = (k: string) => (anterior ? doBanco(anterior[k] as string) : null);
-  const caixaDe = (i: Indicadores) => doBanco(i.recebido as string) - doBanco(i.pago_obras as string) - doBanco(i.pago_empresa as string);
   const rotulosSerie = serie.map((s) => nomeMesCurto(s.mes));
   const tend = (f: (s: Serie) => Centavos): Tendencia => ({ valores: serie.map(f), rotulos: rotulosSerie });
   const tRec = tend((s) => doBanco(s.recebido));
   const tVen = tend((s) => doBanco(s.vendido));
-  const tRes = tend((s) => doBanco(s.recebido) - doBanco(s.pago));
 
   return (
     <>
-      <div className="bi-kpis">
+      <div className={`bi-kpis${c('recebido') === 0 ? ' tres' : ''}`}>
         <KpiBI
-          rotulo="Recebido de clientes" centavos={c('recebido')} anterior={ca('recebido')} rotuloAnt={rotuloAnt} tendencia={tRec}
-          para={`/contas?grupo=recebido&${qs}`}
-          ajuda="Dinheiro que de fato entrou de clientes no período (recebimentos registrados, já descontados estornos). Não inclui transferências entre suas contas nem rendimentos."
-        />
-        <KpiBI
-          rotulo="Vendido (contratado)" centavos={c('vendido')} anterior={ca('vendido')} rotuloAnt={rotuloAnt} tendencia={tVen}
+          rotulo="Aceito pelos clientes" centavos={c('vendido')} anterior={ca('vendido')} rotuloAnt={rotuloAnt} tendencia={tVen}
           para="/propostas?estado=aprovada"
-          ajuda="Propostas e aditivos aceitos pelo cliente no período (versão aprovada), mais obras lançadas sem proposta pela data de contratação. Vendido não é dinheiro em caixa."
+          ajuda="Orçamentos e aditivos que o cliente aceitou no período, mais obras lançadas sem proposta. O que está só orçado (ainda sem aceite) não entra aqui: fica no Comercial. No aceite o valor já vai para A receber, com ou sem contrato."
         />
         <KpiBI
-          rotulo="Resultado de caixa" centavos={resultadoCaixa} anterior={anterior ? caixaDe(anterior) : null} rotuloAnt={rotuloAnt} tendencia={tRes}
-          para={`/contas?grupo=operacional&${qs}`}
-          ajuda="Critério: regime de caixa, só o que entrou e saiu no período (recebido − pago em obras − despesas da empresa). Não é lucro contábil."
+          rotulo="A receber" centavos={c('a_receber')}
+          det={c('a_receber_vencido') > 0 ? <span style={{ color: 'var(--desfavoravel)' }}>{formatar(c('a_receber_vencido'))} vencido</span> : 'Tudo o que foi aceito e ainda não entrou · nada vencido'}
+          para="/financeiro?tipo=receber&situacao=abertas"
+          ajuda="Soma das parcelas em aberto dos orçamentos aceitos (e de outros lançamentos a receber). Hoje, independente do período."
         />
+        {c('recebido') !== 0 && (
+          <KpiBI
+            rotulo="Recebido de clientes" centavos={c('recebido')} anterior={ca('recebido')} rotuloAnt={rotuloAnt} tendencia={tRec}
+            para={`/contas?grupo=recebido&${qs}`}
+            ajuda="Dinheiro que de fato entrou de clientes no período (recebimentos registrados, já descontados estornos). Não inclui transferências entre suas contas nem rendimentos."
+          />
+        )}
         <KpiBI
           rotulo="Saldo nas contas" centavos={c('saldo_contas')} det="Hoje, somando todas as contas ativas" para="/contas"
         />
       </div>
 
       <Faixa itens={[
-        { rotulo: 'A receber', valor: formatar(c('a_receber')), det: c('a_receber_vencido') > 0 ? `${formatar(c('a_receber_vencido'))} vencido` : 'Nada vencido', alerta: c('a_receber_vencido') > 0, para: '/financeiro?tipo=receber&situacao=abertas' },
+        { rotulo: 'Resultado de caixa', valor: formatar(resultadoCaixa), det: 'Entrou − saiu no período', alerta: resultadoCaixa < 0, para: `/contas?grupo=operacional&${qs}` },
         { rotulo: 'A pagar', valor: formatar(c('a_pagar')), det: `${formatar(c('a_pagar_7_dias'))} em 7 dias`, para: '/financeiro?tipo=pagar&situacao=abertas' },
         { rotulo: 'Obras ativas', valor: String(n(ind.obras_ativas)), det: 'Contratadas ou em execução', para: '/obras' },
         ...(ind.comercial ? [
-          { rotulo: 'Propostas com o cliente', valor: resumoProp ? String(resumoProp.comCliente.qtd) : '…', det: resumoProp ? `${formatar(resumoProp.comCliente.valor)} · ${resumoProp.rascunho.qtd} em preparo` : '', para: '/propostas' },
+          { rotulo: 'Oportunidades', valor: String(ind.comercial.oportunidades_abertas), det: ind.comercial.acoes_atrasadas > 0 ? `${ind.comercial.acoes_atrasadas} atrasada(s)` : 'Em dia', alerta: ind.comercial.acoes_atrasadas > 0, para: '/comercial' },
         ] : []),
       ]} />
 
@@ -243,7 +240,7 @@ function ConteudoPainel({ ind, serie, qs, rotulo, tipo, inicio, fim, aoAbrirMes,
           </div>
           <div className="bi-medidores">
             <Medidor rotulo="Recebimentos" valor={c('recebido')} meta={metaRec} formatar={formatarCompacto} />
-            <Medidor rotulo="Vendas" valor={c('vendido')} meta={metaVen} formatar={formatarCompacto} />
+            <Medidor rotulo="Aceitos" valor={c('vendido')} meta={metaVen} formatar={formatarCompacto} />
           </div>
         </div>
       </div>
@@ -255,7 +252,7 @@ function Comparativo({ atual, anterior, anoAnterior, rotulo, rotuloAnt, rotuloAn
   const v = (i: Indicadores, k: string) => doBanco(i[k] as string);
   const caixa = (i: Indicadores) => v(i, 'recebido') - v(i, 'pago_obras') - v(i, 'pago_empresa');
   const linhas: { rotulo: string; f: (i: Indicadores) => Centavos; custo?: boolean }[] = [
-    { rotulo: 'Vendido', f: (i) => v(i, 'vendido') },
+    { rotulo: 'Aceito pelos clientes', f: (i) => v(i, 'vendido') },
     { rotulo: 'Recebido de clientes', f: (i) => v(i, 'recebido') },
     { rotulo: 'Pago em obras', f: (i) => v(i, 'pago_obras'), custo: true },
     { rotulo: 'Despesas da empresa', f: (i) => v(i, 'pago_empresa'), custo: true },

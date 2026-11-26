@@ -42,14 +42,14 @@ export function FluxoCaixa({ fim, aoAbrirMes }: { fim: string; aoAbrirMes: (mes:
     ? [
         { chave: 'rec', nome: 'Recebido', cor: 'var(--serie-1)', valores: linhas.map((l) => l.rec) },
         { chave: 'pag', nome: 'Pago', cor: 'var(--serie-2)', valores: linhas.map((l) => l.pag) },
-        { chave: 'ven', nome: 'Vendido', cor: 'var(--serie-3)', valores: linhas.map((l) => l.ven), forma: 'linha' },
+        { chave: 'ven', nome: 'Aceito', cor: 'var(--serie-3)', valores: linhas.map((l) => l.ven), forma: 'linha' },
       ]
     : visao === 'resultado'
       ? [{ chave: 'res', nome: 'Resultado de caixa', cor: 'var(--serie-1)', valores: resultado, corPorValor: corResultado }]
       : [
           { chave: 'rec', nome: 'Recebido acumulado', cor: 'var(--serie-1)', valores: acumular(linhas.map((l) => l.rec)), forma: 'area' },
           { chave: 'pag', nome: 'Pago acumulado', cor: 'var(--serie-2)', valores: acumular(linhas.map((l) => l.pag)), forma: 'area' },
-          { chave: 'ven', nome: 'Vendido acumulado', cor: 'var(--serie-3)', valores: acumular(linhas.map((l) => l.ven)), forma: 'linha', tracejada: true },
+          { chave: 'ven', nome: 'Aceito acumulado', cor: 'var(--serie-3)', valores: acumular(linhas.map((l) => l.ven)), forma: 'linha', tracejada: true },
         ];
 
   const totRec = linhas.reduce((s, l) => s + l.rec, 0);
@@ -62,7 +62,7 @@ export function FluxoCaixa({ fim, aoAbrirMes }: { fim: string; aoAbrirMes: (mes:
     <div className={`card${carregando && dados ? ' g-carregando' : ''}`}>
       <div className="card-titulo">
         <div>
-          <h2>Fluxo de caixa <Ajuda>Recebido = dinheiro que entrou de clientes. Pago = saídas de obras e da empresa (sem pró-labore e retiradas). Vendido = propostas e aditivos aprovados. Clique num mês para ver o detalhe.</Ajuda></h2>
+          <h2>Fluxo de caixa <Ajuda>Recebido = dinheiro que entrou de clientes. Pago = saídas de obras e da empresa (sem pró-labore e retiradas). Aceito = orçamentos e aditivos aceitos pelos clientes. Clique num mês para ver o detalhe.</Ajuda></h2>
           <div className="sub">
             {linhas.length > 0 && <>Últimos {linhas.length} meses: recebido <b className="num">{formatarCompacto(totRec)}</b> · pago <b className="num">{formatarCompacto(totPag)}</b> · resultado <b className="num" style={{ color: totRec - totPag < 0 ? 'var(--desfavoravel)' : 'var(--favoravel)' }}>{formatarCompacto(totRec - totPag)}</b></>}
           </div>
@@ -109,7 +109,7 @@ export function FluxoCaixa({ fim, aoAbrirMes }: { fim: string; aoAbrirMes: (mes:
             <div><span>Recebido</span><b>{formatar(l.rec)}</b></div>
             <div><span>Pago</span><b>{formatar(l.pag)}</b></div>
             <div><span>Resultado de caixa</span><b style={{ color: l.rec - l.pag < 0 ? 'var(--desfavoravel)' : 'var(--favoravel)' }}>{formatar(l.rec - l.pag)}</b></div>
-            <div><span>Vendido</span><b>{formatar(l.ven)}</b></div>
+            <div><span>Aceito</span><b>{formatar(l.ven)}</b></div>
           </div>
           <div className="row small">
             <Link className="chip-link" to={`/contas?grupo=recebido&inicio=${intervalo.inicio}&fim=${intervalo.fim}`}>Ver recebimentos <Icone nome="seta" /></Link>

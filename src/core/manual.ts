@@ -31,12 +31,12 @@ export const MANUAL: Capitulo[] = [
     resumo: 'A situação da empresa num relance: vendas, recebimentos, contas, caixa e pendências.',
     passos: [
       { titulo: 'Escolha o período', texto: 'No alto, troque entre Mês, Semestre e Ano e use as setas ‹ › para voltar ou avançar. Todos os indicadores e gráficos acompanham o período escolhido.' },
-      { titulo: 'Leia os indicadores principais', texto: 'Recebido (dinheiro que entrou), Vendido (propostas aprovadas), A receber, A pagar e Resultado de caixa. A seta verde ou vermelha compara com o período anterior.' },
+      { titulo: 'Leia os indicadores principais', texto: 'Aceito pelos clientes (orçamentos aceitos), A receber (o que foi aceito e ainda não entrou), Recebido (aparece quando entra dinheiro), A pagar e Resultado de caixa. O que está só orçado fica no Comercial, não no Início. A seta verde ou vermelha compara com o período anterior.' },
       { titulo: 'Explore os gráficos', texto: 'Passe o mouse (ou o dedo) sobre as barras para ver os valores. Clique num mês do fluxo de caixa para ver o detalhe e os atalhos para os lançamentos. Na legenda, toque numa série para escondê-la ou mostrá-la.' },
       { titulo: 'Veja como tabela', texto: 'Nos gráficos com o botão “Tabela”, os mesmos números aparecem em linhas e colunas, bons para conferir ou copiar.' },
       { titulo: 'Acompanhe as metas', texto: 'As barras de meta aparecem quando há meta definida em Configurações → Metas.' },
     ],
-    atencao: ['Vendido não é dinheiro em caixa, e resultado de caixa não é lucro contábil: são números diferentes e aparecem separados de propósito.'],
+    atencao: ['Aceito não é dinheiro em caixa, e resultado de caixa não é lucro contábil: são números diferentes e aparecem separados de propósito.'],
   },
   {
     id: 'comercial', titulo: 'Funil: do contato à obra', icone: 'comercial', link: { para: '/comercial', rotulo: 'Abrir o funil' },
@@ -101,7 +101,7 @@ export const MANUAL: Capitulo[] = [
       { titulo: 'Ou envie o PDF pelo WhatsApp', texto: 'Toque em “Enviar PDF pelo WhatsApp”. O sistema monta o PDF deitado, como uma apresentação, com o botão “Aceitar esta proposta” clicável dentro. No celular, escolha o WhatsApp e a conversa do cliente e o arquivo vai anexado. No computador, o arquivo é salvo e o WhatsApp abre para você anexar.' },
       { titulo: 'Acompanhe o aceite', texto: 'O cliente abre no celular, lê e toca em Aceitar ou pede ajuste. O aceite fica registrado com nome, data e a versão exata, e a proposta passa a Aprovada.' },
       { titulo: 'Acrescente um aditivo', texto: 'Abra o orçamento aceito e toque em “Adicionar aditivo”, no alto da página (também está no alto da obra). Diga o que entra, o valor, os dias a mais e a forma de pagamento e toque em “Criar e enviar por e-mail”: o aditivo sai pronto e a janela do e-mail já abre. O cliente aceita pelo botão do e-mail, o que formaliza a mudança, e o valor passa a somar no fechado do contrato. Para montar com vários itens, use “Detalhar itens antes”.' },
-      { titulo: 'Converta em obra', texto: 'Na proposta aprovada, toque em “Converter em obra”. Serviços, etapas, materiais e recebimentos são criados sem redigitar.' },
+      { titulo: 'Converta em obra', texto: 'Quando o cliente aceita, o sistema já cria a obra/serviço com as etapas e lança o valor em A receber, sem precisar de contrato. Se não aparecer, use “Converter em obra” na proposta aprovada (não duplica).' },
     ],
     dicas: ['“Duplicar” cria uma proposta nova a partir de outra parecida.', '“Baixar PDF” salva o arquivo deitado (16:9) que ocupa a folha inteira, do celular ou do computador.'],
   },
