@@ -5,13 +5,15 @@ import { supabase, mensagemErro } from '../lib/supabase';
 import { useConsulta, ok } from '../lib/consulta';
 import { Ajuda, Carregando, Erro, Modal, Vazio, useToast } from '../components/ui';
 import { Icone } from '../components/Icone';
-import { formatarData, formatarDataHora, hoje, nomeMes, somarMeses } from '../core/datas';
+import { formatarData, formatarDataHora, hoje, nomeMes, somarDias, somarMeses } from '../core/datas';
 import {
   desvioDias, diasEntre, ESTADO_ETAPA, limitesLinhaTempo, posicaoBarra, programarSequencial, semanasDoMes, type EstadoEtapa,
 } from '../core/cronograma';
 import type { Etapa, Pessoa, Progresso } from '../lib/tipos';
 import { Grafico, TabelaDados, type Serie } from '../components/graficos';
 import { curvaS, datasDaCurva, pesosNaObra } from '../core/graficos';
+import { lerEtapas } from '../core/entrega';
+import { PERFIS, perfilDaObra } from '../core/jornada';
 
 type Item = { id: string; nome: string };
 const ESTADOS = Object.keys(ESTADO_ETAPA) as EstadoEtapa[];
@@ -25,11 +27,12 @@ export function BarraProgresso({ valor, conferido, rotulo }: { valor: number; co
   );
 }
 
-export function Cronograma({ obraId, servicos, ehAdm, aoMudar }: { obraId: string; servicos: Item[]; ehAdm: boolean; aoMudar?: () => void }) {
+export function Cronograma({ obraId, servicos, ehAdm, aoMudar, tipoServico }: { obraId: string; servicos: Item[]; ehAdm: boolean; aoMudar?: () => void; tipoServico?: string | null }) {
   const toast = useToast();
   const [visao, setVisao] = useState<'lista' | 'linha' | 'calendario' | 'curva'>('lista');
   const [editar, setEditar] = useState<Etapa | 'nova' | null>(null);
   const [programar, setProgramar] = useState(false);
+  const [lote, setLote] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const { dados, erro: erroCarga, carregando, recarregar } = useConsulta(async () => {
     const [e, p] = await Promise.all([
@@ -77,7 +80,7 @@ export function Cronograma({ obraId, servicos, ehAdm, aoMudar }: { obraId: strin
             <div className="row">
               <button className="btn-secundario" onClick={() => setProgramar(true)} disabled={!etapas.length}><Icone nome="calendario" /> Programar datas</button>
               <button className="btn-secundario" onClick={linhaBase} disabled={!etapas.some((e) => e.inicio_previsto)}>Guardar linha de base</button>
-              <button className="btn-primario" onClick={() => setEditar('nova')} disabled={!servicos.length}><Icone nome="mais" /> Etapa</button>
+              <button className="btn-primario" onClick={() => setLote(true)}><Icone nome="mais" /> Adicionar etapas</button>
             </div>
           )}
         </div>
@@ -100,7 +103,6 @@ export function Cronograma({ obraId, servicos, ehAdm, aoMudar }: { obraId: strin
             </div>
           </div>
         )}
-        {!servicos.length && <p className="muted">Cadastre os serviços da obra primeiro (aba Visão geral).</p>}
         {semDatas > 0 && ehAdm && <div className="aviso info" style={{ marginTop: 10 }}><span>{semDatas} etapa(s) sem data prevista. Use “Programar datas” para sugerir um encadeamento a partir do início.</span></div>}
         {!temBase && etapas.some((e) => e.inicio_previsto) && ehAdm && <div className="aviso info" style={{ marginTop: 10 }}><span>Quando o cronograma estiver combinado com o cliente, clique em “Guardar linha de base”: o planejamento original fica guardado para comparar com a previsão atual.</span></div>}
       </div>
@@ -115,7 +117,10 @@ export function Cronograma({ obraId, servicos, ehAdm, aoMudar }: { obraId: strin
         </div>
         <Erro mensagem={erro ?? erroCarga} />
         {!etapas.length ? (
-          <Vazio titulo="Nenhuma etapa ainda"><p>As etapas chegam da proposta convertida ou podem ser criadas aqui, por serviço.</p></Vazio>
+          <Vazio titulo="Nenhuma etapa ainda">
+            <p>As etapas chegam sozinhas do orçamento aceito. Para colocar à mão, escreva uma por linha.</p>
+            {ehAdm && <button className="btn-primario" onClick={() => setLote(true)}><Icone nome="mais" /> Adicionar etapas</button>}
+          </Vazio>
         ) : visao === 'lista' ? (
           <ListaEtapas etapas={ordenadas} servicos={servicos} aoAbrir={setEditar} aoMudarEstado={mudarEstado} ehAdm={ehAdm} />
         ) : visao === 'linha' ? (
@@ -128,6 +133,7 @@ export function Cronograma({ obraId, servicos, ehAdm, aoMudar }: { obraId: strin
       </div>
 
       {editar && <EtapaForm obraId={obraId} etapa={editar === 'nova' ? null : editar} etapas={etapas} servicos={servicos} ehAdm={ehAdm} aoFechar={() => setEditar(null)} aoSalvar={() => { setEditar(null); mudou(); }} />}
+      {lote && <AdicionarEtapas obraId={obraId} servicos={servicos} etapas={etapas} tipoServico={tipoServico ?? null} aoFechar={() => setLote(false)} aoSalvar={() => { setLote(false); mudou(); }} aoDetalhar={() => { setLote(false); setEditar('nova'); }} />}
       {programar && <ProgramarDatas etapas={etapas} aoFechar={() => setProgramar(false)} aoSalvar={() => { setProgramar(false); mudou(); }} />}
     </div>
   );
@@ -204,7 +210,7 @@ function ListaEtapas({ etapas, servicos, aoAbrir, aoMudarEstado, ehAdm }: { etap
           <h3 className="sub-servico">{s.nome}</h3>
           <div className="tabela-wrap">
             <table className="tabela">
-              <thead><tr><th>Etapa</th><th>Situação</th><th className="right">%</th><th>Previsto</th><th>Realizado</th></tr></thead>
+              <thead><tr><th>Etapa</th><th>Situação</th><th /><th className="right">%</th><th>Previsto</th><th>Realizado</th></tr></thead>
               <tbody>
                 {etapas.filter((e) => e.servico_id === s.id).map((e) => (
                   <tr key={e.id} className={`clicavel${e.estado === 'cancelado' ? ' cancelada' : ''}`} onClick={() => aoAbrir(e)}>
@@ -213,6 +219,14 @@ function ListaEtapas({ etapas, servicos, aoAbrir, aoMudarEstado, ehAdm }: { etap
                       <select aria-label={`Situação de ${e.nome}`} value={e.estado} onChange={(ev) => aoMudarEstado(e, ev.target.value as EstadoEtapa)} className="select-compacto">
                         {ESTADOS.filter((k) => ehAdm || !['conferido', 'cancelado'].includes(k) || k === e.estado).map((k) => <option key={k} value={k}>{ESTADO_ETAPA[k].rotulo}</option>)}
                       </select>
+                    </td>
+                    <td onClick={(ev) => ev.stopPropagation()} className="acao-etapa">
+                      {['nao_iniciado', 'programado', 'aguardando_material', 'aguardando_liberacao', 'suspenso'].includes(e.estado) && (
+                        <button className="btn-secundario btn-mini" onClick={() => aoMudarEstado(e, 'em_execucao')} title="Marca como em andamento a partir de hoje">Iniciar</button>
+                      )}
+                      {e.estado === 'em_execucao' && (
+                        <button className="btn-primario btn-mini" onClick={() => aoMudarEstado(e, 'executado')} title="Marca como concluída hoje (100%)"><Icone nome="check" /> Concluir</button>
+                      )}
                     </td>
                     <td className="right num">{Number(e.percentual).toLocaleString('pt-BR')}%</td>
                     <td className="small">{e.inicio_previsto ? `${formatarData(e.inicio_previsto)} a ${formatarData(e.fim_previsto)}` : <span className="muted">sem data</span>}<div><Desvio e={e} /></div></td>
@@ -503,6 +517,97 @@ function ProgramarDatas({ etapas, aoFechar, aoSalvar }: { etapas: Etapa[]; aoFec
             </table>
           </div>
         )}
+      </div>
+    </Modal>
+  );
+}
+
+
+/** Etapas em lote: uma por linha, com sugestões do tipo de serviço. Sem serviço na obra, cria um. */
+function AdicionarEtapas({ obraId, servicos, etapas, tipoServico, aoFechar, aoSalvar, aoDetalhar }: {
+  obraId: string; servicos: Item[]; etapas: Etapa[]; tipoServico: string | null; aoFechar: () => void; aoSalvar: () => void; aoDetalhar: () => void;
+}) {
+  const toast = useToast();
+  const perfil = perfilDaObra(tipoServico);
+  const sugestoes = PERFIS[perfil].fases.map((f) => f.nome).filter((n) => !etapas.some((e) => e.nome.toLowerCase() === n.toLowerCase()));
+  const [texto, setTexto] = useState('');
+  const [servico, setServico] = useState(servicos[0]?.id ?? '');
+  const ultimaData = etapas.map((e) => e.fim_previsto).filter(Boolean).sort().pop();
+  const [datar, setDatar] = useState(true);
+  const [inicio, setInicio] = useState(() => (ultimaData && ultimaData >= hoje() ? somarDias(ultimaData, 1) : hoje()));
+  const [padrao, setPadrao] = useState('7');
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const lidas = lerEtapas(texto);
+
+  function acrescentar(nome: string) {
+    setTexto((t) => (t.trim() ? `${t.replace(/\s+$/, '')}\n${nome}` : nome));
+  }
+
+  async function salvar() {
+    if (!lidas.length) return setErro('Escreva pelo menos uma etapa (uma por linha).');
+    setErro(null);
+    setSalvando(true);
+    let sid = servico;
+    if (!sid) {
+      const r = await supabase.from('servico').insert({ obra_id: obraId, nome: tipoServico || 'Serviço principal', ordem: 0 }).select('id').single();
+      if (r.error) { setSalvando(false); return setErro(mensagemErro(r.error)); }
+      sid = (r.data as { id: string }).id;
+    }
+    const dPadrao = Math.max(1, Number(padrao) || 7);
+    let cursor = inicio;
+    const base = etapas.filter((e) => e.servico_id === sid).length;
+    const linhas = lidas.map((l, i) => {
+      const dias = l.dias ?? dPadrao;
+      const reg: Record<string, unknown> = { obra_id: obraId, servico_id: sid, nome: l.nome, ordem: base + i + 1, duracao_dias: dias };
+      if (datar) { reg.inicio_previsto = cursor; reg.fim_previsto = somarDias(cursor, dias - 1); cursor = somarDias(cursor, dias); }
+      return reg;
+    });
+    const r = await supabase.from('etapa').insert(linhas);
+    setSalvando(false);
+    if (r.error) return setErro(mensagemErro(r.error));
+    toast(`${linhas.length} etapa(s) adicionada(s)${datar ? `, de ${formatarData(inicio)} a ${formatarData(somarDias(cursor, -1))}` : ''}.`);
+    aoSalvar();
+  }
+
+  return (
+    <Modal titulo="Adicionar etapas" aoFechar={aoFechar} largo
+      rodape={<><button type="button" className="btn-link" onClick={aoDetalhar} disabled={!servicos.length}>Uma etapa com todos os detalhes</button><span style={{ flex: 1 }} /><button className="btn-secundario" onClick={aoFechar}>Cancelar</button><button className="btn-primario" onClick={salvar} disabled={salvando || !lidas.length}>{salvando ? 'Salvando…' : `Adicionar ${lidas.length || ''} etapa(s)`}</button></>}>
+      <div className="stack">
+        {sugestoes.length > 0 && (
+          <div>
+            <div className="muted small" style={{ marginBottom: 6 }}>Toque para usar as etapas de {PERFIS[perfil].nome.toLowerCase()}:</div>
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              {sugestoes.map((n) => <button key={n} type="button" className="chip-link" onClick={() => acrescentar(n)}>+ {n}</button>)}
+              {sugestoes.length > 1 && <button type="button" className="chip-link" onClick={() => setTexto((t) => [t.trim(), ...sugestoes].filter(Boolean).join('\n'))}>Todas</button>}
+            </div>
+          </div>
+        )}
+        <label className="campo">
+          Etapas, uma por linha
+          <span className="dica">A duração é opcional no fim da linha: “Fundação 10 dias”, “Pintura 5d”.</span>
+          <textarea rows={6} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={'Levantamento 3 dias\nCálculo 7 dias\nDetalhamento 5 dias\nEntrega'} autoFocus />
+        </label>
+        <div className="grid grid-3">
+          {servicos.length > 1 && (
+            <label className="campo">Serviço
+              <select value={servico} onChange={(e) => setServico(e.target.value)}>{servicos.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}</select>
+            </label>
+          )}
+          <label className="check" style={{ alignSelf: 'end' }}><input type="checkbox" checked={datar} onChange={(e) => setDatar(e.target.checked)} /> Já colocar as datas, uma depois da outra</label>
+          {datar && <label className="campo">Começando em<input type="date" value={inicio} onChange={(e) => setInicio(e.target.value || hoje())} /></label>}
+          {datar && <label className="campo">Dias de cada (sem duração)<input inputMode="numeric" value={padrao} onChange={(e) => setPadrao(e.target.value.replace(/\D/g, ''))} /></label>}
+        </div>
+        {lidas.length > 0 && (
+          <div className="tabela-wrap">
+            <table className="tabela">
+              <thead><tr><th>Etapa</th><th className="right">Dias</th></tr></thead>
+              <tbody>{lidas.map((l, i) => <tr key={i}><td>{l.nome}</td><td className="right num">{l.dias ?? <span className="muted">{Math.max(1, Number(padrao) || 7)}</span>}</td></tr>)}</tbody>
+            </table>
+          </div>
+        )}
+        {!servicos.length && <p className="muted small" style={{ margin: 0 }}>A obra ainda não tem serviço: vou criar “{tipoServico || 'Serviço principal'}” para guardar as etapas.</p>}
+        <Erro mensagem={erro} />
       </div>
     </Modal>
   );

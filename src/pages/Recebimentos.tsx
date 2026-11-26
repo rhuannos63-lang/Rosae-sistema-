@@ -5,7 +5,7 @@ import { useConsulta } from '../lib/consulta';
 import { Topo } from '../components/Layout';
 import { Ajuda, Carregando, Erro, Vazio } from '../components/ui';
 import { Icone } from '../components/Icone';
-import { carregarContratos, RegistrarRecebimento, type Contrato } from '../components/Recebimentos';
+import { BotaoRecebimento, carregarContratos, RegistrarRecebimento, type Contrato } from '../components/Recebimentos';
 import { doBanco, formatar, somar } from '../core/dinheiro';
 import { formatarData } from '../core/datas';
 import { faltaReceber, percentualRecebido } from '../core/recebimentos';
@@ -31,6 +31,7 @@ export function Recebimentos() {
   return (
     <>
       <Topo titulo="Contratos e recebimentos" sub="Quanto fechou em cada contrato e quanto de fato entrou.">
+        <BotaoRecebimento rotulo="Recebi um pagamento" aoMudar={() => recarregar()} />
       </Topo>
       <div className="grid grid-3" style={{ marginBottom: 14 }}>
         <div className="kpi"><div className="rotulo">Fechado <Ajuda>Orçamentos aceitos mais os aditivos aceitos, e obras lançadas sem proposta.</Ajuda></div><div className="valor num">{formatar(tFechado)}</div><div className="det">{todos.length} contrato(s)</div></div>

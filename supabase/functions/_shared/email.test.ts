@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { erroDoProvedor, estadoDoEvento, montarEmail, validarEnvio } from './email.ts';
+import { cabemNoEmail, erroDoProvedor, estadoDoEvento, montarEmail, validarEntrega, validarEnvio } from './email.ts';
 
 const ok = { versao_id: '6f1c2d3e-4b5a-4c6d-8e7f-001122334455', destinatario: 'cliente@exemplo.com', assunto: 'Proposta', mensagem: 'Olá', chave: 'a'.repeat(20), origem: 'https://rosae.exemplo.dev' };
 
@@ -32,5 +32,18 @@ describe('e-mail da proposta', () => {
     expect(erroDoProvedor(403, { message: 'The domain is not verified' })).toContain('domínio');
     expect(erroDoProvedor(401, null)).toContain('chave');
     expect(erroDoProvedor(503, null)).toContain('fora do ar');
+  });
+});
+
+describe('e-mail da entrega de documentos', () => {
+  it('e-mail da entrega: botão próprio, validação e limite dos anexos', () => {
+    const { html, texto } = montarEmail('Olá', 'https://x/e/t', { nome: 'ROSAE' }, false, 'Baixar os documentos');
+    expect(html).toContain('Baixar os documentos</a>');
+    expect(texto).toContain('Baixar os documentos:\nhttps://x/e/t');
+    expect(validarEntrega({ entrega_id: '6f1c2d3e-4b5a-4c6d-8e7f-001122334455', destinatario: 'a@b.co', assunto: 'x', mensagem: 'y', origem: 'https://a.dev' })).toBeNull();
+    expect(validarEntrega({ entrega_id: 'x', destinatario: 'a@b.co', assunto: 'x', mensagem: 'y', origem: 'https://a.dev' })).toBeTruthy();
+    expect(cabemNoEmail([1_000_000, 2_000_000])).toBe(true);
+    expect(cabemNoEmail([20_000_000])).toBe(false);
+    expect(cabemNoEmail([null])).toBe(false);
   });
 });

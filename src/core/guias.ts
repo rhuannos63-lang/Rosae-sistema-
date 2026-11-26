@@ -15,10 +15,10 @@ const G: Guia[] = [
     passos: [
       { titulo: 'Escolha o período', texto: 'Troque entre Mês, Semestre e Ano e use as setas para voltar ou avançar. Todos os números acompanham.', alvo: 'Semestre' },
       { titulo: 'Abra um departamento', texto: 'Os quatro cartões levam direto a Comercial, Obras, Financeiro e Empresa, cada um com as suas subpastas.', alvo: 'Gestão de Obras' },
-      { titulo: 'Leia os indicadores', texto: 'Recebido é dinheiro que entrou; Vendido é proposta aprovada; Resultado de caixa é entrada menos saída. Toque num número para ver os lançamentos que o formam.', alvo: 'Recebido de clientes' },
+      { titulo: 'Leia os indicadores', texto: 'Aceito é orçamento aceito pelo cliente; A receber é o que foi aceito e ainda não entrou; Recebido aparece quando entra dinheiro. Toque num número para ver os lançamentos que o formam.', alvo: 'Aceito pelos clientes' },
       { titulo: 'Explore o fluxo de caixa', texto: 'Passe o dedo ou o mouse nas barras. Toque num mês para ver o detalhe e use “Tabela” para conferir os números em linhas.', alvo: 'Fluxo de caixa' },
     ],
-    dicas: ['Vendido não é dinheiro em caixa: os números aparecem separados de propósito.', 'Ctrl + K (ou a lupa) abre a busca rápida de qualquer tela, obra ou cliente.'],
+    dicas: ['Aceito não é dinheiro em caixa: os números aparecem separados de propósito.', 'Ctrl + K (ou a lupa) abre a busca rápida de qualquer tela, obra ou cliente.'],
   },
   {
     id: 'dep-comercial', titulo: 'Departamento Comercial e Orçamentos',
